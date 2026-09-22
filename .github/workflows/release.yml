@@ -17,3 +17,18 @@ jobs:
     uses: SonarSource/gh-action_release/.github/workflows/main.yaml@0c9c1cc54cbdd24258f135601d1b77cfc87e67ae # 7.4.0
     with:
       version: ${{ inputs.version }}
+
+  notify_failure:
+    name: Notify Failure
+    needs: release
+    if: "!cancelled() && failure()"
+    permissions:
+      id-token: write
+      actions: read
+    runs-on: sonar-xs
+    steps:
+      - uses: SonarSource/release-github-actions/notify-failure@279e14e6c7636163516a5ccb93b0e29005bbd776 # v1.9.15
+        with:
+          project-name: terraform-provider-sonarqube
+          slack-channel: squad-dopex-on-call
+          needs: ${{ toJSON(needs) }}
