@@ -81,3 +81,22 @@ jobs:
           # request from a fork, the output above is empty, and a bare
           # fromJSON('') stops the job with a template error.
           SONAR_TOKEN: ${{ fromJSON(steps.secrets.outputs.vault || '{}').SONAR_TOKEN }}
+
+  notify_failure:
+    name: Notify Failure
+    needs: build
+    if: >-
+      !cancelled() && failure() &&
+      (github.ref_name == github.event.repository.default_branch ||
+      startsWith(github.ref_name, 'branch-') ||
+      startsWith(github.ref_name, 'dogfood-'))
+    permissions:
+      id-token: write
+      actions: read
+    runs-on: sonar-xs
+    steps:
+      - uses: SonarSource/release-github-actions/notify-failure@279e14e6c7636163516a5ccb93b0e29005bbd776 # v1.9.15
+        with:
+          project-name: terraform-provider-sonarqube
+          slack-channel: squad-dopex-on-call
+          needs: ${{ toJSON(needs) }}
