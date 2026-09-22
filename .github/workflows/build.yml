@@ -22,27 +22,62 @@ jobs:
     permissions:
       id-token: write
       contents: read
+    env:
+      # GitHub gives no OIDC token to a pull request from a fork, so the Vault
+      # authentication, and therefore the analysis, cannot work there. The Go
+      # steps still run. A step-level `if` can read the env context, a
+      # job-level `if` cannot, so the condition lives here.
+      SONAR_ANALYSIS_ENABLED: ${{ github.event_name != 'pull_request' ||
+        github.event.pull_request.head.repo.full_name == github.repository }}
     steps:
       - name: Checkout
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # The analysis needs the full history for the blame data.
+          fetch-depth: 0
 
-      # SECURITY BEST PRACTICES:
-      # - Pin all external actions to specific SHA commits (not tags) for security
-      # - All secrets MUST come from Vault using SonarSource/vault-action-wrapper
-      # - Never use GitHub Secrets for sensitive data
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
 
-      # TODO: Add your build steps here
-      #
-      # For ready-to-use SonarSource GitHub Actions with real-world examples
-      # and production-ready implementations, visit:
-      # https://github.com/SonarSource/ci-github-actions
-      #
-      # For caching, use SonarSource/gh-action_cache@v1
-      # It automatically chooses GitHub Actions cache (public) or S3 cache (private)
-      #
-      # Real-world reference repositories:
-      # - sonar-dummy: Private Java/Maven
-      # - sonar-dummy-gradle-oss: Public Java/Gradle
-      # - sonar-dummy-python-oss: Public Python/Poetry
-      # - sonar-dummy-js: Public NodeJS/Yarn
-      #
+      - name: Check the format
+        run: |
+          unformatted=$(gofmt -l .)
+          if [[ -n "${unformatted}" ]]; then
+            echo "These files are not gofmt-formatted:"
+            echo "${unformatted}"
+            exit 1
+          fi
+
+      - name: Check that go.mod and go.sum are tidy
+        run: |
+          go mod tidy
+          git diff --exit-code go.mod go.sum
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Build
+        run: go build ./...
+
+      - name: Test
+        run: go test -race -covermode=atomic -coverprofile=coverage.out ./...
+
+      - name: Fetch the Vault secrets
+        if: env.SONAR_ANALYSIS_ENABLED == 'true'
+        id: secrets
+        uses: SonarSource/vault-action-wrapper@a7fa5fd4a4e4e0f2593f6137c0812cac196cf4ce # 3.7.0
+        with:
+          secrets: |
+            development/kv/data/sonarcloud token | SONAR_TOKEN;
+
+      - name: SonarQube Cloud analysis
+        if: env.SONAR_ANALYSIS_ENABLED == 'true'
+        uses: SonarSource/sonarqube-scan-action@ba9859eae8dd6bd29e412f25ddbbef3d032000f4 # v8.2.2
+        env:
+          # The `|| '{}'` is necessary. GitHub evaluates the env block of a
+          # step even when the condition of that step is false. On a pull
+          # request from a fork, the output above is empty, and a bare
+          # fromJSON('') stops the job with a template error.
+          SONAR_TOKEN: ${{ fromJSON(steps.secrets.outputs.vault || '{}').SONAR_TOKEN }}
