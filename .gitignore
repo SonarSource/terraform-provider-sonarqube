@@ -1,0 +1,17 @@
+# Go build output
+/terraform-provider-sonarqube
+/dist/
+/vendor/
+coverage.out
+
+# Terraform working files
+.terraform/
+.terraform.lock.hcl
+*.tfstate
+*.tfstate.*
+*.tfvars
+*.tfvars.json
+.terraformrc
+terraform.rc
+crash.log
+crash.*.log
