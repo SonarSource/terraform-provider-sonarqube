@@ -19,6 +19,7 @@
       "description": "The dependency risks that fail the quality gate all sit behind indirect requirements, which Renovate skips by default",
       "matchManagers": ["gomod"],
       "matchDepTypes": ["indirect"],
+      "matchUpdateTypes": ["minor", "patch", "digest"],
       "enabled": true
     },
     {
