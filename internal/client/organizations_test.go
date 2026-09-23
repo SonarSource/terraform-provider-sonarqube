@@ -7,17 +7,17 @@ import (
 	"testing"
 )
 
-const organizationAnswer = `{
-  "organizations": [
-    {
-      "key": "my-org",
-      "name": "My Organization",
-      "description": "Managed by Terraform",
-      "url": "https://example.com",
-      "avatar": "https://example.com/avatar.png"
-    }
-  ]
-}`
+const organizationAnswer = `[
+  {
+    "id": "AZcwYwExlol79EFABiuM",
+    "uuidV4": "3ddd1f8f-2ab4-443f-a3be-a19ca418ca75",
+    "key": "my-org",
+    "name": "My Organization",
+    "description": "Managed by Terraform",
+    "url": "https://example.com",
+    "avatarUrl": "https://example.com/avatar.png"
+  }
+]`
 
 func TestGetOrganization(t *testing.T) {
 	t.Parallel()
@@ -26,7 +26,7 @@ func TestGetOrganization(t *testing.T) {
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		gotPath = r.URL.Path
-		gotQuery = r.URL.Query().Get("organizations")
+		gotQuery = r.URL.Query().Get("organizationKey")
 		w.Write([]byte(organizationAnswer))
 	}))
 	defer srv.Close()
@@ -36,29 +36,29 @@ func TestGetOrganization(t *testing.T) {
 		t.Fatalf("GetOrganization() returned %v", err)
 	}
 
-	if want := "/api/organizations/search"; gotPath != want {
+	if want := "/organizations/organizations"; gotPath != want {
 		t.Errorf("path = %q, want %q", gotPath, want)
 	}
 	if want := "my-org"; gotQuery != want {
-		t.Errorf("organizations parameter = %q, want %q", gotQuery, want)
+		t.Errorf("organizationKey parameter = %q, want %q", gotQuery, want)
 	}
 
 	if got, want := org.Name, "My Organization"; got != want {
 		t.Errorf("Name = %q, want %q", got, want)
 	}
-	if got, want := org.Avatar, "https://example.com/avatar.png"; got != want {
-		t.Errorf("Avatar = %q, want %q", got, want)
+	if got, want := org.AvatarURL, "https://example.com/avatar.png"; got != want {
+		t.Errorf("AvatarURL = %q, want %q", got, want)
 	}
 }
 
-// The web service answers a search that finds nothing, and a search the token
-// may not make, with status 200 and an empty list. Both must become
-// ErrNotFound rather than an organization with empty fields.
-func TestGetOrganizationEmptyList(t *testing.T) {
+// Web API v2 answers 404 for a key that names no organization, and for an
+// organization that the token may not see.
+func TestGetOrganizationNotFound(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.Write([]byte(`{"organizations":[]}`))
+		w.WriteHeader(http.StatusNotFound)
+		w.Write([]byte(`{"message":"Organization with key my-org is not found"}`))
 	}))
 	defer srv.Close()
 
@@ -69,13 +69,30 @@ func TestGetOrganizationEmptyList(t *testing.T) {
 	}
 }
 
-// Guards against a change of the web service that answers with more than the
-// organization that was asked for.
+// An empty array is not a shape the API uses today, but it must not become an
+// organization with empty fields if that ever changes.
+func TestGetOrganizationEmptyAnswer(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Write([]byte(`[]`))
+	}))
+	defer srv.Close()
+
+	_, err := newTestClient(srv).GetOrganization(t.Context(), "my-org")
+
+	if !errors.Is(err, ErrNotFound) {
+		t.Errorf("GetOrganization() returned %v, want an error that matches ErrNotFound", err)
+	}
+}
+
+// Guards against an answer that carries more than the organization that was
+// asked for.
 func TestGetOrganizationIgnoresAnotherKey(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.Write([]byte(`{"organizations":[{"key":"another-org","name":"Another"}]}`))
+		w.Write([]byte(`[{"key":"another-org","name":"Another"}]`))
 	}))
 	defer srv.Close()
 

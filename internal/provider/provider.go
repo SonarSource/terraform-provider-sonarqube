@@ -21,8 +21,9 @@ import (
 // continuous integration jobs, where it holds an analysis token that cannot
 // administer an organization.
 const (
-	envURL   = "SONARQUBE_URL"
-	envToken = "SONARQUBE_TOKEN"
+	envURL    = "SONARQUBE_URL"
+	envAPIURL = "SONARQUBE_API_URL"
+	envToken  = "SONARQUBE_TOKEN"
 )
 
 var _ provider.Provider = &sonarqubeProvider{}
@@ -45,6 +46,7 @@ func New(version string) func() provider.Provider {
 
 type providerModel struct {
 	URL     types.String `tfsdk:"url"`
+	APIURL  types.String `tfsdk:"api_url"`
 	Token   types.String `tfsdk:"token"`
 	Product types.String `tfsdk:"product"`
 }
@@ -65,6 +67,13 @@ func (p *sonarqubeProvider) Schema(_ context.Context, _ provider.SchemaRequest, 
 				Description: "Base address of the instance, for example `" + client.CloudURL +
 					"`. Can also be given with the `" + envURL + "` environment variable. " +
 					"Defaults to `" + client.CloudURL + "` when `product` is `cloud`.",
+			},
+			"api_url": schema.StringAttribute{
+				Optional: true,
+				Description: "Base address of Web API v2, for example " +
+					"`https://api.sonarcloud.io`. Can also be given with the `" + envAPIURL +
+					"` environment variable. Derived from `url` when absent, which is right " +
+					"for every standard deployment.",
 			},
 			"token": schema.StringAttribute{
 				Optional:  true,
@@ -94,6 +103,7 @@ func (p *sonarqubeProvider) Configure(ctx context.Context, req provider.Configur
 	// An unknown value comes from another resource that must be applied first.
 	// Falling back to the environment would authenticate as somebody else.
 	addUnknownError(resp, config.URL, "url", envURL)
+	addUnknownError(resp, config.APIURL, "api_url", envAPIURL)
 	addUnknownError(resp, config.Token, "token", envToken)
 	addUnknownError(resp, config.Product, "product", "")
 	if resp.Diagnostics.HasError() {
@@ -115,6 +125,7 @@ func (p *sonarqubeProvider) Configure(ctx context.Context, req provider.Configur
 	}
 
 	instanceURL := firstNonEmpty(config.URL.ValueString(), os.Getenv(envURL), client.CloudURL)
+	apiURL := firstNonEmpty(config.APIURL.ValueString(), os.Getenv(envAPIURL))
 
 	token := firstNonEmpty(config.Token.ValueString(), os.Getenv(envToken))
 	if token == "" {
@@ -129,6 +140,7 @@ func (p *sonarqubeProvider) Configure(ctx context.Context, req provider.Configur
 
 	c := client.New(client.Config{
 		URL:     instanceURL,
+		APIURL:  apiURL,
 		Token:   token,
 		Product: product,
 	})

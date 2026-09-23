@@ -95,9 +95,9 @@ func TestOrganizationDataSourceRead(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.Write([]byte(`{"organizations":[{"key":"my-org","name":"My Organization",
+		w.Write([]byte(`[{"key":"my-org","name":"My Organization",
 			"description":"Managed by Terraform","url":"https://example.com",
-			"avatar":"https://example.com/avatar.png"}]}`))
+			"avatarUrl":"https://example.com/avatar.png"}]`))
 	}))
 	defer srv.Close()
 
@@ -130,13 +130,14 @@ func TestOrganizationDataSourceRead(t *testing.T) {
 }
 
 // The message matters as much as the failure: a missing organization and a
-// token without permission look identical, so the text must name the instance
-// and mention the permission.
+// token without permission both answer 404, so the text must name the host and
+// mention the permission.
 func TestOrganizationDataSourceReadNotFound(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.Write([]byte(`{"organizations":[]}`))
+		w.WriteHeader(http.StatusNotFound)
+		w.Write([]byte(`{"message":"Organization with key absent-org is not found"}`))
 	}))
 	defer srv.Close()
 
@@ -184,6 +185,7 @@ func readOrganization(t *testing.T, srv *httptest.Server, key string) (tfsdk.Sta
 	d.Configure(ctx, datasource.ConfigureRequest{
 		ProviderData: client.New(client.Config{
 			URL:        srv.URL,
+			APIURL:     srv.URL,
 			Token:      "test-token",
 			Product:    client.ProductCloud,
 			HTTPClient: srv.Client(),

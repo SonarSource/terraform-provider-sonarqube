@@ -107,11 +107,10 @@ func (d *organizationDataSource) Read(ctx context.Context, req datasource.ReadRe
 	org, err := d.client.GetOrganization(ctx, key)
 	if err != nil {
 		if errors.Is(err, client.ErrNotFound) {
-			// A token without the right permission also lands here: the web
-			// service answers a search it may not serve with an empty list.
+			// An organization that the token may not see answers 404 as well.
 			resp.Diagnostics.AddError(
 				"Organization "+key+" not found",
-				"No organization with this key was found at "+d.client.URL()+
+				"No organization with this key was found at "+d.client.APIURL()+
 					". Check the key, and check that the token can read the organization.",
 			)
 			return
@@ -128,7 +127,7 @@ func (d *organizationDataSource) Read(ctx context.Context, req datasource.ReadRe
 		Name:        types.StringValue(org.Name),
 		Description: types.StringValue(org.Description),
 		URL:         types.StringValue(org.URL),
-		AvatarURL:   types.StringValue(org.Avatar),
+		AvatarURL:   types.StringValue(org.AvatarURL),
 	}
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }

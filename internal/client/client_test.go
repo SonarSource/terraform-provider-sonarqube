@@ -9,12 +9,63 @@ import (
 )
 
 func newTestClient(srv *httptest.Server) *Client {
+	// The test server answers on one host, so both surfaces point at it. A
+	// derived api host would name a host that does not exist.
 	return New(Config{
 		URL:        srv.URL,
+		APIURL:     srv.URL,
 		Token:      "test-token",
 		Product:    ProductCloud,
 		HTTPClient: srv.Client(),
 	})
+}
+
+// DeriveAPIURL replaces a sub-domain instead of prefixing one, because the api
+// host sits beside the web application rather than below it.
+func TestDeriveAPIURL(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name string
+		url  string
+		want string
+	}{
+		{"production", "https://sonarcloud.io", "https://api.sonarcloud.io"},
+		{"united states", "https://sonarqube.us", "https://api.sonarqube.us"},
+		{"development instance", "https://dev11.sc-dev11.io", "https://api.sc-dev11.io"},
+		{"keeps the port", "http://localhost:9000", "http://api.localhost:9000"},
+		{"leaves an address by number alone", "http://127.0.0.1:9000", "http://127.0.0.1:9000"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			if got := DeriveAPIURL(tc.url); got != tc.want {
+				t.Errorf("DeriveAPIURL(%q) = %q, want %q", tc.url, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestNewDerivesTheAPIURL(t *testing.T) {
+	t.Parallel()
+
+	c := New(Config{URL: "https://dev11.sc-dev11.io/"})
+
+	if got, want := c.APIURL(), "https://api.sc-dev11.io"; got != want {
+		t.Errorf("APIURL() = %q, want %q", got, want)
+	}
+}
+
+func TestNewKeepsAnExplicitAPIURL(t *testing.T) {
+	t.Parallel()
+
+	c := New(Config{URL: "https://dev11.sc-dev11.io", APIURL: "https://api.example.com/"})
+
+	if got, want := c.APIURL(), "https://api.example.com"; got != want {
+		t.Errorf("APIURL() = %q, want %q", got, want)
+	}
 }
 
 func TestNewTrimsTrailingSlash(t *testing.T) {
@@ -44,7 +95,7 @@ func TestIsCloud(t *testing.T) {
 }
 
 // The web service authenticates the token as the basic-auth user name, with an
-// empty password. Pin that, because it differs from the REST API.
+// empty password. Web API v2 takes a bearer token instead.
 func TestGetSendsTheToken(t *testing.T) {
 	t.Parallel()
 
@@ -168,5 +219,25 @@ func TestDoReportsAnUndecodableBody(t *testing.T) {
 
 	if err == nil || !strings.Contains(err.Error(), "cannot decode the response body") {
 		t.Errorf("get() returned %v, want a decoding error", err)
+	}
+}
+
+func TestAPIGetSendsABearerToken(t *testing.T) {
+	t.Parallel()
+
+	var gotAuthorization string
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotAuthorization = r.Header.Get("Authorization")
+		w.Write([]byte(`[]`))
+	}))
+	defer srv.Close()
+
+	if err := newTestClient(srv).apiGet(t.Context(), "/anything", nil, nil); err != nil {
+		t.Fatalf("apiGet() returned %v", err)
+	}
+
+	if got, want := gotAuthorization, "Bearer test-token"; got != want {
+		t.Errorf("Authorization = %q, want %q", got, want)
 	}
 }

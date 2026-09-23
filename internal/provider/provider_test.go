@@ -58,6 +58,9 @@ func TestConfigureReadsTheEnvironment(t *testing.T) {
 	if got, want := c.URL(), client.CloudURL; got != want {
 		t.Errorf("URL() = %q, want the default %q", got, want)
 	}
+	if got, want := c.APIURL(), "https://api.sonarcloud.io"; got != want {
+		t.Errorf("APIURL() = %q, want %q derived from the default", got, want)
+	}
 	if got, want := c.Product(), client.ProductCloud; got != want {
 		t.Errorf("Product() = %q, want %q", got, want)
 	}
@@ -79,6 +82,26 @@ func TestConfigurePrefersTheConfiguration(t *testing.T) {
 	c := configuredClient(t, resp)
 	if got, want := c.URL(), "https://from-the-configuration.example.com"; got != want {
 		t.Errorf("URL() = %q, want %q", got, want)
+	}
+}
+
+// api_url is the escape hatch for a deployment whose api host does not follow
+// the usual naming.
+func TestConfigureKeepsAnExplicitAPIURL(t *testing.T) {
+	t.Setenv(envToken, "a-token")
+
+	resp := configure(t, map[string]tftypes.Value{
+		"url":     tftypes.NewValue(tftypes.String, "https://dev11.sc-dev11.io"),
+		"api_url": tftypes.NewValue(tftypes.String, "https://api.example.com"),
+	})
+
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("unexpected diagnostics: %v", resp.Diagnostics)
+	}
+
+	c := configuredClient(t, resp)
+	if got, want := c.APIURL(), "https://api.example.com"; got != want {
+		t.Errorf("APIURL() = %q, want %q", got, want)
 	}
 }
 
