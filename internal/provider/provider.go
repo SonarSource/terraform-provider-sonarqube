@@ -2,6 +2,7 @@
 package provider
 
 import (
+	"cmp"
 	"context"
 	"os"
 
@@ -124,10 +125,20 @@ func (p *sonarqubeProvider) Configure(ctx context.Context, req provider.Configur
 		return
 	}
 
-	instanceURL := firstNonEmpty(config.URL.ValueString(), os.Getenv(envURL), client.CloudURL)
-	apiURL := firstNonEmpty(config.APIURL.ValueString(), os.Getenv(envAPIURL))
+	instanceURL := cmp.Or(config.URL.ValueString(), os.Getenv(envURL), client.CloudURL)
+	apiURL := cmp.Or(config.APIURL.ValueString(), os.Getenv(envAPIURL))
+	token := cmp.Or(config.Token.ValueString(), os.Getenv(envToken))
 
-	token := firstNonEmpty(config.Token.ValueString(), os.Getenv(envToken))
+	// url.Parse accepts an address with no scheme and leaves the host empty,
+	// so an address such as "sonarcloud.io" would fail on the first request
+	// with a message that names neither the attribute nor the value.
+	addressError(resp, instanceURL, "url", envURL)
+	if apiURL != "" {
+		addressError(resp, apiURL, "api_url", envAPIURL)
+	}
+	if resp.Diagnostics.HasError() {
+		return
+	}
 	if token == "" {
 		resp.Diagnostics.AddAttributeError(
 			path.Root("token"),
@@ -179,11 +190,17 @@ func addUnknownError(resp *provider.ConfigureResponse, value types.String, attri
 	)
 }
 
-func firstNonEmpty(values ...string) string {
-	for _, v := range values {
-		if v != "" {
-			return v
-		}
+// addressError reports an address that cannot reach an instance.
+func addressError(resp *provider.ConfigureResponse, value, attribute, envVar string) {
+	err := client.ValidateURL(value)
+	if err == nil {
+		return
 	}
-	return ""
+
+	resp.Diagnostics.AddAttributeError(
+		path.Root(attribute),
+		"Invalid address in "+attribute,
+		err.Error()+". Give a full address, for example \"https://sonarcloud.io\", "+
+			"in the "+attribute+" attribute or in the "+envVar+" environment variable.",
+	)
 }

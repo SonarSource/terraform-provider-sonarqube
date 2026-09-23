@@ -230,3 +230,26 @@ func TestProviderRegistersItsDataSources(t *testing.T) {
 		t.Errorf("the provider registers %d resources, want none in this release", got)
 	}
 }
+
+// An address with no scheme must be refused while the provider is configured.
+// url.Parse accepts it, so without the check every request would fail later
+// with a message that names neither the attribute nor the value.
+func TestConfigureRefusesAnAddressWithNoScheme(t *testing.T) {
+	resp := configure(t,
+		map[string]string{envToken: "a-token"},
+		map[string]tftypes.Value{
+			"url": tftypes.NewValue(tftypes.String, "sonarcloud.io"),
+		})
+
+	assertErrorContains(t, resp, "Invalid address in url")
+}
+
+func TestConfigureRefusesAnInvalidAPIAddress(t *testing.T) {
+	resp := configure(t,
+		map[string]string{envToken: "a-token"},
+		map[string]tftypes.Value{
+			"api_url": tftypes.NewValue(tftypes.String, "api.sonarcloud.io"),
+		})
+
+	assertErrorContains(t, resp, "Invalid address in api_url")
+}

@@ -35,6 +35,11 @@ func TestDeriveAPIURL(t *testing.T) {
 		{"development instance", "https://dev11.sc-dev11.io", "https://api.sc-dev11.io"},
 		{"keeps the port", "http://localhost:9000", "http://api.localhost:9000"},
 		{"leaves an address by number alone", "http://127.0.0.1:9000", "http://127.0.0.1:9000"},
+		// A hostname may end in a dot. The empty last label must not make a
+		// host of two labels look like one of three.
+		{"absolute hostname", "https://sonarcloud.io.", "https://api.sonarcloud.io."},
+		{"absolute hostname with a sub-domain", "https://dev11.sc-dev11.io.", "https://api.sc-dev11.io."},
+		{"address with no scheme comes back unchanged", "sonarcloud.io", "sonarcloud.io"},
 	}
 
 	for _, tc := range cases {
@@ -239,5 +244,36 @@ func TestAPIGetSendsABearerToken(t *testing.T) {
 
 	if got, want := gotAuthorization, "Bearer test-token"; got != want {
 		t.Errorf("Authorization = %q, want %q", got, want)
+	}
+}
+
+// ValidateURL is what keeps an address with no scheme out of the client: it
+// parses without an error and leaves the host empty, so every later request
+// would fail with a message about the protocol scheme instead.
+func TestValidateURL(t *testing.T) {
+	t.Parallel()
+
+	valid := []string{"https://sonarcloud.io", "http://localhost:9000", "https://dev11.sc-dev11.io/"}
+	invalid := map[string]string{
+		"sonarcloud.io":       "no http or https scheme",
+		"":                    "no http or https scheme",
+		"ftp://sonarcloud.io": "no http or https scheme",
+		"https://":            "names no host",
+	}
+
+	for _, value := range valid {
+		if err := ValidateURL(value); err != nil {
+			t.Errorf("ValidateURL(%q) = %v, want no error", value, err)
+		}
+	}
+	for value, want := range invalid {
+		err := ValidateURL(value)
+		if err == nil {
+			t.Errorf("ValidateURL(%q) reported no error, want one", value)
+			continue
+		}
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("ValidateURL(%q) = %v, want an error about %q", value, err, want)
+		}
 	}
 }

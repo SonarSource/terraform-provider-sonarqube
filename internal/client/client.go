@@ -88,9 +88,11 @@ func New(cfg Config) *Client {
 //	https://dev11.sc-dev11.io  -> https://api.sc-dev11.io
 //
 // The api host sits beside the web application rather than below it, so a host
-// that already carries a sub-domain has that sub-domain replaced. An address
-// that names a host by number is returned unchanged, because nothing can be
-// derived from it.
+// that already carries a sub-domain has that sub-domain replaced.
+//
+// An address that nothing can be derived from comes back unchanged: one that
+// names its host by number, and one that carries no host at all. ValidateURL
+// refuses the second before a client is ever built.
 func DeriveAPIURL(instanceURL string) string {
 	parsed, err := url.Parse(instanceURL)
 	if err != nil || parsed.Host == "" {
@@ -101,6 +103,13 @@ func DeriveAPIURL(instanceURL string) string {
 	if net.ParseIP(hostname) != nil {
 		return instanceURL
 	}
+
+	// A hostname may end in a dot, which marks it as absolute. Take the dot
+	// off before the labels are counted, because an empty last label would
+	// make a host of two labels look like one of three and rewrite the wrong
+	// label.
+	absolute := strings.HasSuffix(hostname, ".")
+	hostname = strings.TrimSuffix(hostname, ".")
 
 	// Read the port before the host is rewritten.
 	port := parsed.Port()
@@ -113,10 +122,33 @@ func DeriveAPIURL(instanceURL string) string {
 	}
 
 	parsed.Host = strings.Join(labels, ".")
+	if absolute {
+		parsed.Host += "."
+	}
 	if port != "" {
 		parsed.Host += ":" + port
 	}
 	return strings.TrimRight(parsed.String(), "/")
+}
+
+// ValidateURL reports why an address cannot reach an instance.
+//
+// url.Parse accepts an address with no scheme, such as "sonarcloud.io", and
+// leaves the host empty. Without this check the provider would build every
+// request from that address and fail much later, with a message about an
+// unsupported protocol scheme that names neither the attribute nor the value.
+func ValidateURL(value string) error {
+	parsed, err := url.Parse(value)
+	if err != nil {
+		return fmt.Errorf("%q is not an address: %w", value, err)
+	}
+	if parsed.Scheme != "http" && parsed.Scheme != "https" {
+		return fmt.Errorf("%q has no http or https scheme", value)
+	}
+	if parsed.Host == "" {
+		return fmt.Errorf("%q names no host", value)
+	}
+	return nil
 }
 
 // URL returns the base address of the instance.
@@ -139,37 +171,49 @@ func (c *Client) IsCloud() bool {
 	return c.product == ProductCloud
 }
 
-// get calls the older web service.
-func (c *Client) get(ctx context.Context, path string, params url.Values, out any) error {
-	target := c.url + path
+// send builds a request and hands it to do. The two API surfaces differ only
+// in the host they answer at and in the way they take the token, so prepare
+// carries that difference and everything else stays in one place.
+func (c *Client) send(
+	ctx context.Context,
+	method, target string,
+	params url.Values,
+	body io.Reader,
+	prepare func(*http.Request),
+	out any,
+) error {
 	if len(params) > 0 {
 		target += "?" + params.Encode()
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, target, nil)
+	req, err := http.NewRequestWithContext(ctx, method, target, body)
 	if err != nil {
 		return err
 	}
-	// The web service takes the token as the basic-auth user name.
-	req.SetBasicAuth(c.token, "")
+	prepare(req)
 
 	return c.do(req, out)
 }
 
-// apiGet calls Web API v2, which takes a bearer token.
-func (c *Client) apiGet(ctx context.Context, path string, params url.Values, out any) error {
-	target := c.apiURL + path
-	if len(params) > 0 {
-		target += "?" + params.Encode()
-	}
+// webServiceAuth applies the scheme of the older web service, which takes the
+// token as the basic-auth user name with an empty password.
+func (c *Client) webServiceAuth(req *http.Request) {
+	req.SetBasicAuth(c.token, "")
+}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, target, nil)
-	if err != nil {
-		return err
-	}
+// apiAuth applies the scheme of Web API v2, which takes a bearer token.
+func (c *Client) apiAuth(req *http.Request) {
 	req.Header.Set("Authorization", "Bearer "+c.token)
+}
 
-	return c.do(req, out)
+// get calls a read action of the older web service.
+func (c *Client) get(ctx context.Context, path string, params url.Values, out any) error {
+	return c.send(ctx, http.MethodGet, c.url+path, params, nil, c.webServiceAuth, out)
+}
+
+// apiGet calls a read of Web API v2.
+func (c *Client) apiGet(ctx context.Context, path string, params url.Values, out any) error {
+	return c.send(ctx, http.MethodGet, c.apiURL+path, params, nil, c.apiAuth, out)
 }
 
 // do decodes a successful answer into out. A nil out discards the body.
