@@ -4,10 +4,10 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
-// newTestClient builds a client that talks to srv.
 func newTestClient(srv *httptest.Server) *Client {
 	return New(Config{
 		URL:        srv.URL,
@@ -43,8 +43,8 @@ func TestIsCloud(t *testing.T) {
 	}
 }
 
-// TestGetSendsTheToken pins the authentication scheme of the web service: the
-// token is the basic-auth user name and the password stays empty.
+// The web service authenticates the token as the basic-auth user name, with an
+// empty password. Pin that, because it differs from the REST API.
 func TestGetSendsTheToken(t *testing.T) {
 	t.Parallel()
 
@@ -72,7 +72,6 @@ func TestGetSendsTheToken(t *testing.T) {
 	}
 }
 
-// TestDoReportsWebServiceErrors covers the shape the web service uses.
 func TestDoReportsWebServiceErrors(t *testing.T) {
 	t.Parallel()
 
@@ -96,8 +95,8 @@ func TestDoReportsWebServiceErrors(t *testing.T) {
 	}
 }
 
-// TestDoReportsRestAPIErrors covers the other shape. The REST API arrives with
-// the organization binding, and both shapes share one reader.
+// The REST API reports a failure in another shape, and both shapes share one
+// reader.
 func TestDoReportsRestAPIErrors(t *testing.T) {
 	t.Parallel()
 
@@ -114,8 +113,7 @@ func TestDoReportsRestAPIErrors(t *testing.T) {
 	}
 }
 
-// TestDoKeepsAnUnknownErrorBody makes sure that a body in neither known shape
-// still reaches the user.
+// A body in neither known shape must still reach the user.
 func TestDoKeepsAnUnknownErrorBody(t *testing.T) {
 	t.Parallel()
 
@@ -145,5 +143,30 @@ func TestDoMapsNotFound(t *testing.T) {
 
 	if !errors.Is(err, ErrNotFound) {
 		t.Errorf("get() returned %v, want an error that matches ErrNotFound", err)
+	}
+}
+
+func TestProduct(t *testing.T) {
+	t.Parallel()
+
+	if got := New(Config{Product: ProductServer}).Product(); got != ProductServer {
+		t.Errorf("Product() = %q, want %q", got, ProductServer)
+	}
+}
+
+// A success status can still carry a body the caller cannot decode.
+func TestDoReportsAnUndecodableBody(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Write([]byte("this is not JSON"))
+	}))
+	defer srv.Close()
+
+	var out struct{}
+	err := newTestClient(srv).get(t.Context(), "/api/anything", nil, &out)
+
+	if err == nil || !strings.Contains(err.Error(), "cannot decode the response body") {
+		t.Errorf("get() returned %v, want a decoding error", err)
 	}
 }

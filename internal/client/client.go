@@ -1,9 +1,7 @@
 // Package client is an HTTP client for the SonarQube APIs.
 //
-// The endpoints of SonarQube Cloud and of SonarQube Server are not identical,
-// so a client carries the product it talks to. The transport lives here and
-// each group of endpoints lives in its own file beside it, which is where the
-// Server variants go when they arrive.
+// SonarQube Cloud and SonarQube Server do not offer the same endpoints, so a
+// client carries the product it talks to.
 package client
 
 import (
@@ -20,10 +18,9 @@ import (
 // Product is the SonarQube product an instance runs.
 type Product string
 
+// The SonarQube products this client can talk to.
 const (
-	// ProductCloud is SonarQube Cloud, for example https://sonarcloud.io.
-	ProductCloud Product = "cloud"
-	// ProductServer is a SonarQube Server instance.
+	ProductCloud  Product = "cloud"
 	ProductServer Product = "server"
 )
 
@@ -32,15 +29,12 @@ const CloudURL = "https://sonarcloud.io"
 
 const defaultTimeout = 30 * time.Second
 
-// Config holds what a client needs to reach one instance.
+// Config configures a Client.
 type Config struct {
-	// URL is the base address of the instance, without a trailing slash.
-	URL string
-	// Token authenticates every request.
-	Token string
-	// Product says which SonarQube product answers at URL.
+	URL     string
+	Token   string
 	Product Product
-	// HTTPClient replaces the default client. Tests use it; leave it nil
+	// HTTPClient replaces the default client. Tests set it; leave it nil
 	// elsewhere.
 	HTTPClient *http.Client
 }
@@ -53,7 +47,7 @@ type Client struct {
 	http    *http.Client
 }
 
-// New builds a client from cfg.
+// New builds a Client from cfg.
 func New(cfg Config) *Client {
 	httpClient := cfg.HTTPClient
 	if httpClient == nil {
@@ -78,13 +72,11 @@ func (c *Client) Product() Product {
 	return c.product
 }
 
-// IsCloud reports whether the instance is SonarQube Cloud. A resource that
-// exists only in Cloud tests this before it does anything.
+// IsCloud reports whether the instance is SonarQube Cloud.
 func (c *Client) IsCloud() bool {
 	return c.product == ProductCloud
 }
 
-// get calls a read action of the web service and decodes the answer into out.
 func (c *Client) get(ctx context.Context, path string, params url.Values, out any) error {
 	target := c.url + path
 	if len(params) > 0 {
@@ -95,15 +87,13 @@ func (c *Client) get(ctx context.Context, path string, params url.Values, out an
 	if err != nil {
 		return err
 	}
-	// The web service takes the token as the basic-auth user name, with an
-	// empty password.
+	// The web service takes the token as the basic-auth user name.
 	req.SetBasicAuth(c.token, "")
 
 	return c.do(req, out)
 }
 
-// do sends req and decodes a successful answer into out. Pass a nil out to
-// discard the body.
+// do decodes a successful answer into out. A nil out discards the body.
 func (c *Client) do(req *http.Request, out any) error {
 	req.Header.Set("Accept", "application/json")
 

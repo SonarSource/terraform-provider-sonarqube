@@ -51,8 +51,7 @@ func TestGetOrganization(t *testing.T) {
 	}
 }
 
-// TestGetOrganizationEmptyList pins the behaviour that matters most here. The
-// web service answers a search that finds nothing, and a search that the token
+// The web service answers a search that finds nothing, and a search the token
 // may not make, with status 200 and an empty list. Both must become
 // ErrNotFound rather than an organization with empty fields.
 func TestGetOrganizationEmptyList(t *testing.T) {
@@ -70,8 +69,8 @@ func TestGetOrganizationEmptyList(t *testing.T) {
 	}
 }
 
-// TestGetOrganizationIgnoresAnotherKey guards against a future change of the
-// web service that answers with more than the organization that was asked for.
+// Guards against a change of the web service that answers with more than the
+// organization that was asked for.
 func TestGetOrganizationIgnoresAnotherKey(t *testing.T) {
 	t.Parallel()
 

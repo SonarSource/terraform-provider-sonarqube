@@ -10,20 +10,16 @@ import (
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 )
 
-// envTestOrganization names an organization that the token can read. The
-// acceptance test needs a live instance, so it runs only when this variable
-// and the credentials are set.
+// envTestOrganization names an organization that the token can read.
 const envTestOrganization = "SONARQUBE_TEST_ORGANIZATION"
 
-// testAccProtoV6ProviderFactories gives each acceptance test a provider that
-// runs in the test process.
+// The provider runs inside the test process.
 var testAccProtoV6ProviderFactories = map[string]func() (tfprotov6.ProviderServer, error){
 	"sonarqube": providerserver.NewProtocol6WithError(New("test")()),
 }
 
-// testAccPreCheck stops a test that cannot reach an instance. resource.Test
-// already skips every test when TF_ACC is unset; this adds the settings that
-// this provider needs.
+// resource.Test already skips every test when TF_ACC is unset. This adds the
+// settings that this provider needs.
 func testAccPreCheck(t *testing.T) {
 	t.Helper()
 

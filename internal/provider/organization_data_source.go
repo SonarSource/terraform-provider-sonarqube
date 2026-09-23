@@ -83,8 +83,6 @@ func (d *organizationDataSource) Configure(_ context.Context, req datasource.Con
 		return
 	}
 
-	// Every data source and resource that exists in SonarQube Cloud only makes
-	// this test.
 	if !c.IsCloud() {
 		resp.Diagnostics.AddError(
 			"Organizations need SonarQube Cloud",
@@ -109,9 +107,8 @@ func (d *organizationDataSource) Read(ctx context.Context, req datasource.ReadRe
 	org, err := d.client.GetOrganization(ctx, key)
 	if err != nil {
 		if errors.Is(err, client.ErrNotFound) {
-			// A token without the right permission also lands here, because
-			// the web service answers a search it may not serve with an empty
-			// list instead of an error.
+			// A token without the right permission also lands here: the web
+			// service answers a search it may not serve with an empty list.
 			resp.Diagnostics.AddError(
 				"Organization "+key+" not found",
 				"No organization with this key was found at "+d.client.URL()+

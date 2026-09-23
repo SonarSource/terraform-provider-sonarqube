@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/provider"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-go/tftypes"
@@ -62,9 +63,7 @@ func TestConfigureReadsTheEnvironment(t *testing.T) {
 	}
 }
 
-// TestConfigurePrefersTheConfiguration makes sure that a value written in the
-// configuration wins over the environment, which is the order every provider
-// uses.
+// A value in the configuration wins over the environment.
 func TestConfigurePrefersTheConfiguration(t *testing.T) {
 	t.Setenv(envToken, "token-from-the-environment")
 	t.Setenv(envURL, "https://from-the-environment.example.com")
@@ -91,9 +90,8 @@ func TestConfigureNeedsAToken(t *testing.T) {
 	assertErrorContains(t, resp, "Missing token")
 }
 
-// TestConfigureRefusesServer pins the promise of the product attribute. The
-// schema accepts "server" so that the contract is visible, but this release
-// manages SonarQube Cloud only.
+// The schema accepts "server" so that the contract is visible, but this
+// release manages SonarQube Cloud only.
 func TestConfigureRefusesServer(t *testing.T) {
 	t.Setenv(envToken, "a-token")
 
@@ -104,9 +102,8 @@ func TestConfigureRefusesServer(t *testing.T) {
 	assertErrorContains(t, resp, "SonarQube Server is not supported")
 }
 
-// TestConfigureRefusesAnUnknownToken guards the credentials: a token that is
-// not known yet must stop the provider, not fall through to the environment
-// variable, which would authenticate as somebody else.
+// A token that is not known yet must stop the provider, not fall through to
+// the environment variable, which would authenticate as somebody else.
 func TestConfigureRefusesAnUnknownToken(t *testing.T) {
 	t.Setenv(envToken, "token-from-the-environment")
 
@@ -117,7 +114,6 @@ func TestConfigureRefusesAnUnknownToken(t *testing.T) {
 	assertErrorContains(t, resp, "Unknown value for token")
 }
 
-// providerSchema returns the schema of the provider.
 func providerSchema(t *testing.T) *provider.SchemaResponse {
 	t.Helper()
 
@@ -126,7 +122,7 @@ func providerSchema(t *testing.T) *provider.SchemaResponse {
 	return resp
 }
 
-// configure runs Configure with the given attributes. Every attribute that the
+// configure runs Configure with the given attributes. Every attribute the
 // caller leaves out is null, as it is for an empty provider block.
 func configure(t *testing.T, attributes map[string]tftypes.Value) *provider.ConfigureResponse {
 	t.Helper()
@@ -156,8 +152,6 @@ func configure(t *testing.T, attributes map[string]tftypes.Value) *provider.Conf
 	return resp
 }
 
-// configuredClient returns the client that Configure passed to the resources
-// and the data sources.
 func configuredClient(t *testing.T, resp *provider.ConfigureResponse) *client.Client {
 	t.Helper()
 
@@ -183,4 +177,31 @@ func assertErrorContains(t *testing.T, resp *provider.ConfigureResponse, want st
 		}
 	}
 	t.Errorf("no error mentions %q, got %v", want, resp.Diagnostics.Errors())
+}
+
+// A data source that is written but never registered is invisible to
+// Terraform.
+func TestProviderRegistersItsDataSources(t *testing.T) {
+	t.Parallel()
+
+	p := New("test")()
+
+	dataSources := p.DataSources(context.Background())
+	if got, want := len(dataSources), 1; got != want {
+		t.Fatalf("the provider registers %d data sources, want %d", got, want)
+	}
+
+	resp := &datasource.MetadataResponse{}
+	dataSources[0]().Metadata(
+		context.Background(),
+		datasource.MetadataRequest{ProviderTypeName: "sonarqube"},
+		resp,
+	)
+	if got, want := resp.TypeName, "sonarqube_organization"; got != want {
+		t.Errorf("the registered data source is %q, want %q", got, want)
+	}
+
+	if got := len(p.Resources(context.Background())); got != 0 {
+		t.Errorf("the provider registers %d resources, want none in this release", got)
+	}
 }

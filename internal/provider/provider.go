@@ -17,12 +17,9 @@ import (
 	"github.com/SonarSource/terraform-provider-sonarqube/internal/client"
 )
 
-// Names of the environment variables that hold the provider configuration.
-//
-// The names carry the SONARQUBE_ prefix on purpose. SONAR_TOKEN is already set
-// in many continuous integration jobs, where it holds an analysis token. That
-// token cannot administer an organization, so a provider that read it would
-// fail in a way that is hard to understand.
+// The SONARQUBE_ prefix is deliberate. SONAR_TOKEN is already set in many
+// continuous integration jobs, where it holds an analysis token that cannot
+// administer an organization.
 const (
 	envURL   = "SONARQUBE_URL"
 	envToken = "SONARQUBE_TOKEN"
@@ -36,7 +33,8 @@ type sonarqubeProvider struct {
 	version string
 }
 
-// New returns a function that creates the provider with the given version.
+// New returns the factory that main and the acceptance tests use to build
+// the provider.
 func New(version string) func() provider.Provider {
 	return func() provider.Provider {
 		return &sonarqubeProvider{
@@ -45,15 +43,14 @@ func New(version string) func() provider.Provider {
 	}
 }
 
-// providerModel mirrors the provider schema.
 type providerModel struct {
 	URL     types.String `tfsdk:"url"`
 	Token   types.String `tfsdk:"token"`
 	Product types.String `tfsdk:"product"`
 }
 
-// Metadata sets the provider type name, which prefixes the name of each
-// resource and data source, for example "sonarqube_organization".
+// Metadata sets the type name, which prefixes every resource and data source,
+// for example "sonarqube_organization".
 func (p *sonarqubeProvider) Metadata(_ context.Context, _ provider.MetadataRequest, resp *provider.MetadataResponse) {
 	resp.TypeName = "sonarqube"
 	resp.Version = p.version
@@ -94,10 +91,8 @@ func (p *sonarqubeProvider) Configure(ctx context.Context, req provider.Configur
 		return
 	}
 
-	// A value that is unknown here comes from another resource that must be
-	// applied first. Say so, rather than reading the environment variable
-	// instead, which would use a different instance or a different identity
-	// than the configuration asks for.
+	// An unknown value comes from another resource that must be applied first.
+	// Falling back to the environment would authenticate as somebody else.
 	addUnknownError(resp, config.URL, "url", envURL)
 	addUnknownError(resp, config.Token, "token", envToken)
 	addUnknownError(resp, config.Product, "product", "")
@@ -152,8 +147,8 @@ func (p *sonarqubeProvider) DataSources(_ context.Context) []func() datasource.D
 	}
 }
 
-// addUnknownError reports an attribute whose value is not known yet. Pass an
-// empty envVar for an attribute that no environment variable can supply.
+// addUnknownError takes an empty envVar for an attribute that no environment
+// variable can supply.
 func addUnknownError(resp *provider.ConfigureResponse, value types.String, attribute, envVar string) {
 	if !value.IsUnknown() {
 		return
