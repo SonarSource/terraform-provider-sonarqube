@@ -45,10 +45,7 @@ func TestProviderSchema(t *testing.T) {
 }
 
 func TestConfigureReadsTheEnvironment(t *testing.T) {
-	t.Setenv(envToken, "token-from-the-environment")
-	t.Setenv(envURL, "")
-
-	resp := configure(t, nil)
+	resp := configure(t, map[string]string{envToken: "token-from-the-environment"}, nil)
 
 	if resp.Diagnostics.HasError() {
 		t.Fatalf("unexpected diagnostics: %v", resp.Diagnostics)
@@ -68,12 +65,14 @@ func TestConfigureReadsTheEnvironment(t *testing.T) {
 
 // A value in the configuration wins over the environment.
 func TestConfigurePrefersTheConfiguration(t *testing.T) {
-	t.Setenv(envToken, "token-from-the-environment")
-	t.Setenv(envURL, "https://from-the-environment.example.com")
-
-	resp := configure(t, map[string]tftypes.Value{
-		"url": tftypes.NewValue(tftypes.String, "https://from-the-configuration.example.com"),
-	})
+	resp := configure(t,
+		map[string]string{
+			envToken: "token-from-the-environment",
+			envURL:   "https://from-the-environment.example.com",
+		},
+		map[string]tftypes.Value{
+			"url": tftypes.NewValue(tftypes.String, "https://from-the-configuration.example.com"),
+		})
 
 	if resp.Diagnostics.HasError() {
 		t.Fatalf("unexpected diagnostics: %v", resp.Diagnostics)
@@ -88,12 +87,12 @@ func TestConfigurePrefersTheConfiguration(t *testing.T) {
 // api_url is the escape hatch for a deployment whose api host does not follow
 // the usual naming.
 func TestConfigureKeepsAnExplicitAPIURL(t *testing.T) {
-	t.Setenv(envToken, "a-token")
-
-	resp := configure(t, map[string]tftypes.Value{
-		"url":     tftypes.NewValue(tftypes.String, "https://dev11.sc-dev11.io"),
-		"api_url": tftypes.NewValue(tftypes.String, "https://api.example.com"),
-	})
+	resp := configure(t,
+		map[string]string{envToken: "a-token"},
+		map[string]tftypes.Value{
+			"url":     tftypes.NewValue(tftypes.String, "https://dev11.sc-dev11.io"),
+			"api_url": tftypes.NewValue(tftypes.String, "https://api.example.com"),
+		})
 
 	if resp.Diagnostics.HasError() {
 		t.Fatalf("unexpected diagnostics: %v", resp.Diagnostics)
@@ -106,9 +105,7 @@ func TestConfigureKeepsAnExplicitAPIURL(t *testing.T) {
 }
 
 func TestConfigureNeedsAToken(t *testing.T) {
-	t.Setenv(envToken, "")
-
-	resp := configure(t, nil)
+	resp := configure(t, nil, nil)
 
 	assertErrorContains(t, resp, "Missing token")
 }
@@ -116,11 +113,11 @@ func TestConfigureNeedsAToken(t *testing.T) {
 // The schema accepts "server" so that the contract is visible, but this
 // release manages SonarQube Cloud only.
 func TestConfigureRefusesServer(t *testing.T) {
-	t.Setenv(envToken, "a-token")
-
-	resp := configure(t, map[string]tftypes.Value{
-		"product": tftypes.NewValue(tftypes.String, string(client.ProductServer)),
-	})
+	resp := configure(t,
+		map[string]string{envToken: "a-token"},
+		map[string]tftypes.Value{
+			"product": tftypes.NewValue(tftypes.String, string(client.ProductServer)),
+		})
 
 	assertErrorContains(t, resp, "SonarQube Server is not supported")
 }
@@ -128,11 +125,11 @@ func TestConfigureRefusesServer(t *testing.T) {
 // A token that is not known yet must stop the provider, not fall through to
 // the environment variable, which would authenticate as somebody else.
 func TestConfigureRefusesAnUnknownToken(t *testing.T) {
-	t.Setenv(envToken, "token-from-the-environment")
-
-	resp := configure(t, map[string]tftypes.Value{
-		"token": tftypes.NewValue(tftypes.String, tftypes.UnknownValue),
-	})
+	resp := configure(t,
+		map[string]string{envToken: "token-from-the-environment"},
+		map[string]tftypes.Value{
+			"token": tftypes.NewValue(tftypes.String, tftypes.UnknownValue),
+		})
 
 	assertErrorContains(t, resp, "Unknown value for token")
 }
@@ -145,10 +142,15 @@ func providerSchema(t *testing.T) *provider.SchemaResponse {
 	return resp
 }
 
-// configure runs Configure with the given attributes. Every attribute the
-// caller leaves out is null, as it is for an empty provider block.
-func configure(t *testing.T, attributes map[string]tftypes.Value) *provider.ConfigureResponse {
+// configure runs Configure with the given environment and attributes. Every
+// variable and every attribute that the caller leaves out is empty, so that no
+// test depends on the environment of the machine it runs on.
+func configure(t *testing.T, env map[string]string, attributes map[string]tftypes.Value) *provider.ConfigureResponse {
 	t.Helper()
+
+	for _, name := range []string{envURL, envAPIURL, envToken} {
+		t.Setenv(name, env[name])
+	}
 
 	ctx := context.Background()
 	schema := providerSchema(t).Schema

@@ -7,9 +7,9 @@ import (
 	"strings"
 )
 
-// ErrNotFound reports that an entity does not exist. A missing organization
-// arrives in two shapes, a 404 and an empty result from "search", and both
-// become this error, so a caller has one condition to test.
+// ErrNotFound reports that an entity does not exist. Web API v2 answers a
+// missing organization with a 404, and an answer that carries nothing becomes
+// the same error, so a caller has one condition to test.
 var ErrNotFound = errors.New("not found")
 
 // APIError is a response with a status outside the 2xx range.
