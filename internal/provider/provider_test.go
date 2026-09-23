@@ -2,9 +2,14 @@ package provider
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-framework/provider"
+	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
+	"github.com/hashicorp/terraform-plugin-go/tftypes"
+
+	"github.com/SonarSource/terraform-provider-sonarqube/internal/client"
 )
 
 func TestProviderMetadata(t *testing.T) {
@@ -27,10 +32,7 @@ func TestProviderMetadata(t *testing.T) {
 func TestProviderSchema(t *testing.T) {
 	t.Parallel()
 
-	p := New("test")()
-
-	resp := &provider.SchemaResponse{}
-	p.Schema(context.Background(), provider.SchemaRequest{}, resp)
+	resp := providerSchema(t)
 
 	if resp.Diagnostics.HasError() {
 		t.Errorf("unexpected diagnostics: %v", resp.Diagnostics)
@@ -39,4 +41,146 @@ func TestProviderSchema(t *testing.T) {
 	if err := resp.Schema.ValidateImplementation(context.Background()); err != nil {
 		t.Errorf("invalid schema implementation: %v", err)
 	}
+}
+
+func TestConfigureReadsTheEnvironment(t *testing.T) {
+	t.Setenv(envToken, "token-from-the-environment")
+	t.Setenv(envURL, "")
+
+	resp := configure(t, nil)
+
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("unexpected diagnostics: %v", resp.Diagnostics)
+	}
+
+	c := configuredClient(t, resp)
+	if got, want := c.URL(), client.CloudURL; got != want {
+		t.Errorf("URL() = %q, want the default %q", got, want)
+	}
+	if got, want := c.Product(), client.ProductCloud; got != want {
+		t.Errorf("Product() = %q, want %q", got, want)
+	}
+}
+
+// TestConfigurePrefersTheConfiguration makes sure that a value written in the
+// configuration wins over the environment, which is the order every provider
+// uses.
+func TestConfigurePrefersTheConfiguration(t *testing.T) {
+	t.Setenv(envToken, "token-from-the-environment")
+	t.Setenv(envURL, "https://from-the-environment.example.com")
+
+	resp := configure(t, map[string]tftypes.Value{
+		"url": tftypes.NewValue(tftypes.String, "https://from-the-configuration.example.com"),
+	})
+
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("unexpected diagnostics: %v", resp.Diagnostics)
+	}
+
+	c := configuredClient(t, resp)
+	if got, want := c.URL(), "https://from-the-configuration.example.com"; got != want {
+		t.Errorf("URL() = %q, want %q", got, want)
+	}
+}
+
+func TestConfigureNeedsAToken(t *testing.T) {
+	t.Setenv(envToken, "")
+
+	resp := configure(t, nil)
+
+	assertErrorContains(t, resp, "Missing token")
+}
+
+// TestConfigureRefusesServer pins the promise of the product attribute. The
+// schema accepts "server" so that the contract is visible, but this release
+// manages SonarQube Cloud only.
+func TestConfigureRefusesServer(t *testing.T) {
+	t.Setenv(envToken, "a-token")
+
+	resp := configure(t, map[string]tftypes.Value{
+		"product": tftypes.NewValue(tftypes.String, string(client.ProductServer)),
+	})
+
+	assertErrorContains(t, resp, "SonarQube Server is not supported")
+}
+
+// TestConfigureRefusesAnUnknownToken guards the credentials: a token that is
+// not known yet must stop the provider, not fall through to the environment
+// variable, which would authenticate as somebody else.
+func TestConfigureRefusesAnUnknownToken(t *testing.T) {
+	t.Setenv(envToken, "token-from-the-environment")
+
+	resp := configure(t, map[string]tftypes.Value{
+		"token": tftypes.NewValue(tftypes.String, tftypes.UnknownValue),
+	})
+
+	assertErrorContains(t, resp, "Unknown value for token")
+}
+
+// providerSchema returns the schema of the provider.
+func providerSchema(t *testing.T) *provider.SchemaResponse {
+	t.Helper()
+
+	resp := &provider.SchemaResponse{}
+	New("test")().Schema(context.Background(), provider.SchemaRequest{}, resp)
+	return resp
+}
+
+// configure runs Configure with the given attributes. Every attribute that the
+// caller leaves out is null, as it is for an empty provider block.
+func configure(t *testing.T, attributes map[string]tftypes.Value) *provider.ConfigureResponse {
+	t.Helper()
+
+	ctx := context.Background()
+	schema := providerSchema(t).Schema
+
+	objectType, ok := schema.Type().TerraformType(ctx).(tftypes.Object)
+	if !ok {
+		t.Fatalf("the provider schema is not an object type")
+	}
+
+	values := make(map[string]tftypes.Value, len(objectType.AttributeTypes))
+	for name, attributeType := range objectType.AttributeTypes {
+		if value, given := attributes[name]; given {
+			values[name] = value
+			continue
+		}
+		values[name] = tftypes.NewValue(attributeType, nil)
+	}
+
+	req := provider.ConfigureRequest{
+		Config: tfsdk.Config{Schema: schema, Raw: tftypes.NewValue(objectType, values)},
+	}
+	resp := &provider.ConfigureResponse{}
+	New("test")().Configure(ctx, req, resp)
+	return resp
+}
+
+// configuredClient returns the client that Configure passed to the resources
+// and the data sources.
+func configuredClient(t *testing.T, resp *provider.ConfigureResponse) *client.Client {
+	t.Helper()
+
+	c, ok := resp.DataSourceData.(*client.Client)
+	if !ok {
+		t.Fatalf("DataSourceData is %T, want *client.Client", resp.DataSourceData)
+	}
+	if resp.ResourceData != resp.DataSourceData {
+		t.Error("the resources and the data sources got different clients")
+	}
+	return c
+}
+
+func assertErrorContains(t *testing.T, resp *provider.ConfigureResponse, want string) {
+	t.Helper()
+
+	if !resp.Diagnostics.HasError() {
+		t.Fatalf("Configure reported no error, want one about %q", want)
+	}
+	for _, diagnostic := range resp.Diagnostics.Errors() {
+		if strings.Contains(diagnostic.Summary(), want) || strings.Contains(diagnostic.Detail(), want) {
+			return
+		}
+	}
+	t.Errorf("no error mentions %q, got %v", want, resp.Diagnostics.Errors())
 }
