@@ -145,7 +145,10 @@ func ValidateURL(value string) error {
 	if parsed.Scheme != "http" && parsed.Scheme != "https" {
 		return fmt.Errorf("%q has no http or https scheme", value)
 	}
-	if parsed.Host == "" {
+	// Test the host name, not Host: Host still carries the port when the name
+	// is empty, so "https://:9000" would pass and every request would go to
+	// the machine that runs Terraform.
+	if parsed.Hostname() == "" {
 		return fmt.Errorf("%q names no host", value)
 	}
 	return nil

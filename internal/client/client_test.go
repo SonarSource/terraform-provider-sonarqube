@@ -259,6 +259,7 @@ func TestValidateURL(t *testing.T) {
 		"":                    "no http or https scheme",
 		"ftp://sonarcloud.io": "no http or https scheme",
 		"https://":            "names no host",
+		"https://:9000":       "names no host",
 	}
 
 	for _, value := range valid {
