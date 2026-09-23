@@ -1,0 +1,32 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "local>SonarSource/renovate-config:orchestration-integration-squad"
+  ],
+  "enabledManagers": [
+    "github-actions",
+    "gomod",
+    "pre-commit"
+  ],
+  "pre-commit": {
+    "enabled": true
+  },
+  "postUpdateOptions": [
+    "gomodTidy"
+  ],
+  "packageRules": [
+    {
+      "description": "The dependency risks that fail the quality gate all sit behind indirect requirements, which Renovate skips by default",
+      "matchManagers": ["gomod"],
+      "matchDepTypes": ["indirect"],
+      "matchUpdateTypes": ["minor", "patch", "digest"],
+      "enabled": true
+    },
+    {
+      "matchManagers": ["gomod"],
+      "matchUpdateTypes": ["minor", "patch"],
+      "groupName": "Non-major Go dependencies",
+      "prHeader": "Update non-major Go dependencies"
+    }
+  ]
+}
