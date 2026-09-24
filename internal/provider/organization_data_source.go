@@ -3,7 +3,6 @@ package provider
 import (
 	"context"
 	"errors"
-	"fmt"
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
@@ -68,30 +67,9 @@ func (d *organizationDataSource) Schema(_ context.Context, _ datasource.SchemaRe
 }
 
 func (d *organizationDataSource) Configure(_ context.Context, req datasource.ConfigureRequest, resp *datasource.ConfigureResponse) {
-	// The framework calls Configure with no data while it validates the
-	// configuration, before the provider itself is configured.
-	if req.ProviderData == nil {
-		return
-	}
-
-	c, ok := req.ProviderData.(*client.Client)
-	if !ok {
-		resp.Diagnostics.AddError(
-			"Unexpected provider data",
-			fmt.Sprintf("Expected *client.Client, got %T. This is a fault in the provider.", req.ProviderData),
-		)
-		return
-	}
-
-	if !c.IsCloud() {
-		resp.Diagnostics.AddError(
-			"Organizations need SonarQube Cloud",
-			"The sonarqube_organization data source reads an organization, which "+
-				"exists in SonarQube Cloud only.",
-		)
-		return
-	}
-
+	c, diagnostics := requireCloudClient(req.ProviderData,
+		"The sonarqube_organization data source reads an organization")
+	resp.Diagnostics.Append(diagnostics...)
 	d.client = c
 }
 

@@ -7,6 +7,7 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/provider"
+	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-go/tftypes"
 
@@ -204,8 +205,8 @@ func assertErrorContains(t *testing.T, resp *provider.ConfigureResponse, want st
 	t.Errorf("no error mentions %q, got %v", want, resp.Diagnostics.Errors())
 }
 
-// A data source that is written but never registered is invisible to
-// Terraform.
+// A data source or a resource that is written but never registered is
+// invisible to Terraform.
 func TestProviderRegistersItsDataSources(t *testing.T) {
 	t.Parallel()
 
@@ -226,8 +227,19 @@ func TestProviderRegistersItsDataSources(t *testing.T) {
 		t.Errorf("the registered data source is %q, want %q", got, want)
 	}
 
-	if got := len(p.Resources(context.Background())); got != 0 {
-		t.Errorf("the provider registers %d resources, want none in this release", got)
+	resources := p.Resources(context.Background())
+	if got, want := len(resources), 1; got != want {
+		t.Fatalf("the provider registers %d resources, want %d", got, want)
+	}
+
+	resourceResp := &resource.MetadataResponse{}
+	resources[0]().Metadata(
+		context.Background(),
+		resource.MetadataRequest{ProviderTypeName: "sonarqube"},
+		resourceResp,
+	)
+	if got, want := resourceResp.TypeName, "sonarqube_organization"; got != want {
+		t.Errorf("the registered resource is %q, want %q", got, want)
 	}
 }
 
