@@ -7,18 +7,6 @@ Shared instructions for all coding agents working in this repository.
 One official Terraform provider for SonarQube Cloud and SonarQube Server.
 The alpha supports Cloud only and targets organizations bound to GitHub.
 
-## Before reading files
-
-Run the deterministic secrets scanner before reading any file:
-
-```bash
-sonar analyze secrets <path/to/file>
-```
-
-If the scanner reports a secret, do not read the file. Explain that reading
-it would expose the value in chat history, logs, and downstream telemetry.
-Advise the user to rotate the credential at its source and remove it from
-the file. Stop the original task until the secret has been removed.
 
 ## Repository structure
 
