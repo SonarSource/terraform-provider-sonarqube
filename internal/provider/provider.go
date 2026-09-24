@@ -161,7 +161,9 @@ func (p *sonarqubeProvider) Configure(ctx context.Context, req provider.Configur
 }
 
 func (p *sonarqubeProvider) Resources(_ context.Context) []func() resource.Resource {
-	return []func() resource.Resource{}
+	return []func() resource.Resource{
+		NewOrganizationResource,
+	}
 }
 
 func (p *sonarqubeProvider) DataSources(_ context.Context) []func() datasource.DataSource {

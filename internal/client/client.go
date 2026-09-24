@@ -214,6 +214,17 @@ func (c *Client) get(ctx context.Context, path string, params url.Values, out an
 	return c.send(ctx, http.MethodGet, c.url+path, params, nil, c.webServiceAuth, out)
 }
 
+// post calls a write action of the older web service, which has no counterpart
+// in Web API v2. The answer is discarded: every such action of this client
+// reads the entity back through Web API v2.
+func (c *Client) post(ctx context.Context, path string, params url.Values) error {
+	return c.send(ctx, http.MethodPost, c.url+path, nil, strings.NewReader(params.Encode()),
+		func(req *http.Request) {
+			req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+			c.webServiceAuth(req)
+		}, nil)
+}
+
 // apiGet calls a read of Web API v2.
 func (c *Client) apiGet(ctx context.Context, path string, params url.Values, out any) error {
 	return c.send(ctx, http.MethodGet, c.apiURL+path, params, nil, c.apiAuth, out)
