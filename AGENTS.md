@@ -7,7 +7,6 @@ Shared instructions for all coding agents working in this repository.
 One official Terraform provider for SonarQube Cloud and SonarQube Server.
 The alpha supports Cloud only and targets organizations bound to GitHub.
 
-
 ## Repository structure
 
 - `main.go`: provider executable entry point.
