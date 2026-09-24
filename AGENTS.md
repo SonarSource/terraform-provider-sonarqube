@@ -1,6 +1,108 @@
-# AGENTS.md
+# terraform-provider-sonarqube
 
-Cross-tool instructions for any AI coding agent working in this repo.
+Shared instructions for all coding agents working in this repository.
+
+## Purpose and scope
+
+One official Terraform provider for SonarQube Cloud and SonarQube Server.
+The alpha supports Cloud only and targets organizations bound to GitHub.
+
+## Before reading files
+
+Run the deterministic secrets scanner before reading any file:
+
+```bash
+sonar analyze secrets <path/to/file>
+```
+
+If the scanner reports a secret, do not read the file. Explain that reading
+it would expose the value in chat history, logs, and downstream telemetry.
+Advise the user to rotate the credential at its source and remove it from
+the file. Stop the original task until the secret has been removed.
+
+## Repository structure
+
+- `main.go`: provider executable entry point.
+- `internal/provider`: Terraform configuration, schemas, diagnostics,
+  resources, data sources, and state.
+- `internal/client`: SonarQube HTTP transport, authentication, API payloads,
+  and API errors.
+- `internal/client/APIS.md`: inventory of consumed API endpoints.
+- `.github/workflows`: GitHub Actions workflows.
+
+Use `terraform-plugin-framework` for provider implementations and
+`terraform-plugin-testing` for Terraform acceptance tests. Follow the
+existing organization data source and its tests when adding functionality.
+
+## Build and validation
+
+Use the Go version declared in `go.mod`. Run commands from the repository
+root. `.github/workflows/build.yml` defines the CI checks.
+
+During development, target the affected package or test:
+
+```bash
+go test ./internal/client -run '^TestGetOrganization' -count=1
+```
+
+After Go changes, format the changed Go files and run:
+
+```bash
+gofmt -w <changed-go-files>
+go vet ./...
+go build ./...
+env -u TF_ACC go test -race ./...
+```
+
+Unsetting `TF_ACC` keeps this validation independent of live acceptance
+tests, even when the variable is set in the calling shell.
+
+When imports or dependencies change, run `go mod tidy` and review both
+`go.mod` and `go.sum`.
+
+For documentation or workflow changes, run the applicable checks from
+`.pre-commit-config.yaml`:
+
+```bash
+pre-commit run --files <changed-files>
+```
+
+Report which checks ran and distinguish failures, skipped checks, and
+checks that could not run.
+
+## Implementation rules
+
+- Route all SonarQube HTTP requests through `internal/client`. Keep
+  Terraform schemas, state, and diagnostics in `internal/provider`.
+- Reuse the client's transport and authentication helpers. Web API v2
+  uses the API host with bearer authentication; the older web services
+  use the instance host with the token as the basic-auth username.
+- Preserve `SONARQUBE_URL`, `SONARQUBE_API_URL`, and `SONARQUBE_TOKEN`.
+  Do not substitute `SONAR_TOKEN`: CI commonly uses it for analysis.
+- Preserve Terraform's distinction between null, unknown, and known
+  values. Unknown provider settings must produce diagnostics rather than
+  silently falling back to environment variables.
+- Keep tokens sensitive and exclude credentials from logs and diagnostics.
+- Propagate request contexts and return errors through Terraform diagnostics.
+- An organization read returning 404 can indicate either a missing
+  organization or insufficient access. Diagnostics must explain both.
+- Explain non-obvious API behavior in comments. Avoid comments that merely
+  restate the code.
+
+## Adding or changing a resource or data source
+
+1. Follow the existing implementation in the same package.
+2. Add API operations to the appropriate domain file in `internal/client`.
+3. Implement the Terraform schema, configuration, and state handling.
+4. Register the constructor in the provider's `Resources` or `DataSources`.
+5. Update `internal/client/APIS.md` in the same change.
+6. Add tests for changed behavior, relevant errors, and state transitions.
+   For resources, cover cleanup and a second apply with no changes;
+   cover import when supported.
+
+Use `httptest` for client behavior and direct provider tests for schemas,
+configuration, diagnostics, and state. These tests must work without live
+credentials.
 
 ## Keep the API inventory current
 
@@ -9,6 +111,11 @@ calls, grouped by domain, with each endpoint marked either public (with a
 link to its docs page) or internal. Whenever a change to `internal/client`
 adds, removes, or changes an endpoint — including adding a new domain for a
 new resource or data source — update `APIS.md` in the same change.
+
+## Documentation
+
+Update these instructions when commands, package boundaries, or development
+rules change.
 
 <!-- sonar:begin:sonarqube-agentic-analysis-protocol -->
 ## SonarQube Agentic Analysis protocol
