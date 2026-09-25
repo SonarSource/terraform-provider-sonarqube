@@ -51,6 +51,14 @@ func TestGetOrganization(t *testing.T) {
 	if got, want := org.AvatarURL, "https://example.com/avatar.png"; got != want {
 		t.Errorf("AvatarURL = %q, want %q", got, want)
 	}
+	// The bindings API accepts this identifier and nothing else, so the
+	// provider reads it out of the same answer.
+	if got, want := org.ID, "AZcwYwExlol79EFABiuM"; got != want {
+		t.Errorf("ID = %q, want %q", got, want)
+	}
+	if got, want := org.UUIDV4, "3ddd1f8f-2ab4-443f-a3be-a19ca418ca75"; got != want {
+		t.Errorf("UUIDV4 = %q, want %q", got, want)
+	}
 }
 
 // Web API v2 answers 404 for a key that names no organization, and for an
