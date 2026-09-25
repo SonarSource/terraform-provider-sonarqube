@@ -1,0 +1,49 @@
+name: Acceptance tests
+
+on:
+  push:
+    branches:
+      - master
+  workflow_dispatch:
+
+# One shared staging organization. Two overlapping runs would race each
+# other's create/delete calls, so runs queue instead of running in parallel.
+concurrency:
+  group: acceptance-tests
+  cancel-in-progress: false
+
+jobs:
+  acceptance-tests:
+    # For guidance on runner selection, visit:
+    # https://xtranet-sonarsource.atlassian.net/wiki/spaces/Platform/pages/3694231566/GitHub+Actions+Runner+-+GitHub
+    runs-on: sonar-s
+    name: Acceptance tests
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v4.0.1
+        with:
+          terraform_wrapper: false
+
+      - name: Run the acceptance tests against SonarQube Cloud staging
+        env:
+          TF_ACC: "1"
+          SONARQUBE_URL: https://sc-staging.io
+          # A repository secret is a stopgap for SC-58198, tracked there. It
+          # is not exposed to a pull request from a fork (this workflow never
+          # runs on pull_request), but anyone with write access to this
+          # public repo can still read it from a branch. A follow-up moves it
+          # to Vault, the same way build.yml does for SONAR_TOKEN.
+          SONARQUBE_TOKEN: ${{ secrets.SONARQUBE_STAGING_TOKEN }}
+          SONARQUBE_TEST_ORGANIZATION: ${{ vars.SONARQUBE_STAGING_ORGANIZATION }}
+        run: go test -v -count=1 -timeout 25m ./internal/provider/...
