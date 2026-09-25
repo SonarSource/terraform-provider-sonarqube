@@ -23,3 +23,37 @@ An endpoint is "Public" only when SonarSource's own docs link one as public.
 
 Web API v2 has no create, update, rename or delete for an organization today,
 so every write goes through the internal v1 surface.
+
+`GetOrganization` also reports the internal identifier of the organization,
+such as `AZcwYwExlol79EFABiuM`. The bindings API below names an organization
+by that identifier and by nothing else, so a read of the organization is how
+an organization key reaches it.
+
+## DevOps platform bindings (`bindings.go`)
+
+| Function | Endpoint | Surface | Public or internal |
+|---|---|---|---|
+| `CreateOrganizationBinding` | `POST {api_url}/dop-translation/organization-bindings` | Web API v2 | Internal |
+| `GetOrganizationBinding` | `GET {api_url}/dop-translation/organization-bindings/{id}` | Web API v2 | Internal |
+| `FindOrganizationBinding` | `GET {api_url}/dop-translation/organization-bindings?organizationId=` | Web API v2 | Internal |
+| `UpdateOrganizationBinding` | `PATCH {api_url}/dop-translation/organization-bindings/{id}` | Web API v2 | Internal |
+
+There is no delete. A binding goes away only when its organization is
+deleted, which removes the records that these endpoints write.
+
+A search for an organization that is not bound answers 404 with an empty
+body, not 200 with an empty collection.
+
+Every endpoint of these two domains was read against `dev11.sc-dev11.io` on
+2026-09-24. A bind that succeeds was not tested: it needs a GitHub
+application installation that is bound to no organization.
+
+## DevOps platform applications (`dop_applications.go`)
+
+| Function | Endpoint | Surface | Public or internal |
+|---|---|---|---|
+| `ListDopApplications` | `GET {api_url}/dop-translation/dop-applications?devOpsPlatform=` | Web API v2 | Internal |
+
+A binding to github.com accepts an installation of one of these applications
+only, because the server looks an installation up in its own records instead
+of asking GitHub.
