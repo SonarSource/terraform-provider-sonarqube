@@ -8,9 +8,9 @@ import (
 const dopApplicationsAnswer = `{
   "devOpsPlatformApplications": [
     {
-      "id": "github#sonarqube-cloud-dev11",
+      "id": "github#sonarqube-cloud-test",
       "devOpsPlatform": "github",
-      "applicationKey": "sonarqube-cloud-dev11",
+      "applicationKey": "sonarqube-cloud-test",
       "bindingType": "integration-dop"
     }
   ]
@@ -38,7 +38,7 @@ func TestListDopApplications(t *testing.T) {
 	if len(applications) != 1 {
 		t.Fatalf("got %d applications, want 1", len(applications))
 	}
-	if got, want := applications[0].ApplicationKey, "sonarqube-cloud-dev11"; got != want {
+	if got, want := applications[0].ApplicationKey, "sonarqube-cloud-test"; got != want {
 		t.Errorf("ApplicationKey = %q, want %q", got, want)
 	}
 }

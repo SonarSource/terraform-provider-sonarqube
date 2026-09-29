@@ -68,45 +68,73 @@ resource "sonarqube_organization" "test" {
 `, key, name, description)
 }
 
-// A test that makes and deletes an organization must reach a test instance
-// only. The guard allows the hosts it knows, because a list of dangerous hosts
-// cannot know about every address that reaches production.
+// The variable holds the names of the instances, so this repository holds
+// none.
 func TestRequireSafeTarget(t *testing.T) {
-	t.Parallel()
+	t.Setenv(envAllowedHosts, "test.example.com, another.example.net")
 
 	refused := []string{
 		"https://sonarcloud.io",
 		"https://SonarCloud.io/",
 		"https://www.sonarcloud.io",
 		"https://sonarqube.us",
-		// A hostname that ends in a dot is absolute, and it reaches the same
-		// instance.
 		"https://sonarcloud.io.",
 		"https://SonarCloud.io./",
 		"https://sonarqube.us.",
-		// An address that the guard does not know, whatever it is.
 		"https://18.66.147.51",
 		"https://example.com",
-		"https://sonarcloud.io.example.com",
-		"https://sc-dev11.io.example.com",
+		"https://not-listed.example.org",
+		// An allowed name inside another name allows nothing.
+		"https://test.example.com.evil.example.org",
 	}
 	allowed := []string{
-		"https://dev11.sc-dev11.io",
-		"https://sc-dev11.io",
-		"https://sc-staging.io",
-		"https://dev.sc-staging.io",
+		"https://test.example.com",
+		"https://TEST.example.com/",
+		"https://test.example.com.",
+		// An entry allows its sub-domains.
+		"https://eu.test.example.com",
+		"https://another.example.net",
 		"http://localhost:9000",
 		"http://127.0.0.1:9000",
 	}
 
 	for _, instanceURL := range refused {
 		if err := requireSafeTarget(instanceURL); err == nil {
-			t.Errorf("requireSafeTarget(%q) allowed an instance that is not a test instance", instanceURL)
+			t.Errorf("requireSafeTarget(%q) allowed an instance that is not allowed", instanceURL)
 		}
 	}
 	for _, instanceURL := range allowed {
 		if err := requireSafeTarget(instanceURL); err != nil {
 			t.Errorf("requireSafeTarget(%q) = %v, want it allowed", instanceURL, err)
 		}
+	}
+}
+
+// The variable cannot open production, not even through a sub-domain.
+func TestRequireSafeTargetNeverAllowsProduction(t *testing.T) {
+	t.Setenv(envAllowedHosts, "sonarcloud.io, sonarqube.us")
+
+	for _, instanceURL := range []string{
+		"https://sonarcloud.io",
+		"https://api.sonarcloud.io",
+		"https://eu.sonarcloud.io",
+		"https://www.sonarcloud.io.",
+		"https://api.sonarqube.us",
+	} {
+		if err := requireSafeTarget(instanceURL); err == nil {
+			t.Errorf("requireSafeTarget(%q) allowed production", instanceURL)
+		}
+	}
+}
+
+// A run that forgets the variable writes nowhere.
+func TestRequireSafeTargetWithNoAllowedHosts(t *testing.T) {
+	t.Setenv(envAllowedHosts, "")
+
+	if err := requireSafeTarget("https://test.example.com"); err == nil {
+		t.Error("an instance was allowed although the variable is empty")
+	}
+	if err := requireSafeTarget("http://localhost:9000"); err != nil {
+		t.Errorf("a local instance was refused: %v", err)
 	}
 }

@@ -44,7 +44,7 @@ deleted, which removes the records that these endpoints write.
 A search for an organization that is not bound answers 404 with an empty
 body, not 200 with an empty collection.
 
-Every endpoint of these two domains was read against `dev11.sc-dev11.io` on
+Every endpoint of these two domains was read against a development instance on
 2026-09-24. A bind that succeeds was not tested: it needs a GitHub
 application installation that is bound to no organization.
 

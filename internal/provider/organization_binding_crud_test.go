@@ -351,7 +351,7 @@ func TestOrganizationBindingResourceImportOfAnUnboundOrganization(t *testing.T) 
 // The resource binds to github.com only, so it must refuse the import of a
 // binding to another platform rather than write a state that no plan can
 // answer: such a binding carries no installation, and the attribute is
-// required here. dev11 holds a binding to GitLab of exactly this shape.
+// required here. A real instance holds a binding to GitLab of exactly this shape.
 func TestOrganizationBindingResourceImportOfAnotherPlatform(t *testing.T) {
 	t.Parallel()
 

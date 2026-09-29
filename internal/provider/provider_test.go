@@ -91,7 +91,7 @@ func TestConfigureKeepsAnExplicitAPIURL(t *testing.T) {
 	resp := configure(t,
 		map[string]string{envToken: "a-token"},
 		map[string]tftypes.Value{
-			"url":     tftypes.NewValue(tftypes.String, "https://dev11.sc-dev11.io"),
+			"url":     tftypes.NewValue(tftypes.String, "https://dev.example.io"),
 			"api_url": tftypes.NewValue(tftypes.String, "https://api.example.com"),
 		})
 

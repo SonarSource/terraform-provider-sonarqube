@@ -224,7 +224,7 @@ func (f *fakeBoundInstance) serveOne(w http.ResponseWriter, r *http.Request, id 
 
 // bindTo puts an organization and a binding to one platform into the
 // instance. A binding to a platform that is not GitHub carries no
-// installation, which is what dev11 reports for GitLab.
+// installation, which is what a real instance reports for GitLab.
 func (f *fakeBoundInstance) bindTo(organizationKey, organizationID, platform string) *client.OrganizationBinding {
 	binding := f.bind(organizationKey, organizationID)
 	binding.DevOpsPlatform = platform

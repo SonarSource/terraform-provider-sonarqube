@@ -7,6 +7,27 @@ Shared instructions for all coding agents working in this repository.
 One official Terraform provider for SonarQube Cloud and SonarQube Server.
 The alpha supports Cloud only and targets organizations bound to GitHub.
 
+## Data sensitivity
+
+This repository is public. Never add any of the following to files,
+comments, commit messages, or pull request and issue descriptions:
+
+- **Restricted data**: secrets, API tokens, keys or credentials
+- **Confidential data**: PII, customer source code, license keys, financial
+  records, employee/candidate data, or customer data that could put a
+  customer at risk.
+- **Internal-only information**: non-public strategic decisions,
+  architecture diagrams, specifications, company records/correspondence, or
+  contact lists.
+
+Use placeholder values in examples, comments, and tests (e.g. `test-token`,
+`dev.example.io`) instead of real hosts, keys, or identifiers.
+
+If a change would introduce something that might fall into one of these
+categories, or something already in the repository looks like it does, stop
+and ask the user before adding, removing, redacting, or otherwise changing
+it — do not decide unilaterally.
+
 ## Repository structure
 
 - `main.go`: provider executable entry point.

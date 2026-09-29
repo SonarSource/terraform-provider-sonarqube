@@ -66,7 +66,7 @@ func TestDopApplicationsDataSourceRead(t *testing.T) {
 	t.Parallel()
 
 	instance := newFakeApplicationsInstance(`{"devOpsPlatformApplications":[
-		{"id":"github#sonarqube-cloud-dev11","devOpsPlatform":"github","applicationKey":"sonarqube-cloud-dev11","bindingType":"integration-dop"}
+		{"id":"github#sonarqube-cloud-test","devOpsPlatform":"github","applicationKey":"sonarqube-cloud-test","bindingType":"integration-dop"}
 	]}`)
 	d := &dopApplicationsDataSource{client: instance.start(t)}
 
@@ -90,7 +90,7 @@ func TestDopApplicationsDataSourceRead(t *testing.T) {
 	if len(state.Applications) != 1 {
 		t.Fatalf("got %d applications, want 1", len(state.Applications))
 	}
-	if got, want := state.Applications[0].ApplicationKey.ValueString(), "sonarqube-cloud-dev11"; got != want {
+	if got, want := state.Applications[0].ApplicationKey.ValueString(), "sonarqube-cloud-test"; got != want {
 		t.Errorf("application_key = %q, want %q", got, want)
 	}
 }

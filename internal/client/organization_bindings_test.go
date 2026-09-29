@@ -166,7 +166,7 @@ func TestFindOrganizationBinding(t *testing.T) {
 }
 
 // The server answers a search for an organization that is not bound with a
-// 404 and an empty body. Verified against dev11.
+// 404 and an empty body. Verified against a development instance.
 func TestFindOrganizationBindingOfAnUnboundOrganization(t *testing.T) {
 	t.Parallel()
 

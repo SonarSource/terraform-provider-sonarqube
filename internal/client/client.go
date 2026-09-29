@@ -85,8 +85,8 @@ func New(cfg Config) *Client {
 // DeriveAPIURL returns the address of Web API v2 that belongs to a web
 // application address.
 //
-//	https://sonarcloud.io      -> https://api.sonarcloud.io
-//	https://dev11.sc-dev11.io  -> https://api.sc-dev11.io
+//	https://sonarcloud.io  -> https://api.sonarcloud.io
+//	https://dev.example.io -> https://api.example.io
 //
 // The api host sits beside the web application rather than below it, so a host
 // that already carries a sub-domain has that sub-domain replaced.
