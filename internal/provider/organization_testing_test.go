@@ -2,12 +2,27 @@ package provider
 
 import (
 	"context"
+	"net/http/httptest"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-go/tftypes"
+
+	"github.com/SonarSource/terraform-provider-sonarqube/internal/client"
 )
+
+// newTestCloudClient builds a client that talks to a fake instance of
+// SonarQube Cloud, held in memory by srv.
+func newTestCloudClient(srv *httptest.Server) *client.Client {
+	return client.New(client.Config{
+		URL:        srv.URL,
+		APIURL:     srv.URL,
+		Token:      "test-token",
+		Product:    client.ProductCloud,
+		HTTPClient: srv.Client(),
+	})
+}
 
 // organizationValue builds a value of the resource schema. Every attribute the
 // caller leaves out is null, as it is for an attribute absent from the

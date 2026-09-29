@@ -7,6 +7,27 @@ Shared instructions for all coding agents working in this repository.
 One official Terraform provider for SonarQube Cloud and SonarQube Server.
 The alpha supports Cloud only and targets organizations bound to GitHub.
 
+## Data sensitivity
+
+This repository is public. Never add any of the following to files,
+comments, commit messages, or pull request and issue descriptions:
+
+- **Restricted data**: secrets, API tokens, keys or credentials
+- **Confidential data**: PII, customer source code, license keys, financial
+  records, employee/candidate data, or customer data that could put a
+  customer at risk.
+- **Internal-only information**: non-public strategic decisions,
+  architecture diagrams, specifications, company records/correspondence, or
+  contact lists.
+
+Use placeholder values in examples, comments, and tests (e.g. `test-token`,
+`dev.example.io`) instead of real hosts, keys, or identifiers.
+
+If a change would introduce something that might fall into one of these
+categories, or something already in the repository looks like it does, stop
+and ask the user before adding, removing, redacting, or otherwise changing
+it — do not decide unilaterally.
+
 ## Repository structure
 
 - `main.go`: provider executable entry point.
@@ -43,6 +64,24 @@ env -u TF_ACC go test -race ./...
 
 Unsetting `TF_ACC` keeps this validation independent of live acceptance
 tests, even when the variable is set in the calling shell.
+
+The acceptance tests need `TF_ACC=1`, `SONARQUBE_URL` and `SONARQUBE_TOKEN`,
+and three more variables:
+
+- `SONARQUBE_TEST_ALLOWED_HOSTS`: the hosts where a test may make and delete
+  an organization, separated by commas. An entry allows its sub-domains as
+  well. Empty allows nothing but a local instance, and a target that it does
+  not name stops the run. A production instance is refused whatever this
+  variable says. Set it to the instance you test against, never to
+  production.
+- `SONARQUBE_TEST_ORGANIZATION`: an organization that the token can read, for
+  the tests that only read.
+- `SONARQUBE_TEST_GITHUB_INSTALLATION_ID`: an installation of the GitHub
+  application of the instance that no organization is bound to, for the tests
+  that bind. Nothing can make one: install the application from
+  `https://github.com/apps/<application_key>` on a GitHub organization that is
+  not bound yet, and read the identifier from the address that GitHub shows.
+  The `sonarqube_dop_applications` data source reports the application key.
 
 When imports or dependencies change, run `go mod tidy` and review both
 `go.mod` and `go.sum`.

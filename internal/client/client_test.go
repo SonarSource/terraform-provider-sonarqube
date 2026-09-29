@@ -32,13 +32,13 @@ func TestDeriveAPIURL(t *testing.T) {
 	}{
 		{"production", "https://sonarcloud.io", "https://api.sonarcloud.io"},
 		{"united states", "https://sonarqube.us", "https://api.sonarqube.us"},
-		{"development instance", "https://dev11.sc-dev11.io", "https://api.sc-dev11.io"},
+		{"development instance", "https://dev.example.io", "https://api.example.io"},
 		{"keeps the port", "http://localhost:9000", "http://api.localhost:9000"},
 		{"leaves an address by number alone", "http://127.0.0.1:9000", "http://127.0.0.1:9000"},
 		// A hostname may end in a dot. The empty last label must not make a
 		// host of two labels look like one of three.
 		{"absolute hostname", "https://sonarcloud.io.", "https://api.sonarcloud.io."},
-		{"absolute hostname with a sub-domain", "https://dev11.sc-dev11.io.", "https://api.sc-dev11.io."},
+		{"absolute hostname with a sub-domain", "https://dev.example.io.", "https://api.example.io."},
 		{"address with no scheme comes back unchanged", "sonarcloud.io", "sonarcloud.io"},
 	}
 
@@ -56,9 +56,9 @@ func TestDeriveAPIURL(t *testing.T) {
 func TestNewDerivesTheAPIURL(t *testing.T) {
 	t.Parallel()
 
-	c := New(Config{URL: "https://dev11.sc-dev11.io/"})
+	c := New(Config{URL: "https://dev.example.io/"})
 
-	if got, want := c.APIURL(), "https://api.sc-dev11.io"; got != want {
+	if got, want := c.APIURL(), "https://api.example.io"; got != want {
 		t.Errorf("APIURL() = %q, want %q", got, want)
 	}
 }
@@ -66,7 +66,7 @@ func TestNewDerivesTheAPIURL(t *testing.T) {
 func TestNewKeepsAnExplicitAPIURL(t *testing.T) {
 	t.Parallel()
 
-	c := New(Config{URL: "https://dev11.sc-dev11.io", APIURL: "https://api.example.com/"})
+	c := New(Config{URL: "https://dev.example.io", APIURL: "https://api.example.com/"})
 
 	if got, want := c.APIURL(), "https://api.example.com"; got != want {
 		t.Errorf("APIURL() = %q, want %q", got, want)
@@ -253,7 +253,7 @@ func TestAPIGetSendsABearerToken(t *testing.T) {
 func TestValidateURL(t *testing.T) {
 	t.Parallel()
 
-	valid := []string{"https://sonarcloud.io", "http://localhost:9000", "https://dev11.sc-dev11.io/"}
+	valid := []string{"https://sonarcloud.io", "http://localhost:9000", "https://dev.example.io/"}
 	invalid := map[string]string{
 		"sonarcloud.io":       "no http or https scheme",
 		"":                    "no http or https scheme",

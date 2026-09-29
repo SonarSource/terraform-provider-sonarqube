@@ -5,7 +5,6 @@ import (
 	"net"
 	"net/url"
 	"os"
-	"regexp"
 	"strings"
 	"testing"
 
@@ -60,9 +59,10 @@ func testAccPreCheckDestructive(t *testing.T) {
 		t.Skipf("%s is not set. A test that makes and deletes an organization must name "+
 			"its instance, because the provider otherwise uses %s.", envURL, client.CloudURL)
 	}
-
 	// A wrong target is a fault in the setup, not a test that cannot run, so
-	// stop instead of skipping. A skip counts as a pass in Go.
+	// stop instead of skipping. A skip counts as a pass in Go. An empty
+	// SONARQUBE_TEST_ALLOWED_HOSTS therefore stops the run as well, for every
+	// instance but a local one.
 	if err := requireSafeTarget(instanceURL); err != nil {
 		t.Fatal(err.Error())
 	}
@@ -70,57 +70,82 @@ func testAccPreCheckDestructive(t *testing.T) {
 
 // productionHosts are the instances that hold the organizations of customers.
 // They get their own message, because naming one is the mistake that this
-// guard exists to catch.
-var productionHosts = map[string]bool{
-	"sonarcloud.io":     true,
-	"www.sonarcloud.io": true,
-	"sonarqube.us":      true,
-	"www.sonarqube.us":  true,
+// guard exists to catch. Each entry covers its sub-domains, which is what
+// api.sonarcloud.io and www.sonarcloud.io are.
+var productionHosts = []string{"sonarcloud.io", "sonarqube.us"}
+
+// isProduction reports a host that reaches an instance of customers, itself
+// or through a sub-domain.
+func isProduction(host string) bool {
+	for _, production := range productionHosts {
+		if host == production || strings.HasSuffix(host, "."+production) {
+			return true
+		}
+	}
+	return false
 }
 
-// safeHostPattern matches the instances where a test may make and delete an
-// organization: the staging instance and a development instance.
-var safeHostPattern = regexp.MustCompile(`^([a-z0-9-]+\.)*sc-(staging|dev[0-9]+)\.io$`)
+// envAllowedHosts holds the hosts where a test may make and delete an
+// organization, separated by commas. Whoever runs the destructive
+// acceptance tests sets it; AGENTS.md says so too. Empty allows nothing, and
+// the name of no instance then has to live in this public repository.
+const envAllowedHosts = "SONARQUBE_TEST_ALLOWED_HOSTS"
 
 // requireSafeTarget reports an address that no destructive test may use.
 //
-// This allows the hosts it knows rather than refusing the hosts it knows to be
-// dangerous. A list of dangerous hosts cannot know about an address that
-// reaches production another way, and the cost of being wrong is a deletion in
-// production. The cost of being wrong the other way is one line to add here,
-// and a message that says so.
+// It allows what envAllowedHosts names and refuses the rest, because a list
+// of dangerous hosts cannot know every address that reaches production, and
+// the cost of being wrong there is a deletion in production.
 func requireSafeTarget(instanceURL string) error {
 	parsed, err := url.Parse(instanceURL)
 	if err != nil {
 		return fmt.Errorf("%s holds %q, which is not an address: %w", envURL, instanceURL, err)
 	}
 
-	// Take off every trailing dot before the test. A hostname that ends in a
-	// dot is absolute, and DNS and the check of a TLS name both read
-	// "sonarcloud.io." as "sonarcloud.io", so the two reach the same instance.
-	host := strings.TrimRight(strings.ToLower(parsed.Hostname()), ".")
+	host := normaliseHost(parsed.Hostname())
 
-	if productionHosts[host] {
+	if isProduction(host) {
 		return fmt.Errorf("%s names the production instance %q. A test that makes and "+
 			"deletes an organization must never run there: a deletion starts billing "+
 			"events and can leave a binding behind. Use a development or a staging "+
 			"instance.", envURL, host)
 	}
 
-	if safeHostPattern.MatchString(host) {
+	// Nothing on the machine that runs the test can be production.
+	if host == "localhost" {
 		return nil
 	}
 	if address := net.ParseIP(host); address != nil && address.IsLoopback() {
 		return nil
 	}
-	if host == "localhost" {
-		return nil
+
+	// The test above runs first, and it names the sub-domains too, so the
+	// variable below can allow nothing that reaches production.
+	for _, allowed := range allowedHosts() {
+		if host == allowed || strings.HasSuffix(host, "."+allowed) {
+			return nil
+		}
 	}
 
-	return fmt.Errorf("%s names %q, which is no instance that this test knows. A test "+
-		"that makes and deletes an organization runs against a staging instance, a "+
-		"development instance, or a local one. Add the host to safeHostPattern when it "+
-		"is safe.", envURL, host)
+	return fmt.Errorf("%s names %q, which %s does not allow. A test that makes and "+
+		"deletes an organization runs against an instance that %s names. Add the host "+
+		"to that variable when it is safe.", envURL, host, envAllowedHosts, envAllowedHosts)
+}
+
+func allowedHosts() []string {
+	hosts := []string{}
+	for _, entry := range strings.Split(os.Getenv(envAllowedHosts), ",") {
+		if host := normaliseHost(entry); host != "" {
+			hosts = append(hosts, host)
+		}
+	}
+	return hosts
+}
+
+// normaliseHost takes off a trailing dot, which marks a hostname as absolute:
+// DNS and the check of a TLS name read "sonarcloud.io." as "sonarcloud.io".
+func normaliseHost(host string) string {
+	return strings.TrimRight(strings.ToLower(strings.TrimSpace(host)), ".")
 }
 
 func TestAccOrganizationDataSource(t *testing.T) {

@@ -11,6 +11,7 @@
 package client
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -84,8 +85,8 @@ func New(cfg Config) *Client {
 // DeriveAPIURL returns the address of Web API v2 that belongs to a web
 // application address.
 //
-//	https://sonarcloud.io      -> https://api.sonarcloud.io
-//	https://dev11.sc-dev11.io  -> https://api.sc-dev11.io
+//	https://sonarcloud.io  -> https://api.sonarcloud.io
+//	https://dev.example.io -> https://api.example.io
 //
 // The api host sits beside the web application rather than below it, so a host
 // that already carries a sub-domain has that sub-domain replaced.
@@ -225,9 +226,41 @@ func (c *Client) post(ctx context.Context, path string, params url.Values) error
 		}, nil)
 }
 
+// apiSend calls Web API v2, with a JSON body when body is not nil.
+//
+// Nothing here is particular to a product: Web API v2 answers on SonarQube
+// Cloud and on SonarQube Server alike, and only the paths differ.
+func (c *Client) apiSend(ctx context.Context, method, path string, params url.Values, body, out any) error {
+	if body == nil {
+		return c.send(ctx, method, c.apiURL+path, params, nil, c.apiAuth, out)
+	}
+
+	encoded, err := json.Marshal(body)
+	if err != nil {
+		return fmt.Errorf("cannot encode the request body: %w", err)
+	}
+
+	return c.send(ctx, method, c.apiURL+path, params, bytes.NewReader(encoded),
+		func(req *http.Request) {
+			req.Header.Set("Content-Type", "application/json")
+			c.apiAuth(req)
+		}, out)
+}
+
 // apiGet calls a read of Web API v2.
 func (c *Client) apiGet(ctx context.Context, path string, params url.Values, out any) error {
-	return c.send(ctx, http.MethodGet, c.apiURL+path, params, nil, c.apiAuth, out)
+	return c.apiSend(ctx, http.MethodGet, path, params, nil, out)
+}
+
+// apiPost calls a create of Web API v2.
+func (c *Client) apiPost(ctx context.Context, path string, body, out any) error {
+	return c.apiSend(ctx, http.MethodPost, path, nil, body, out)
+}
+
+// apiPatch calls a partial update of Web API v2, which writes the fields the
+// body carries and leaves every other field alone.
+func (c *Client) apiPatch(ctx context.Context, path string, body, out any) error {
+	return c.apiSend(ctx, http.MethodPatch, path, nil, body, out)
 }
 
 // do decodes a successful answer into out. A nil out discards the body.
