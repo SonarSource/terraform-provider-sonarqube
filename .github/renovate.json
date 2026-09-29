@@ -6,6 +6,7 @@
   "enabledManagers": [
     "github-actions",
     "gomod",
+    "mise",
     "pre-commit"
   ],
   "pre-commit": {
