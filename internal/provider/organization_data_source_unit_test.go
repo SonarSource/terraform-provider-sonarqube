@@ -159,7 +159,7 @@ func TestOrganizationDataSourceReadReportsOtherFailures(t *testing.T) {
 
 	_, diagnostics := readOrganization(t, srv, "my-org")
 
-	assertDiagnosticsContain(t, diagnostics, "Cannot read organization my-org")
+	assertDiagnosticsContain(t, diagnostics, "Cannot read the organization my-org")
 	assertDiagnosticsContain(t, diagnostics, "the instance is unwell")
 }
 

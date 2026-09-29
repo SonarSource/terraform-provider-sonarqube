@@ -212,34 +212,66 @@ func TestProviderRegistersItsDataSources(t *testing.T) {
 
 	p := New("test")()
 
-	dataSources := p.DataSources(context.Background())
-	if got, want := len(dataSources), 1; got != want {
-		t.Fatalf("the provider registers %d data sources, want %d", got, want)
+	dataSourceNames := []string{}
+	for _, newDataSource := range p.DataSources(context.Background()) {
+		resp := &datasource.MetadataResponse{}
+		newDataSource().Metadata(
+			context.Background(),
+			datasource.MetadataRequest{ProviderTypeName: "sonarqube"},
+			resp,
+		)
+		dataSourceNames = append(dataSourceNames, resp.TypeName)
 	}
 
-	resp := &datasource.MetadataResponse{}
-	dataSources[0]().Metadata(
-		context.Background(),
-		datasource.MetadataRequest{ProviderTypeName: "sonarqube"},
-		resp,
-	)
-	if got, want := resp.TypeName, "sonarqube_organization"; got != want {
-		t.Errorf("the registered data source is %q, want %q", got, want)
+	assertNames(t, "data sources", dataSourceNames, []string{
+		"sonarqube_organization",
+		"sonarqube_organization_binding",
+		"sonarqube_dop_applications",
+	})
+
+	resourceNames := []string{}
+	for _, newResource := range p.Resources(context.Background()) {
+		resp := &resource.MetadataResponse{}
+		newResource().Metadata(
+			context.Background(),
+			resource.MetadataRequest{ProviderTypeName: "sonarqube"},
+			resp,
+		)
+		resourceNames = append(resourceNames, resp.TypeName)
 	}
 
-	resources := p.Resources(context.Background())
-	if got, want := len(resources), 1; got != want {
-		t.Fatalf("the provider registers %d resources, want %d", got, want)
+	assertNames(t, "resources", resourceNames, []string{
+		"sonarqube_organization",
+		"sonarqube_organization_binding",
+	})
+}
+
+// assertNames reports every name that is registered and should not be, and
+// every name that should be registered and is not. The order of the
+// registration carries no meaning, so it is not tested.
+func assertNames(t *testing.T, subject string, got, want []string) {
+	t.Helper()
+
+	// A name that is registered twice keeps one entry in the map below, so
+	// count the names first. Terraform refuses a type name that two
+	// constructors give.
+	if len(got) != len(want) {
+		t.Errorf("the provider registers %d %s, want %d: got %v", len(got), subject, len(want), got)
 	}
 
-	resourceResp := &resource.MetadataResponse{}
-	resources[0]().Metadata(
-		context.Background(),
-		resource.MetadataRequest{ProviderTypeName: "sonarqube"},
-		resourceResp,
-	)
-	if got, want := resourceResp.TypeName, "sonarqube_organization"; got != want {
-		t.Errorf("the registered resource is %q, want %q", got, want)
+	registered := make(map[string]bool, len(got))
+	for _, name := range got {
+		registered[name] = true
+	}
+
+	for _, name := range want {
+		if !registered[name] {
+			t.Errorf("the provider registers no %s named %q", subject, name)
+		}
+		delete(registered, name)
+	}
+	for name := range registered {
+		t.Errorf("the provider registers the %s %q, which no test expects", subject, name)
 	}
 }
 
