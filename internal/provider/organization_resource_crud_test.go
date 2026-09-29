@@ -35,13 +35,7 @@ func (f *fakeInstance) start(t *testing.T) *client.Client {
 	srv := httptest.NewServer(http.HandlerFunc(f.serve))
 	t.Cleanup(srv.Close)
 
-	return client.New(client.Config{
-		URL:        srv.URL,
-		APIURL:     srv.URL,
-		Token:      "test-token",
-		Product:    client.ProductCloud,
-		HTTPClient: srv.Client(),
-	})
+	return newTestCloudClient(srv)
 }
 
 // notFound answers the way both surfaces answer for an entity they do not

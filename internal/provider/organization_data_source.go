@@ -2,10 +2,10 @@ package provider
 
 import (
 	"context"
-	"errors"
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 
 	"github.com/SonarSource/terraform-provider-sonarqube/internal/client"
@@ -82,21 +82,8 @@ func (d *organizationDataSource) Read(ctx context.Context, req datasource.ReadRe
 
 	key := config.Key.ValueString()
 
-	org, err := d.client.GetOrganization(ctx, key)
-	if err != nil {
-		if errors.Is(err, client.ErrNotFound) {
-			// An organization that the token may not see answers 404 as well.
-			resp.Diagnostics.AddError(
-				"Organization "+key+" not found",
-				"No organization with this key was found at "+d.client.APIURL()+
-					". Check the key, and check that the token can read the organization.",
-			)
-			return
-		}
-		resp.Diagnostics.AddError(
-			"Cannot read organization "+key,
-			"The provider could not read the organization: "+err.Error(),
-		)
+	org, ok := lookupOrganization(ctx, d.client, key, path.Root("key"), &resp.Diagnostics)
+	if !ok {
 		return
 	}
 
