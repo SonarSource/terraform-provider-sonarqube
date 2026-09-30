@@ -6,8 +6,12 @@ on:
       - master
   workflow_dispatch:
 
-# One shared staging organization. Two overlapping runs would race each
-# other's create/delete calls, so runs queue instead of running in parallel.
+# Run only one test run against staging at a time. Each run makes
+# organizations with a random key, so two runs do not use the same
+# organization. The limit keeps the load on staging low. GitHub keeps
+# a maximum of one pending run in each group. A new push cancels the
+# older pending run. Thus, when many pushes to master occur quickly,
+# only the first and the last commit get a test run.
 concurrency:
   group: acceptance-tests
   cancel-in-progress: false
@@ -37,6 +41,9 @@ jobs:
         env:
           TF_ACC: "1"
           SONARQUBE_URL: https://sc-staging.io
+          # The tests make and delete organizations only on a host that
+          # this variable names. Without it, these tests stop the run.
+          SONARQUBE_TEST_ALLOWED_HOSTS: sc-staging.io
           # A repository secret is a stopgap for SC-58198. See that ticket
           # for details. This workflow never runs on pull_request. So a pull
           # request from a fork cannot read the secret that way. But any
