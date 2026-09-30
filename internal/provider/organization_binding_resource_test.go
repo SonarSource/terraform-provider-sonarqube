@@ -61,7 +61,7 @@ func TestOrganizationBindingResourceConfigureNeedsCloud(t *testing.T) {
 	resp := &resource.ConfigureResponse{}
 	r.Configure(context.Background(), resource.ConfigureRequest{ProviderData: serverClient}, resp)
 
-	assertDiagnosticsContain(t, resp.Diagnostics, "need SonarQube Cloud")
+	assertDiagnosticsContain(t, resp.Diagnostics, "needs SonarQube Cloud")
 	if r.client != nil {
 		t.Error("the resource kept a client that is not SonarQube Cloud")
 	}

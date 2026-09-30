@@ -2,7 +2,6 @@ package client
 
 import (
 	"context"
-	"errors"
 	"net/url"
 )
 
@@ -37,12 +36,7 @@ func (c *Client) GetOrganization(ctx context.Context, key string) (*Organization
 		return nil, err
 	}
 
-	for _, org := range out {
-		if org.Key == key {
-			return &org, nil
-		}
-	}
-	return nil, ErrNotFound
+	return findByKey(out, key, func(org Organization) string { return org.Key })
 }
 
 // OrganizationRequest carries the fields of an organization that can be
@@ -117,8 +111,5 @@ func (c *Client) DeleteOrganization(ctx context.Context, key string) error {
 	params := url.Values{}
 	params.Set("organization", key)
 
-	if err := c.post(ctx, "/api/organizations/delete", params); err != nil && !errors.Is(err, ErrNotFound) {
-		return err
-	}
-	return nil
+	return c.postIgnoringNotFound(ctx, "/api/organizations/delete", params)
 }

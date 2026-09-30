@@ -24,10 +24,10 @@ func newTestCloudClient(srv *httptest.Server) *client.Client {
 	})
 }
 
-// organizationValue builds a value of the resource schema. Every attribute the
+// schemaValue builds a value of any resource schema. Every attribute the
 // caller leaves out is null, as it is for an attribute absent from the
 // configuration.
-func organizationValue(t *testing.T, s schema.Schema, attributes map[string]string) tftypes.Value {
+func schemaValue(t *testing.T, s schema.Schema, attributes map[string]string) tftypes.Value {
 	t.Helper()
 
 	objectType, ok := s.Type().TerraformType(context.Background()).(tftypes.Object)
@@ -54,11 +54,11 @@ func emptyState(t *testing.T, s schema.Schema) tfsdk.State {
 	return tfsdk.State{Schema: s, Raw: tftypes.NewValue(s.Type().TerraformType(context.Background()), nil)}
 }
 
-// readModel reads the resource state back into the model.
-func readModel(t *testing.T, state tfsdk.State) organizationResourceModel {
+// readModel reads the resource state back into the model of the resource.
+func readModel[T any](t *testing.T, state tfsdk.State) T {
 	t.Helper()
 
-	var model organizationResourceModel
+	var model T
 	if diags := state.Get(context.Background(), &model); diags.HasError() {
 		t.Fatalf("cannot read the state: %v", diags)
 	}

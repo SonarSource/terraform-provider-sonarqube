@@ -57,3 +57,16 @@ application installation that is bound to no organization.
 A binding to github.com accepts an installation of one of these applications
 only, because the server looks an installation up in its own records instead
 of asking GitHub.
+
+## Projects (`projects.go`)
+
+| Function | Endpoint | Surface | Public or internal |
+|---|---|---|---|
+| `GetProject` | `GET {api_url}/projects/projects?keys=&organizationIds=` | Web API v2 | [Public](https://api-docs.sonarsource.com/sonarqube-cloud/default/public-projectsexternal-0-0-1#/Projects/getProjects) |
+| `CreateProject` | `POST {url}/api/projects/create` | Web API v1 | [Public](https://sonarcloud.io/web_api/api/projects/create) |
+| `DeleteProject` | `POST {url}/api/projects/delete` | Web API v1 | [Public](https://sonarcloud.io/web_api/api/projects/delete) |
+
+`GetProject` first reads the organization to get its UUID, because the list call
+filters by UUID. A project that is missing answers 200 with an empty list.
+
+Project creation uses the plain project API and does not bind a repository.

@@ -68,7 +68,7 @@ func TestOrganizationBindingDataSourceRead(t *testing.T) {
 		t.Fatalf("unexpected diagnostics: %v", resp.Diagnostics)
 	}
 
-	state := readBindingModel(t, resp.State)
+	state := readModel[organizationBindingModel](t, resp.State)
 	if got, want := state.ID.ValueString(), theBindingID; got != want {
 		t.Errorf("id = %q, want %q", got, want)
 	}
@@ -153,7 +153,7 @@ func TestOrganizationBindingDataSourceReadOfAnotherPlatform(t *testing.T) {
 		t.Fatalf("unexpected diagnostics: %v", resp.Diagnostics)
 	}
 
-	state := readBindingModel(t, resp.State)
+	state := readModel[organizationBindingModel](t, resp.State)
 	if !state.InstallationID.IsNull() {
 		t.Errorf("installation_id = %v, want no value for a binding that carries none", state.InstallationID)
 	}
