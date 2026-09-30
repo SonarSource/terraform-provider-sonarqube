@@ -23,6 +23,12 @@ comments, commit messages, or pull request and issue descriptions:
 Use placeholder values in examples, comments, and tests (e.g. `test-token`,
 `dev.example.io`) instead of real hosts, keys, or identifiers.
 
+Never copy values from a live instance, a captured API response, or another
+repository into this one. That covers identifiers, keys, and organization or
+repository names. Keep the shape of a response, and replace each value with
+an obvious placeholder, such as `project-legacy-id` or
+`my-github-org/my-repo`.
+
 If a change would introduce something that might fall into one of these
 categories, or something already in the repository looks like it does, stop
 and ask the user before adding, removing, redacting, or otherwise changing
@@ -66,7 +72,7 @@ Unsetting `TF_ACC` keeps this validation independent of live acceptance
 tests, even when the variable is set in the calling shell.
 
 The acceptance tests need `TF_ACC=1`, `SONARQUBE_URL` and `SONARQUBE_TOKEN`,
-and three more variables:
+and four more variables:
 
 - `SONARQUBE_TEST_ALLOWED_HOSTS`: the hosts where a test may make and delete
   an organization, separated by commas. An entry allows its sub-domains as
@@ -82,6 +88,11 @@ and three more variables:
   `https://github.com/apps/<application_key>` on a GitHub organization that is
   not bound yet, and read the identifier from the address that GitHub shows.
   The `sonarqube_dop_applications` data source reports the application key.
+- `SONARQUBE_TEST_GITHUB_REPOSITORY`: a public repository, as `owner/name`,
+  that the installation above can see, for the tests that bind a project.
+  Write the slug with the case that GitHub shows. The test deletes its
+  organization at the end, which removes the binding, so one repository
+  serves every run.
 
 When imports or dependencies change, run `go mod tidy` and review both
 `go.mod` and `go.sum`.
@@ -114,6 +125,9 @@ checks that could not run.
   organization or insufficient access. Diagnostics must explain both.
 - Explain non-obvious API behavior in comments. Avoid comments that merely
   restate the code.
+- Use a public Web API v2 endpoint when one gives the data. Do not use
+  `/api/navigation/*`: these endpoints serve the web interface, and they can
+  change without notice. Mark every internal endpoint in `APIS.md`.
 
 ## Adding or changing a resource or data source
 

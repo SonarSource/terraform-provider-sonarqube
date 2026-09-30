@@ -15,7 +15,7 @@ import (
 // they cover the whole lifecycle without a Terraform binary and without
 // credentials.
 
-const theOrganizationID = "AZcwYwExlol79EFABiuM"
+const theOrganizationID = "organization-id"
 
 func TestOrganizationBindingResourceCreate(t *testing.T) {
 	t.Parallel()
@@ -30,7 +30,7 @@ func TestOrganizationBindingResourceCreate(t *testing.T) {
 		Plan: tfsdk.Plan{Schema: s, Raw: bindingValue(t, s, map[string]any{
 			"organization_key": "my-org",
 			"dev_ops_platform": client.PlatformGitHub,
-			"installation_id":  "65381777",
+			"installation_id":  "12345678",
 		})},
 	}, resp)
 
@@ -74,7 +74,7 @@ func TestOrganizationBindingResourceCreateWithAnUnknownOrganization(t *testing.T
 		Plan: tfsdk.Plan{Schema: s, Raw: bindingValue(t, s, map[string]any{
 			"organization_key": "gone",
 			"dev_ops_platform": client.PlatformGitHub,
-			"installation_id":  "65381777",
+			"installation_id":  "12345678",
 		})},
 	}, resp)
 
@@ -106,7 +106,7 @@ func TestOrganizationBindingResourceCreateWithAnAutoImportTheServerRefuses(t *te
 		Plan: tfsdk.Plan{Schema: s, Raw: bindingValue(t, s, map[string]any{
 			"organization_key":         "my-org",
 			"dev_ops_platform":         client.PlatformGitHub,
-			"installation_id":          "65381777",
+			"installation_id":          "12345678",
 			"repo_auto_import_enabled": true,
 		})},
 	}, resp)
@@ -156,14 +156,14 @@ func TestOrganizationBindingResourceUpdateWithAnAutoImportTheServerRefuses(t *te
 		Plan: tfsdk.Plan{Schema: s, Raw: bindingValue(t, s, map[string]any{
 			"organization_key":         "my-org",
 			"dev_ops_platform":         client.PlatformGitHub,
-			"installation_id":          "65381777",
+			"installation_id":          "12345678",
 			"repo_auto_import_enabled": true,
 		})},
 		State: tfsdk.State{Schema: s, Raw: bindingValue(t, s, map[string]any{
 			"id":               theBindingID,
 			"organization_key": "my-org",
 			"dev_ops_platform": client.PlatformGitHub,
-			"installation_id":  "65381777",
+			"installation_id":  "12345678",
 		})},
 	}, resp)
 
@@ -199,7 +199,7 @@ func TestOrganizationBindingResourceRead(t *testing.T) {
 	}
 
 	state := readModel[organizationBindingModel](t, resp.State)
-	if got, want := state.InstallationID.ValueString(), "65381777"; got != want {
+	if got, want := state.InstallationID.ValueString(), "12345678"; got != want {
 		t.Errorf("installation_id = %q, want %q", got, want)
 	}
 	// The API never reports the key, so the read must keep the one that the
@@ -243,14 +243,14 @@ func TestOrganizationBindingResourceUpdate(t *testing.T) {
 		Plan: tfsdk.Plan{Schema: s, Raw: bindingValue(t, s, map[string]any{
 			"organization_key":         "my-org",
 			"dev_ops_platform":         client.PlatformGitHub,
-			"installation_id":          "65381777",
+			"installation_id":          "12345678",
 			"repo_auto_import_enabled": true,
 		})},
 		State: tfsdk.State{Schema: s, Raw: bindingValue(t, s, map[string]any{
 			"id":                       theBindingID,
 			"organization_key":         "my-org",
 			"dev_ops_platform":         client.PlatformGitHub,
-			"installation_id":          "65381777",
+			"installation_id":          "12345678",
 			"repo_auto_import_enabled": false,
 		})},
 	}, resp)
@@ -388,7 +388,7 @@ func TestOrganizationBindingResourceCreateReadsBack(t *testing.T) {
 		Plan: tfsdk.Plan{Schema: s, Raw: bindingValue(t, s, map[string]any{
 			"organization_key": "my-org",
 			"dev_ops_platform": client.PlatformGitHub,
-			"installation_id":  "65381777",
+			"installation_id":  "12345678",
 		})},
 	}, resp)
 
@@ -420,7 +420,7 @@ func TestOrganizationBindingResourceCreateWarnsWhenTheReadBackFails(t *testing.T
 		Plan: tfsdk.Plan{Schema: s, Raw: bindingValue(t, s, map[string]any{
 			"organization_key": "my-org",
 			"dev_ops_platform": client.PlatformGitHub,
-			"installation_id":  "65381777",
+			"installation_id":  "12345678",
 		})},
 	}, resp)
 
@@ -452,14 +452,14 @@ func TestOrganizationBindingResourceUpdateFailsWhenTheReadBackFails(t *testing.T
 	s := organizationBindingResourceSchema(t)
 	prior := bindingValue(t, s, map[string]any{
 		"id": theBindingID, "organization_key": "my-org",
-		"dev_ops_platform": client.PlatformGitHub, "installation_id": "65381777",
+		"dev_ops_platform": client.PlatformGitHub, "installation_id": "12345678",
 	})
 
 	resp := &resource.UpdateResponse{State: tfsdk.State{Schema: s, Raw: prior}}
 	r.Update(context.Background(), resource.UpdateRequest{
 		Plan: tfsdk.Plan{Schema: s, Raw: bindingValue(t, s, map[string]any{
 			"id": theBindingID, "organization_key": "my-org",
-			"dev_ops_platform": client.PlatformGitHub, "installation_id": "65381777",
+			"dev_ops_platform": client.PlatformGitHub, "installation_id": "12345678",
 			"repo_auto_import_enabled": true,
 		})},
 		State: tfsdk.State{Schema: s, Raw: prior},

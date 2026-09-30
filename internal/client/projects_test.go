@@ -37,7 +37,7 @@ func TestCreateProject(t *testing.T) {
 	}
 }
 
-const projectOrganizationAnswer = `[{"id":"AZcwYwExlol79EFABiuM","uuidV4":"3ddd1f8f-2ab4-443f-a3be-a19ca418ca75","key":"my-org","name":"My Organization"}]`
+const projectOrganizationAnswer = `[{"id":"organization-id","uuidV4":"00000000-0000-4000-8000-000000000001","key":"my-org","name":"My Organization"}]`
 
 // projectServer answers the organization read and the project list. It hands
 // the project list request to check.
@@ -66,8 +66,8 @@ func TestGetProject(t *testing.T) {
 	srv := projectServer(t,
 		`{"projects":[`+
 			`{"id":"u0","key":"another","name":"Another"},`+
-			`{"id":"u1","key":"my-project","name":"My Project","visibility":"private",`+
-			`"organizationId":"3ddd1f8f-2ab4-443f-a3be-a19ca418ca75"}]}`,
+			`{"id":"u1","legacyId":"project-legacy-id","key":"my-project","name":"My Project","visibility":"private",`+
+			`"organizationId":"00000000-0000-4000-8000-000000000001"}]}`,
 		func(r *http.Request) {
 			if r.Method != http.MethodGet {
 				t.Errorf("method = %s, want GET", r.Method)
@@ -75,7 +75,7 @@ func TestGetProject(t *testing.T) {
 			if got := r.URL.Query().Get("keys"); got != "my-project" {
 				t.Errorf("keys = %q, want my-project", got)
 			}
-			if got, want := r.URL.Query().Get("organizationIds"), "3ddd1f8f-2ab4-443f-a3be-a19ca418ca75"; got != want {
+			if got, want := r.URL.Query().Get("organizationIds"), "00000000-0000-4000-8000-000000000001"; got != want {
 				t.Errorf("organizationIds = %q, want %q", got, want)
 			}
 		})
@@ -86,8 +86,8 @@ func TestGetProject(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := Project{
-		ID: "u1", Key: "my-project", Name: "My Project", Visibility: "private",
-		OrganizationID: "3ddd1f8f-2ab4-443f-a3be-a19ca418ca75",
+		ID: "u1", LegacyID: "project-legacy-id", Key: "my-project", Name: "My Project", Visibility: "private",
+		OrganizationID: "00000000-0000-4000-8000-000000000001",
 	}
 	if *project != want {
 		t.Errorf("project = %+v, want %+v", *project, want)

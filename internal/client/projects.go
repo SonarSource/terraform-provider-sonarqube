@@ -8,7 +8,10 @@ import (
 // Project is a SonarQube Cloud project.
 type Project struct {
 	// ID is the UUID of the main branch.
-	ID             string `json:"id"`
+	ID string `json:"id"`
+	// LegacyID is the internal identifier of the project. The project
+	// bindings API names a project by this identifier and by nothing else.
+	LegacyID       string `json:"legacyId"`
 	Key            string `json:"key"`
 	Name           string `json:"name"`
 	Visibility     string `json:"visibility"`

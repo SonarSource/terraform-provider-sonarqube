@@ -25,7 +25,7 @@ Web API v2 has no create, update, rename or delete for an organization today,
 so every write goes through the internal v1 surface.
 
 `GetOrganization` also reports the internal identifier of the organization,
-such as `AZcwYwExlol79EFABiuM`. The bindings API below names an organization
+an opaque string of 20 characters. The bindings API below names an organization
 by that identifier and by nothing else, so a read of the organization is how
 an organization key reaches it.
 
@@ -70,3 +70,30 @@ of asking GitHub.
 filters by UUID. A project that is missing answers 200 with an empty list.
 
 Project creation uses the plain project API and does not bind a repository.
+
+The project bindings API below names a project by its legacy identifier and
+by nothing else. `GetProject` reports it in `legacyId`. The `id` field holds a
+UUID, which the bindings API refuses.
+
+## Project bindings (`project_bindings.go`)
+
+| Function | Endpoint | Surface | Public or internal |
+|---|---|---|---|
+| `CreateProjectBinding` | `POST {api_url}/dop-translation/project-bindings` | Web API v2 | Internal |
+| `FindProjectBinding` | `GET {api_url}/dop-translation/project-bindings?projectId=` | Web API v2 | Internal |
+| `UpdateProjectBinding` | `PATCH {api_url}/dop-translation/project-bindings/{id}` | Web API v2 | Internal |
+
+There is no delete. A binding goes away only when its project is deleted.
+
+For GitHub, a request takes the slug `owner/name` in `repositoryId`, and a read
+gives the numeric identifier of the repository in the same field. The change
+call accepts `application/merge-patch+json` only.
+
+A search for a project that is not bound answers 200 with an empty collection,
+unlike the search of organization bindings. A search for a project that does
+not exist answers 404.
+
+A bind, a read, a change of case and an import were read against a
+development instance on 2026-09-30. On 2026-10-02, `legacyId` was checked to
+be the identifier that the bindings API takes. A change to a different
+repository was not tested.
