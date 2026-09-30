@@ -253,6 +253,11 @@ func findByKey[T any](items []T, key string, keyOf func(T) string) (*T, error) {
 // Nothing here is particular to a product: Web API v2 answers on SonarQube
 // Cloud and on SonarQube Server alike, and only the paths differ.
 func (c *Client) apiSend(ctx context.Context, method, path string, params url.Values, body, out any) error {
+	return c.apiSendAs(ctx, method, path, params, "application/json", body, out)
+}
+
+// apiSendAs is apiSend with the media type of the body given by the caller.
+func (c *Client) apiSendAs(ctx context.Context, method, path string, params url.Values, contentType string, body, out any) error {
 	if body == nil {
 		return c.send(ctx, method, c.apiURL+path, params, nil, c.apiAuth, out)
 	}
@@ -264,7 +269,7 @@ func (c *Client) apiSend(ctx context.Context, method, path string, params url.Va
 
 	return c.send(ctx, method, c.apiURL+path, params, bytes.NewReader(encoded),
 		func(req *http.Request) {
-			req.Header.Set("Content-Type", "application/json")
+			req.Header.Set("Content-Type", contentType)
 			c.apiAuth(req)
 		}, out)
 }
@@ -283,6 +288,12 @@ func (c *Client) apiPost(ctx context.Context, path string, body, out any) error 
 // body carries and leaves every other field alone.
 func (c *Client) apiPatch(ctx context.Context, path string, body, out any) error {
 	return c.apiSend(ctx, http.MethodPatch, path, nil, body, out)
+}
+
+// apiMergePatch calls a partial update of Web API v2 that accepts a JSON merge
+// patch (RFC 7396) only, and refuses a body sent as plain JSON.
+func (c *Client) apiMergePatch(ctx context.Context, path string, body, out any) error {
+	return c.apiSendAs(ctx, http.MethodPatch, path, nil, "application/merge-patch+json", body, out)
 }
 
 // do decodes a successful answer into out. A nil out discards the body.

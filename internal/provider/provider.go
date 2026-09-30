@@ -165,6 +165,7 @@ func (p *sonarqubeProvider) Resources(_ context.Context) []func() resource.Resou
 		NewOrganizationResource,
 		NewOrganizationBindingResource,
 		NewProjectResource,
+		NewProjectBindingResource,
 	}
 }
 
@@ -173,6 +174,7 @@ func (p *sonarqubeProvider) DataSources(_ context.Context) []func() datasource.D
 		NewOrganizationDataSource,
 		NewOrganizationBindingDataSource,
 		NewDopApplicationsDataSource,
+		NewProjectBindingDataSource,
 	}
 }
 

@@ -18,7 +18,7 @@ import (
 
 // theBindingID is the identifier that the instance below gives to the one
 // binding it makes.
-const theBindingID = "0206a6e1-15dc-4481-888b-de0877286b27"
+const theBindingID = "00000000-0000-4000-8000-000000000002"
 
 // schemaTyper is what bindingValue needs of a schema, and it is all that the
 // resource schema and the data source schema have in common.
@@ -151,7 +151,7 @@ func (f *fakeBoundInstance) serveCreate(w http.ResponseWriter, r *http.Request) 
 	binding := &client.OrganizationBinding{
 		ID:                    theBindingID,
 		OrganizationID:        req.OrganizationID,
-		OrganizationUUIDV4:    "3ddd1f8f-2ab4-443f-a3be-a19ca418ca75",
+		OrganizationUUIDV4:    "00000000-0000-4000-8000-000000000001",
 		DevOpsPlatform:        req.DevOpsPlatform,
 		BindingType:           "integration-dop",
 		InstallationID:        req.InstallationID,
@@ -230,10 +230,10 @@ func (f *fakeBoundInstance) bind(organizationKey, organizationID string) *client
 	binding := &client.OrganizationBinding{
 		ID:                    theBindingID,
 		OrganizationID:        organizationID,
-		OrganizationUUIDV4:    "3ddd1f8f-2ab4-443f-a3be-a19ca418ca75",
+		OrganizationUUIDV4:    "00000000-0000-4000-8000-000000000001",
 		DevOpsPlatform:        client.PlatformGitHub,
 		BindingType:           "integration-dop",
-		InstallationID:        "65381777",
+		InstallationID:        "12345678",
 		DevOpsPlatformURL:     "https://github.com/my-github-org",
 		RepoAutoImportEnabled: &autoImport,
 	}

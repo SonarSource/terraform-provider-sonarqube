@@ -72,7 +72,7 @@ func TestOrganizationBindingDataSourceRead(t *testing.T) {
 	if got, want := state.ID.ValueString(), theBindingID; got != want {
 		t.Errorf("id = %q, want %q", got, want)
 	}
-	if got, want := state.InstallationID.ValueString(), "65381777"; got != want {
+	if got, want := state.InstallationID.ValueString(), "12345678"; got != want {
 		t.Errorf("installation_id = %q, want %q", got, want)
 	}
 	if got, want := state.OrganizationKey.ValueString(), "my-org"; got != want {

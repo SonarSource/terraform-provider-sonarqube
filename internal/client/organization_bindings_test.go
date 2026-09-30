@@ -10,12 +10,12 @@ import (
 )
 
 const bindingAnswer = `{
-  "id": "0206a6e1-15dc-4481-888b-de0877286b27",
-  "organizationId": "AZcwYwExlol79EFABiuM",
-  "organizationUuidV4": "3ddd1f8f-2ab4-443f-a3be-a19ca418ca75",
+  "id": "00000000-0000-4000-8000-000000000002",
+  "organizationId": "organization-id",
+  "organizationUuidV4": "00000000-0000-4000-8000-000000000001",
   "devOpsPlatform": "github",
   "bindingType": "integration-dop",
-  "installationId": "65381777",
+  "installationId": "12345678",
   "devOpsPlatformUrl": "https://github.com/my-github-org",
   "repoAutoImportEnabled": false
 }`
@@ -51,9 +51,9 @@ func TestCreateOrganizationBinding(t *testing.T) {
 
 	autoImport := true
 	binding, err := newTestClient(srv).CreateOrganizationBinding(t.Context(), CreateBindingRequest{
-		OrganizationID:        "AZcwYwExlol79EFABiuM",
+		OrganizationID:        "organization-id",
 		DevOpsPlatform:        PlatformGitHub,
-		InstallationID:        "65381777",
+		InstallationID:        "12345678",
 		RepoAutoImportEnabled: &autoImport,
 	})
 	if err != nil {
@@ -66,17 +66,17 @@ func TestCreateOrganizationBinding(t *testing.T) {
 	if want := "/dop-translation/organization-bindings"; rec.path != want {
 		t.Errorf("path = %q, want %q", rec.path, want)
 	}
-	if got, want := rec.body["organizationId"], "AZcwYwExlol79EFABiuM"; got != want {
+	if got, want := rec.body["organizationId"], "organization-id"; got != want {
 		t.Errorf("organizationId = %v, want %q", got, want)
 	}
-	if got, want := rec.body["installationId"], "65381777"; got != want {
+	if got, want := rec.body["installationId"], "12345678"; got != want {
 		t.Errorf("installationId = %v, want %q", got, want)
 	}
 	if got := rec.body["repoAutoImportEnabled"]; got != true {
 		t.Errorf("repoAutoImportEnabled = %v, want true", got)
 	}
 
-	if got, want := binding.ID, "0206a6e1-15dc-4481-888b-de0877286b27"; got != want {
+	if got, want := binding.ID, "00000000-0000-4000-8000-000000000002"; got != want {
 		t.Errorf("ID = %q, want %q", got, want)
 	}
 	if binding.RepoAutoImportEnabled == nil || *binding.RepoAutoImportEnabled {
@@ -94,9 +94,9 @@ func TestCreateOrganizationBindingLeavesOutTheAutoImport(t *testing.T) {
 	defer srv.Close()
 
 	_, err := newTestClient(srv).CreateOrganizationBinding(t.Context(), CreateBindingRequest{
-		OrganizationID: "AZcwYwExlol79EFABiuM",
+		OrganizationID: "organization-id",
 		DevOpsPlatform: PlatformGitHub,
-		InstallationID: "65381777",
+		InstallationID: "12345678",
 	})
 	if err != nil {
 		t.Fatalf("CreateOrganizationBinding() returned %v", err)
@@ -114,15 +114,15 @@ func TestGetOrganizationBinding(t *testing.T) {
 	srv := httptest.NewServer(rec.serve(bindingAnswer))
 	defer srv.Close()
 
-	binding, err := newTestClient(srv).GetOrganizationBinding(t.Context(), "0206a6e1-15dc-4481-888b-de0877286b27")
+	binding, err := newTestClient(srv).GetOrganizationBinding(t.Context(), "00000000-0000-4000-8000-000000000002")
 	if err != nil {
 		t.Fatalf("GetOrganizationBinding() returned %v", err)
 	}
 
-	if want := "/dop-translation/organization-bindings/0206a6e1-15dc-4481-888b-de0877286b27"; rec.path != want {
+	if want := "/dop-translation/organization-bindings/00000000-0000-4000-8000-000000000002"; rec.path != want {
 		t.Errorf("path = %q, want %q", rec.path, want)
 	}
-	if got, want := binding.InstallationID, "65381777"; got != want {
+	if got, want := binding.InstallationID, "12345678"; got != want {
 		t.Errorf("InstallationID = %q, want %q", got, want)
 	}
 }
@@ -149,7 +149,7 @@ func TestFindOrganizationBinding(t *testing.T) {
 	srv := httptest.NewServer(rec.serve(`{"organizationBindings":[` + bindingAnswer + `]}`))
 	defer srv.Close()
 
-	binding, err := newTestClient(srv).FindOrganizationBinding(t.Context(), "AZcwYwExlol79EFABiuM")
+	binding, err := newTestClient(srv).FindOrganizationBinding(t.Context(), "organization-id")
 	if err != nil {
 		t.Fatalf("FindOrganizationBinding() returned %v", err)
 	}
@@ -157,10 +157,10 @@ func TestFindOrganizationBinding(t *testing.T) {
 	if want := "/dop-translation/organization-bindings"; rec.path != want {
 		t.Errorf("path = %q, want %q", rec.path, want)
 	}
-	if want := "organizationId=AZcwYwExlol79EFABiuM"; rec.query != want {
+	if want := "organizationId=organization-id"; rec.query != want {
 		t.Errorf("query = %q, want %q", rec.query, want)
 	}
-	if got, want := binding.OrganizationID, "AZcwYwExlol79EFABiuM"; got != want {
+	if got, want := binding.OrganizationID, "organization-id"; got != want {
 		t.Errorf("OrganizationID = %q, want %q", got, want)
 	}
 }
@@ -175,7 +175,7 @@ func TestFindOrganizationBindingOfAnUnboundOrganization(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	_, err := newTestClient(srv).FindOrganizationBinding(t.Context(), "AZcwYwExlol79EFABiuM")
+	_, err := newTestClient(srv).FindOrganizationBinding(t.Context(), "organization-id")
 	if !errors.Is(err, ErrNotFound) {
 		t.Errorf("FindOrganizationBinding() returned %v, want ErrNotFound", err)
 	}
@@ -191,7 +191,7 @@ func TestFindOrganizationBindingWithAnEmptyList(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	_, err := newTestClient(srv).FindOrganizationBinding(t.Context(), "AZcwYwExlol79EFABiuM")
+	_, err := newTestClient(srv).FindOrganizationBinding(t.Context(), "organization-id")
 	if !errors.Is(err, ErrNotFound) {
 		t.Errorf("FindOrganizationBinding() returned %v, want ErrNotFound", err)
 	}
@@ -207,7 +207,7 @@ func TestFindOrganizationBindingWithMoreThanOneEntry(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	_, err := newTestClient(srv).FindOrganizationBinding(t.Context(), "AZcwYwExlol79EFABiuM")
+	_, err := newTestClient(srv).FindOrganizationBinding(t.Context(), "organization-id")
 	if err == nil {
 		t.Fatal("FindOrganizationBinding() returned no error, want one")
 	}
@@ -225,7 +225,7 @@ func TestUpdateOrganizationBinding(t *testing.T) {
 
 	autoImport := false
 	_, err := newTestClient(srv).UpdateOrganizationBinding(t.Context(),
-		"0206a6e1-15dc-4481-888b-de0877286b27",
+		"00000000-0000-4000-8000-000000000002",
 		PatchBindingRequest{RepoAutoImportEnabled: &autoImport})
 	if err != nil {
 		t.Fatalf("UpdateOrganizationBinding() returned %v", err)
@@ -234,7 +234,7 @@ func TestUpdateOrganizationBinding(t *testing.T) {
 	if rec.method != http.MethodPatch {
 		t.Errorf("method = %q, want %q", rec.method, http.MethodPatch)
 	}
-	if want := "/dop-translation/organization-bindings/0206a6e1-15dc-4481-888b-de0877286b27"; rec.path != want {
+	if want := "/dop-translation/organization-bindings/00000000-0000-4000-8000-000000000002"; rec.path != want {
 		t.Errorf("path = %q, want %q", rec.path, want)
 	}
 	if got := rec.body["repoAutoImportEnabled"]; got != false {

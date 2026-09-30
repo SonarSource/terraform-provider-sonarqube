@@ -11,8 +11,8 @@ import (
 
 const organizationAnswer = `[
   {
-    "id": "AZcwYwExlol79EFABiuM",
-    "uuidV4": "3ddd1f8f-2ab4-443f-a3be-a19ca418ca75",
+    "id": "organization-id",
+    "uuidV4": "00000000-0000-4000-8000-000000000001",
     "key": "my-org",
     "name": "My Organization",
     "description": "Managed by Terraform",
@@ -53,10 +53,10 @@ func TestGetOrganization(t *testing.T) {
 	}
 	// The bindings API accepts this identifier and nothing else, so the
 	// provider reads it out of the same answer.
-	if got, want := org.ID, "AZcwYwExlol79EFABiuM"; got != want {
+	if got, want := org.ID, "organization-id"; got != want {
 		t.Errorf("ID = %q, want %q", got, want)
 	}
-	if got, want := org.UUIDV4, "3ddd1f8f-2ab4-443f-a3be-a19ca418ca75"; got != want {
+	if got, want := org.UUIDV4, "00000000-0000-4000-8000-000000000001"; got != want {
 		t.Errorf("UUIDV4 = %q, want %q", got, want)
 	}
 }

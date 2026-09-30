@@ -21,7 +21,7 @@ output "install_the_application_from" {
 # https://github.com/organizations/<github-org>/settings/installations/<installation_id>
 resource "sonarqube_organization_binding" "example" {
   organization_key = sonarqube_organization.example.key
-  installation_id  = "164561763"
+  installation_id  = "12345678"
 }
 
 # A destroy removes the organization and the binding together. The API cannot

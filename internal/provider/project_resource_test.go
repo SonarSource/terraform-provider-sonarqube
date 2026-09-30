@@ -71,7 +71,7 @@ func TestProjectResourceConfigureNeedsCloud(t *testing.T) {
 	}
 }
 
-const fakeOrganizationUUID = "3ddd1f8f-2ab4-443f-a3be-a19ca418ca75"
+const fakeOrganizationUUID = "00000000-0000-4000-8000-000000000001"
 
 type fakeProjectInstance struct {
 	projects map[string]string
@@ -99,7 +99,7 @@ func (f *fakeProjectInstance) start(t *testing.T) *client.Client {
 				w.WriteHeader(http.StatusNotFound)
 				return
 			}
-			_, _ = w.Write([]byte(`[{"id":"AZcwYwExlol79EFABiuM","uuidV4":"` + fakeOrganizationUUID + `","key":"my-org"}]`))
+			_, _ = w.Write([]byte(`[{"id":"organization-id","uuidV4":"` + fakeOrganizationUUID + `","key":"my-org"}]`))
 		case "/projects/projects":
 			if r.URL.Query().Get("organizationIds") != fakeOrganizationUUID {
 				t.Errorf("organizationIds = %q, want %q", r.URL.Query().Get("organizationIds"), fakeOrganizationUUID)

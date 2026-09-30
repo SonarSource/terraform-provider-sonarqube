@@ -7,7 +7,7 @@ import (
 
 // Organization is an organization of SonarQube Cloud.
 type Organization struct {
-	// ID is the internal identifier, such as "AZcwYwExlol79EFABiuM". The
+	// ID is the internal identifier, an opaque string of 20 characters. The
 	// bindings API names an organization by this and by nothing else, so a
 	// read of the organization is how a key reaches that API.
 	ID string `json:"id"`
