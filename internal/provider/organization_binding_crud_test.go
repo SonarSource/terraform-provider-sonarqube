@@ -48,7 +48,7 @@ func TestOrganizationBindingResourceCreate(t *testing.T) {
 		t.Errorf("the bind call carried organizationId %q, want %q", got, want)
 	}
 
-	state := readBindingModel(t, resp.State)
+	state := readModel[organizationBindingModel](t, resp.State)
 	if got, want := state.ID.ValueString(), theBindingID; got != want {
 		t.Errorf("id = %q, want %q", got, want)
 	}
@@ -134,7 +134,7 @@ func TestOrganizationBindingResourceCreateWithAnAutoImportTheServerRefuses(t *te
 	// attribute is computed and therefore unknown in a real plan, which
 	// answers any value, so the configured attribute is the one that must
 	// match.
-	if !readBindingModel(t, resp.State).RepoAutoImportEnabled.ValueBool() {
+	if !readModel[organizationBindingModel](t, resp.State).RepoAutoImportEnabled.ValueBool() {
 		t.Error("repo_auto_import_enabled = false in the state while the plan asks for true, " +
 			"which Terraform reports as an inconsistent result and which taints the binding")
 	}
@@ -174,7 +174,7 @@ func TestOrganizationBindingResourceUpdateWithAnAutoImportTheServerRefuses(t *te
 		t.Errorf("summary = %q, want it to name the automatic import", got)
 	}
 	// The state holds what the server holds, so the next plan is honest.
-	if readBindingModel(t, resp.State).RepoAutoImportEnabled.ValueBool() {
+	if readModel[organizationBindingModel](t, resp.State).RepoAutoImportEnabled.ValueBool() {
 		t.Error("repo_auto_import_enabled = true in the state, want the false that the server holds")
 	}
 }
@@ -198,7 +198,7 @@ func TestOrganizationBindingResourceRead(t *testing.T) {
 		t.Fatalf("unexpected diagnostics: %v", resp.Diagnostics)
 	}
 
-	state := readBindingModel(t, resp.State)
+	state := readModel[organizationBindingModel](t, resp.State)
 	if got, want := state.InstallationID.ValueString(), "65381777"; got != want {
 		t.Errorf("installation_id = %q, want %q", got, want)
 	}
@@ -262,7 +262,7 @@ func TestOrganizationBindingResourceUpdate(t *testing.T) {
 	if got := instance.bindings[theBindingID].RepoAutoImportEnabled; got == nil || !*got {
 		t.Error("the automatic import was not turned on")
 	}
-	if !readBindingModel(t, resp.State).RepoAutoImportEnabled.ValueBool() {
+	if !readModel[organizationBindingModel](t, resp.State).RepoAutoImportEnabled.ValueBool() {
 		t.Error("repo_auto_import_enabled = false in the state, want true")
 	}
 }
@@ -316,7 +316,7 @@ func TestOrganizationBindingResourceImportTakesTheOrganizationKey(t *testing.T) 
 		t.Fatalf("unexpected diagnostics: %v", resp.Diagnostics)
 	}
 
-	state := readBindingModel(t, resp.State)
+	state := readModel[organizationBindingModel](t, resp.State)
 	if got, want := state.ID.ValueString(), theBindingID; got != want {
 		t.Errorf("id = %q, want %q", got, want)
 	}
@@ -396,7 +396,7 @@ func TestOrganizationBindingResourceCreateReadsBack(t *testing.T) {
 		t.Fatalf("unexpected diagnostics: %v", resp.Diagnostics)
 	}
 
-	state := readBindingModel(t, resp.State)
+	state := readModel[organizationBindingModel](t, resp.State)
 	if got, want := state.DevOpsPlatformURL.ValueString(), instance.storedPlatformURL; got != want {
 		t.Errorf("dev_ops_platform_url = %q, want %q, which the read back reports", got, want)
 	}
@@ -434,7 +434,7 @@ func TestOrganizationBindingResourceCreateWarnsWhenTheReadBackFails(t *testing.T
 	if resp.State.Raw.IsNull() {
 		t.Fatal("the binding is not in the state, so nothing can manage it")
 	}
-	if got, want := readBindingModel(t, resp.State).ID.ValueString(), theBindingID; got != want {
+	if got, want := readModel[organizationBindingModel](t, resp.State).ID.ValueString(), theBindingID; got != want {
 		t.Errorf("id in the state = %q, want %q from the answer of the write", got, want)
 	}
 }

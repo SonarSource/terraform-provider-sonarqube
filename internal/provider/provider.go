@@ -164,6 +164,7 @@ func (p *sonarqubeProvider) Resources(_ context.Context) []func() resource.Resou
 	return []func() resource.Resource{
 		NewOrganizationResource,
 		NewOrganizationBindingResource,
+		NewProjectResource,
 	}
 }
 

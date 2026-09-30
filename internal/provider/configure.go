@@ -40,7 +40,7 @@ func requireCloudClient(providerData any, subject string) (*client.Client, diag.
 
 	if !c.IsCloud() {
 		diagnostics.AddError(
-			"Organizations need SonarQube Cloud",
+			"This needs SonarQube Cloud",
 			subject+", which exists in SonarQube Cloud only.",
 		)
 		return nil, diagnostics

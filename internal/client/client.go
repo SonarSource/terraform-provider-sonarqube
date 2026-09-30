@@ -14,11 +14,13 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net"
 	"net/http"
 	"net/url"
+	"slices"
 	"strings"
 	"time"
 )
@@ -216,14 +218,34 @@ func (c *Client) get(ctx context.Context, path string, params url.Values, out an
 }
 
 // post calls a write action of the older web service, which has no counterpart
-// in Web API v2. The answer is discarded: every such action of this client
-// reads the entity back through Web API v2.
+// in Web API v2. It discards the answer, so a caller that needs the entity
+// reads the entity back itself.
 func (c *Client) post(ctx context.Context, path string, params url.Values) error {
 	return c.send(ctx, http.MethodPost, c.url+path, nil, strings.NewReader(params.Encode()),
 		func(req *http.Request) {
 			req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 			c.webServiceAuth(req)
 		}, nil)
+}
+
+// postIgnoringNotFound calls a write action and accepts an entity that is
+// already gone, so that a second delete succeeds.
+func (c *Client) postIgnoringNotFound(ctx context.Context, path string, params url.Values) error {
+	if err := c.post(ctx, path, params); err != nil && !errors.Is(err, ErrNotFound) {
+		return err
+	}
+	return nil
+}
+
+// findByKey returns the item that carries the key, or ErrNotFound. Both read
+// actions that this client makes answer with a list, and a list can hold more
+// than the key that the caller asked for.
+func findByKey[T any](items []T, key string, keyOf func(T) string) (*T, error) {
+	i := slices.IndexFunc(items, func(item T) bool { return keyOf(item) == key })
+	if i < 0 {
+		return nil, ErrNotFound
+	}
+	return &items[i], nil
 }
 
 // apiSend calls Web API v2, with a JSON body when body is not nil.

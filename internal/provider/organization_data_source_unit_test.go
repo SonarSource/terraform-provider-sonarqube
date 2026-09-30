@@ -85,7 +85,7 @@ func TestOrganizationDataSourceConfigureNeedsCloud(t *testing.T) {
 	resp := &datasource.ConfigureResponse{}
 	d.Configure(context.Background(), datasource.ConfigureRequest{ProviderData: serverClient}, resp)
 
-	assertDiagnosticsContain(t, resp.Diagnostics, "need SonarQube Cloud")
+	assertDiagnosticsContain(t, resp.Diagnostics, "needs SonarQube Cloud")
 	if d.client != nil {
 		t.Error("the data source kept a client that is not SonarQube Cloud")
 	}

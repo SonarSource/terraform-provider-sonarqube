@@ -11,7 +11,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
-	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-go/tftypes"
 
 	"github.com/SonarSource/terraform-provider-sonarqube/internal/client"
@@ -42,7 +41,7 @@ func organizationBindingResourceSchema(t *testing.T) schema.Schema {
 // Every attribute the caller leaves out is null, as it is for an attribute
 // absent from the configuration.
 //
-// organizationValue cannot do this: it writes every attribute as a string,
+// schemaValue cannot do this: it writes every attribute as a string,
 // and this schema carries a boolean.
 //
 // The parameter is an interface, because the resource and the data source
@@ -65,17 +64,6 @@ func bindingValue(t *testing.T, s schemaTyper, attributes map[string]any) tftype
 		values[name] = tftypes.NewValue(attributeType, given)
 	}
 	return tftypes.NewValue(objectType, values)
-}
-
-// readBindingModel reads the state back into the model of the binding.
-func readBindingModel(t *testing.T, state tfsdk.State) organizationBindingModel {
-	t.Helper()
-
-	var model organizationBindingModel
-	if diags := state.Get(context.Background(), &model); diags.HasError() {
-		t.Fatalf("cannot read the state: %v", diags)
-	}
-	return model
 }
 
 // fakeBoundInstance answers the calls that a binding needs: the read of an

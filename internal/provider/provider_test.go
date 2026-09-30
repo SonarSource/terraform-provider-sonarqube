@@ -243,6 +243,7 @@ func TestProviderRegistersItsDataSources(t *testing.T) {
 	assertNames(t, "resources", resourceNames, []string{
 		"sonarqube_organization",
 		"sonarqube_organization_binding",
+		"sonarqube_project",
 	})
 }
 

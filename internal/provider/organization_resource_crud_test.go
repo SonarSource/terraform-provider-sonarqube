@@ -114,7 +114,7 @@ func TestOrganizationResourceCreate(t *testing.T) {
 	s := organizationResourceSchema(t)
 	resp := &resource.CreateResponse{State: emptyState(t, s)}
 	r.Create(context.Background(), resource.CreateRequest{
-		Plan: tfsdk.Plan{Schema: s, Raw: organizationValue(t, s, map[string]string{
+		Plan: tfsdk.Plan{Schema: s, Raw: schemaValue(t, s, map[string]string{
 			"key": "my-org", "name": "My Organization", "description": "Managed by Terraform",
 		})},
 	}, resp)
@@ -131,7 +131,7 @@ func TestOrganizationResourceCreate(t *testing.T) {
 		t.Errorf("stored name = %q, want %q", got, want)
 	}
 
-	state := readModel(t, resp.State)
+	state := readModel[organizationResourceModel](t, resp.State)
 	if got, want := state.ID.ValueString(), "my-org"; got != want {
 		t.Errorf("id = %q, want the key %q", got, want)
 	}
@@ -150,13 +150,13 @@ func TestOrganizationResourceRead(t *testing.T) {
 	s := organizationResourceSchema(t)
 	resp := &resource.ReadResponse{State: emptyState(t, s)}
 	r.Read(context.Background(), resource.ReadRequest{
-		State: tfsdk.State{Schema: s, Raw: organizationValue(t, s, map[string]string{"key": "my-org"})},
+		State: tfsdk.State{Schema: s, Raw: schemaValue(t, s, map[string]string{"key": "my-org"})},
 	}, resp)
 
 	if resp.Diagnostics.HasError() {
 		t.Fatalf("unexpected diagnostics: %v", resp.Diagnostics)
 	}
-	if got, want := readModel(t, resp.State).Name.ValueString(), "My Organization"; got != want {
+	if got, want := readModel[organizationResourceModel](t, resp.State).Name.ValueString(), "My Organization"; got != want {
 		t.Errorf("name = %q, want %q", got, want)
 	}
 }
@@ -171,7 +171,7 @@ func TestOrganizationResourceReadAfterAnOutsideDeletion(t *testing.T) {
 	s := organizationResourceSchema(t)
 	resp := &resource.ReadResponse{State: emptyState(t, s)}
 	r.Read(context.Background(), resource.ReadRequest{
-		State: tfsdk.State{Schema: s, Raw: organizationValue(t, s, map[string]string{"key": "gone"})},
+		State: tfsdk.State{Schema: s, Raw: schemaValue(t, s, map[string]string{"key": "gone"})},
 	}, resp)
 
 	if resp.Diagnostics.HasError() {
@@ -194,13 +194,13 @@ func TestOrganizationResourceUpdateRenames(t *testing.T) {
 	s := organizationResourceSchema(t)
 	resp := &resource.UpdateResponse{State: tfsdk.State{
 		Schema: s,
-		Raw:    organizationValue(t, s, map[string]string{"key": "old-key", "name": "Old name"}),
+		Raw:    schemaValue(t, s, map[string]string{"key": "old-key", "name": "Old name"}),
 	}}
 	r.Update(context.Background(), resource.UpdateRequest{
-		Plan: tfsdk.Plan{Schema: s, Raw: organizationValue(t, s, map[string]string{
+		Plan: tfsdk.Plan{Schema: s, Raw: schemaValue(t, s, map[string]string{
 			"key": "new-key", "name": "New name",
 		})},
-		State: tfsdk.State{Schema: s, Raw: organizationValue(t, s, map[string]string{
+		State: tfsdk.State{Schema: s, Raw: schemaValue(t, s, map[string]string{
 			"key": "old-key", "name": "Old name",
 		})},
 	}, resp)
@@ -218,7 +218,7 @@ func TestOrganizationResourceUpdateRenames(t *testing.T) {
 
 	assertCallOrder(t, instance.calls, "/api/organizations/update_key", "/api/organizations/update")
 
-	state := readModel(t, resp.State)
+	state := readModel[organizationResourceModel](t, resp.State)
 	if got, want := state.ID.ValueString(), "new-key"; got != want {
 		t.Errorf("id = %q, want %q", got, want)
 	}
@@ -236,14 +236,14 @@ func TestOrganizationResourceUpdateClearsADescription(t *testing.T) {
 	r := &organizationResource{client: instance.start(t)}
 
 	s := organizationResourceSchema(t)
-	prior := organizationValue(t, s, map[string]string{
+	prior := schemaValue(t, s, map[string]string{
 		"key": "my-org", "name": "My Organization", "description": "Going away",
 	})
 
 	// The framework starts the response state as the prior state.
 	resp := &resource.UpdateResponse{State: tfsdk.State{Schema: s, Raw: prior}}
 	r.Update(context.Background(), resource.UpdateRequest{
-		Plan: tfsdk.Plan{Schema: s, Raw: organizationValue(t, s, map[string]string{
+		Plan: tfsdk.Plan{Schema: s, Raw: schemaValue(t, s, map[string]string{
 			"key": "my-org", "name": "My Organization",
 		})},
 		State: tfsdk.State{Schema: s, Raw: prior},
@@ -255,7 +255,7 @@ func TestOrganizationResourceUpdateClearsADescription(t *testing.T) {
 	if got := instance.organizations["my-org"]["description"]; got != "" {
 		t.Errorf("stored description = %q, want it cleared", got)
 	}
-	if !readModel(t, resp.State).Description.IsNull() {
+	if !readModel[organizationResourceModel](t, resp.State).Description.IsNull() {
 		t.Error("the description stayed in the state although it was cleared")
 	}
 }
@@ -270,7 +270,7 @@ func TestOrganizationResourceDelete(t *testing.T) {
 	s := organizationResourceSchema(t)
 	resp := &resource.DeleteResponse{State: emptyState(t, s)}
 	r.Delete(context.Background(), resource.DeleteRequest{
-		State: tfsdk.State{Schema: s, Raw: organizationValue(t, s, map[string]string{"key": "my-org"})},
+		State: tfsdk.State{Schema: s, Raw: schemaValue(t, s, map[string]string{"key": "my-org"})},
 	}, resp)
 
 	if resp.Diagnostics.HasError() {
@@ -298,7 +298,7 @@ func TestOrganizationResourceCreateReportsAFailure(t *testing.T) {
 	s := organizationResourceSchema(t)
 	resp := &resource.CreateResponse{State: emptyState(t, s)}
 	r.Create(context.Background(), resource.CreateRequest{
-		Plan: tfsdk.Plan{Schema: s, Raw: organizationValue(t, s, map[string]string{
+		Plan: tfsdk.Plan{Schema: s, Raw: schemaValue(t, s, map[string]string{
 			"key": "my-org", "name": "My Organization",
 		})},
 	}, resp)
@@ -328,7 +328,7 @@ func TestOrganizationResourceCreateReportsAFailedReadBack(t *testing.T) {
 	s := organizationResourceSchema(t)
 	resp := &resource.CreateResponse{State: emptyState(t, s)}
 	r.Create(context.Background(), resource.CreateRequest{
-		Plan: tfsdk.Plan{Schema: s, Raw: organizationValue(t, s, map[string]string{
+		Plan: tfsdk.Plan{Schema: s, Raw: schemaValue(t, s, map[string]string{
 			"key": "my-org", "name": "My Organization",
 		})},
 	}, resp)
@@ -341,7 +341,7 @@ func TestOrganizationResourceCreateReportsAFailedReadBack(t *testing.T) {
 	if resp.State.Raw.IsNull() {
 		t.Fatal("the created organization is not in the state")
 	}
-	if got, want := readModel(t, resp.State).Key.ValueString(), "my-org"; got != want {
+	if got, want := readModel[organizationResourceModel](t, resp.State).Key.ValueString(), "my-org"; got != want {
 		t.Errorf("recorded key = %q, want %q", got, want)
 	}
 }
@@ -365,13 +365,13 @@ func TestOrganizationResourceUpdateKeepsThePriorKeyWhenTheRenameFails(t *testing
 
 	s := organizationResourceSchema(t)
 	// A prior state always carries the computed id beside the key.
-	prior := organizationValue(t, s, map[string]string{
+	prior := schemaValue(t, s, map[string]string{
 		"id": "my-org", "key": "my-org", "name": "My Organization",
 	})
 
 	resp := &resource.UpdateResponse{State: tfsdk.State{Schema: s, Raw: prior}}
 	r.Update(context.Background(), resource.UpdateRequest{
-		Plan: tfsdk.Plan{Schema: s, Raw: organizationValue(t, s, map[string]string{
+		Plan: tfsdk.Plan{Schema: s, Raw: schemaValue(t, s, map[string]string{
 			"key": "taken-key", "name": "My Organization",
 		})},
 		State: tfsdk.State{Schema: s, Raw: prior},
@@ -379,10 +379,10 @@ func TestOrganizationResourceUpdateKeepsThePriorKeyWhenTheRenameFails(t *testing
 
 	assertDiagnosticsContain(t, resp.Diagnostics, "already exists")
 
-	if got, want := readModel(t, resp.State).Key.ValueString(), "my-org"; got != want {
+	if got, want := readModel[organizationResourceModel](t, resp.State).Key.ValueString(), "my-org"; got != want {
 		t.Errorf("key in the state = %q, want the prior key %q", got, want)
 	}
-	if got, want := readModel(t, resp.State).ID.ValueString(), "my-org"; got != want {
+	if got, want := readModel[organizationResourceModel](t, resp.State).ID.ValueString(), "my-org"; got != want {
 		t.Errorf("id in the state = %q, want the prior key %q", got, want)
 	}
 }
@@ -402,7 +402,7 @@ func TestOrganizationResourceImportState(t *testing.T) {
 	if resp.Diagnostics.HasError() {
 		t.Fatalf("unexpected diagnostics: %v", resp.Diagnostics)
 	}
-	if got, want := readModel(t, resp.State).Key.ValueString(), "my-org"; got != want {
+	if got, want := readModel[organizationResourceModel](t, resp.State).Key.ValueString(), "my-org"; got != want {
 		t.Errorf("imported key = %q, want %q", got, want)
 	}
 }
@@ -439,13 +439,13 @@ func TestOrganizationResourceUpdateRecordsBeforeTheReadBack(t *testing.T) {
 	})}
 
 	s := organizationResourceSchema(t)
-	prior := organizationValue(t, s, map[string]string{
+	prior := schemaValue(t, s, map[string]string{
 		"id": "my-org", "key": "my-org", "name": "Old name",
 	})
 
 	resp := &resource.UpdateResponse{State: tfsdk.State{Schema: s, Raw: prior}}
 	r.Update(context.Background(), resource.UpdateRequest{
-		Plan: tfsdk.Plan{Schema: s, Raw: organizationValue(t, s, map[string]string{
+		Plan: tfsdk.Plan{Schema: s, Raw: schemaValue(t, s, map[string]string{
 			"key": "my-org", "name": "New name",
 		})},
 		State: tfsdk.State{Schema: s, Raw: prior},
@@ -453,7 +453,7 @@ func TestOrganizationResourceUpdateRecordsBeforeTheReadBack(t *testing.T) {
 
 	assertDiagnosticsContain(t, resp.Diagnostics, "the instance is unwell")
 
-	if got, want := readModel(t, resp.State).Name.ValueString(), "New name"; got != want {
+	if got, want := readModel[organizationResourceModel](t, resp.State).Name.ValueString(), "New name"; got != want {
 		t.Errorf("name in the state = %q, want %q, which the server now holds", got, want)
 	}
 }
