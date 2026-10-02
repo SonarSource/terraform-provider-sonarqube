@@ -2,6 +2,7 @@
 package acctest
 
 import (
+	"cmp"
 	"fmt"
 	"net"
 	"net/url"
@@ -38,6 +39,18 @@ func PreCheck(t *testing.T) {
 	if os.Getenv(EnvTestOrganization) == "" {
 		t.Skipf("%s is not set, so the acceptance test has no organization to read", EnvTestOrganization)
 	}
+}
+
+// Client returns a client for the instance that the environment names, as the
+// provider configures it. A test uses it to change or read the instance
+// outside of Terraform.
+func Client() *client.Client {
+	return client.New(client.Config{
+		URL:     cmp.Or(os.Getenv(provider.EnvURL), client.CloudURL),
+		APIURL:  os.Getenv(provider.EnvAPIURL),
+		Token:   os.Getenv(provider.EnvToken),
+		Product: client.ProductCloud,
+	})
 }
 
 // PreCheckToken stops a test that has no credentials.
