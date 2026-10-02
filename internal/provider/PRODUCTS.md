@@ -18,6 +18,7 @@ will also work on SonarQube Server when the provider supports it.
 | `sonarqube_cloud_project_binding` | SonarQube Cloud | A SonarQube Server binding needs the key of a DevOps platform integration and attributes for each platform. It also has a real delete, but on SonarQube Cloud a destroy only removes the binding from the state. |
 | `sonarqube_cloud_quality_gate` | SonarQube Cloud | Cloud gates use organization scope, UUIDs, an AI Code Assurance flag, and condition metric identifiers that Server does not share. The required schema and import ID therefore differ. |
 | `sonarqube_cloud_organization_default_quality_gate` | SonarQube Cloud | The default belongs to an organization, which SonarQube Server does not have. On SonarQube Server, the default belongs to the instance, and the import ID is different. |
+| `sonarqube_cloud_project_quality_gate` | SonarQube Cloud | The assignment uses organization scope and gate UUIDs, and the import ID is `<organization>/<project_key>`. SonarQube Server has no organizations and names a gate by its name. |
 
 ## Data sources
 
