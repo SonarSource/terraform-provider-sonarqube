@@ -37,8 +37,18 @@ it — do not decide unilaterally.
 ## Repository structure
 
 - `main.go`: provider executable entry point.
-- `internal/provider`: Terraform configuration, schemas, diagnostics,
-  resources, data sources, and state.
+- `internal/provider`: the provider: its settings, and the registration of
+  every resource and data source.
+  - `cloud`: resources and data sources for SonarQube Cloud only.
+  - `server`: resources and data sources for SonarQube Server only. It does
+    not exist yet.
+  - `shared`: resources and data sources for both products.
+  - `configure`: gives the resources and data sources the client that the
+    provider built.
+  - `validate`: the rules that the server applies to keys.
+  - `providertest`: helpers for the unit tests of the packages above.
+- `internal/acctest`: helpers for the acceptance tests, such as the provider
+  factories and the check that refuses a production instance.
 - `internal/client`: SonarQube HTTP transport, authentication, API payloads,
   and API errors.
 - `internal/client/APIS.md`: inventory of consumed API endpoints.
@@ -174,15 +184,19 @@ product-specific.
 - `sonarqube_cloud_<name>`: SonarQube Cloud only.
 - `sonarqube_server_<name>`: SonarQube Server only.
 
-In `internal/provider`, the names of the Go files follow the Terraform name.
-The names of the types and constructors that contain the name of the
-resource or data source, such as the resource, data source and model types,
-also follow it. For example, `sonarqube_cloud_organization` is in
-`cloud_organization_resource.go`, with `cloudOrganizationResource`,
-`cloudOrganizationResourceModel` and `NewCloudOrganizationResource`. Helpers
-that have the name of an attribute or a task, such as plan modifiers, do not
-follow this rule. The names in `internal/client` describe API calls, so they
-do not follow this rule.
+Put a resource or data source in the package of its products: `cloud`,
+`server` or `shared`. The package shows the product, so the names of the Go
+files, types and constructors do not repeat it. For example,
+`sonarqube_cloud_organization` is in `cloud/organization_resource.go`, with
+`organizationResource`, `organizationResourceModel` and
+`cloud.NewOrganizationResource`. The names in `internal/client` describe API
+calls, so they do not follow this rule.
+
+Put a helper in the package that uses it. When packages of more than one
+product use it, put it in a package below `internal/provider` that has the
+name of its task, such as `configure` or `validate`. Do not use a package
+name that tells nothing, such as `common` or `util`. A product package must
+not import another product package.
 
 A change from shared to product-specific, or the opposite, is a rename. A
 rename after a release breaks the configurations of users.
@@ -210,7 +224,13 @@ rename after a release breaks the configurations of users.
 
 Use `httptest` for client behavior and direct provider tests for schemas,
 configuration, diagnostics, and state. These tests must work without live
-credentials.
+credentials. Put a helper that the unit tests of more than one package use
+in `internal/provider/providertest`.
+
+Write the acceptance tests in an external test package, such as
+`cloud_test`. They start the provider, and the provider imports the product
+packages, so a test in the product package itself makes an import cycle.
+Their helpers are in `internal/acctest`.
 
 ## Keep the API inventory current
 
