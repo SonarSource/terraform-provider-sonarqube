@@ -16,6 +16,7 @@ will also work on SonarQube Server when the provider supports it.
 | `sonarqube_cloud_organization` | SonarQube Cloud | SonarQube Server has no organizations. |
 | `sonarqube_cloud_organization_binding` | SonarQube Cloud | SonarQube Server has no organizations. It connects to a DevOps platform through integration settings of the instance, which have a different schema. |
 | `sonarqube_cloud_project_binding` | SonarQube Cloud | A SonarQube Server binding needs the key of a DevOps platform integration and attributes for each platform. It also has a real delete, but on SonarQube Cloud a destroy only removes the binding from the state. |
+| `sonarqube_cloud_quality_gate` | SonarQube Cloud | Cloud gates use organization scope, UUIDs, an AI Code Assurance flag, and condition metric identifiers that Server does not share. The required schema and import ID therefore differ. |
 
 ## Data sources
 
@@ -25,3 +26,4 @@ will also work on SonarQube Server when the provider supports it.
 | `sonarqube_cloud_organization_binding` | SonarQube Cloud | Same reason as the resource. |
 | `sonarqube_cloud_project_binding` | SonarQube Cloud | Same reason as the resource. |
 | `sonarqube_cloud_dop_applications` | SonarQube Cloud | It lists the DevOps platform applications of a SonarQube Cloud instance, which an organization binding uses. SonarQube Server keeps DevOps platform integration settings instead, with a different schema. |
+| `sonarqube_cloud_quality_gate` | SonarQube Cloud | Same Cloud-specific gate identity and attributes as the resource. |

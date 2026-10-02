@@ -171,6 +171,7 @@ func (p *sonarqubeProvider) Resources(_ context.Context) []func() resource.Resou
 		cloud.NewOrganizationBindingResource,
 		shared.NewProjectResource,
 		cloud.NewProjectBindingResource,
+		cloud.NewQualityGateResource,
 	}
 }
 
@@ -180,6 +181,7 @@ func (p *sonarqubeProvider) DataSources(_ context.Context) []func() datasource.D
 		cloud.NewOrganizationBindingDataSource,
 		cloud.NewDopApplicationsDataSource,
 		cloud.NewProjectBindingDataSource,
+		cloud.NewQualityGateDataSource,
 	}
 }
 
