@@ -2,6 +2,7 @@ package client
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -11,10 +12,13 @@ import (
 
 // QualityGate is a SonarQube Cloud quality gate.
 type QualityGate struct {
-	ID          string `json:"id"`
-	Name        string `json:"name"`
-	AIQualified bool   `json:"aiQualified"`
-	BuiltIn     bool   `json:"builtIn"`
+	ID   string `json:"id"`
+	Name string `json:"name"`
+	// LegacyID is the numeric identifier that the older web services take.
+	// json.Number accepts it as a number and as a string.
+	LegacyID    json.Number `json:"legacyId"`
+	AIQualified bool        `json:"aiQualified"`
+	BuiltIn     bool        `json:"builtIn"`
 }
 
 // QualityGateCondition is one condition of a Cloud quality gate.
@@ -106,6 +110,29 @@ func (c *Client) DeleteQualityGate(ctx context.Context, id string) error {
 		return nil
 	}
 	return err
+}
+
+// SetDefaultQualityGate makes a gate the default of an organization. Web API
+// v2 has no operation for this, and no API removes a default: only a different
+// gate can take its place.
+//
+// The older web service names a gate by its numeric legacy identifier only,
+// and a read of the gate is the only place that reports it. A gate that does
+// not exist gives ErrNotFound.
+func (c *Client) SetDefaultQualityGate(ctx context.Context, organization, gateID string) error {
+	gate, err := c.GetQualityGate(ctx, gateID)
+	if err != nil {
+		return err
+	}
+	if gate.LegacyID == "" {
+		return fmt.Errorf("the API gave no legacy identifier for the quality gate %s", gateID)
+	}
+
+	params := url.Values{}
+	params.Set("organization", organization)
+	params.Set("id", gate.LegacyID.String())
+
+	return c.post(ctx, "/api/qualitygates/set_as_default", params)
 }
 
 // ListQualityGateConditions reads all conditions of a gate.

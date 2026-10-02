@@ -112,6 +112,16 @@ repository was not tested.
 | `UpdateQualityGateCondition` | `PATCH {api_url}/quality-gates/conditions/{id}` | Web API v2 | [Public](https://api-docs.sonarsource.com/sonarqube-cloud/default/public-qualitygates-1-0-0) |
 | `DeleteQualityGateCondition` | `DELETE {api_url}/quality-gates/conditions/{id}` | Web API v2 | [Public](https://api-docs.sonarsource.com/sonarqube-cloud/default/public-qualitygates-1-0-0) |
 | `ListMetrics` | `GET {url}/api/metrics/search?p=&ps=` | Web API v1 | [Public](https://sonarcloud.io/web_api/api/metrics/search) |
+| `SetDefaultQualityGate` | `POST {url}/api/qualitygates/set_as_default` | Web API v1 | [Public](https://sonarcloud.io/web_api/api/qualitygates/set_as_default) |
 
 The metrics web service maps a Terraform metric key to the condition API's
 `legacyMetricId`. It also maps identifiers back to keys during refresh.
+
+Web API v2 cannot set the default gate of an organization, so
+`SetDefaultQualityGate` uses the older web service. That service names the
+gate by its numeric `legacyId`, not by the UUID, so the function first reads
+the gate with `GetQualityGate`. No API removes a default: only a different
+gate can take its place.
+
+The organization must be on the Team or the Enterprise plan. On the Free plan,
+the web service answers 403 for every gate, the built-in ones included.
