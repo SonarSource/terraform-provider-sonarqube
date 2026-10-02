@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"testing"
 )
 
@@ -244,5 +245,90 @@ func TestQualityGateCreateFailure(t *testing.T) {
 	defer srv.Close()
 	if _, err := newTestClient(srv).CreateQualityGate(t.Context(), "organization-uuid", "My Gate"); err == nil {
 		t.Error("create failure was ignored")
+	}
+}
+
+// The legacy identifier is a number in the answer of the API. A string is
+// accepted too, so that a change of the type does not break a read.
+func TestGetQualityGateReadsTheLegacyID(t *testing.T) {
+	t.Parallel()
+	for name, answer := range map[string]string{
+		"number": `{"id":"gate-id","name":"My Gate","legacyId":42}`,
+		"string": `{"id":"gate-id","name":"My Gate","legacyId":"42"}`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.Write([]byte(answer))
+			}))
+			defer srv.Close()
+			gate, err := newTestClient(srv).GetQualityGate(t.Context(), "gate-id")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if gate.LegacyID != "42" {
+				t.Errorf("LegacyID = %q, want 42", gate.LegacyID)
+			}
+		})
+	}
+}
+
+// The web service takes the legacy identifier, so the client reads the gate
+// first.
+func TestSetDefaultQualityGate(t *testing.T) {
+	t.Parallel()
+	var gotForm url.Values
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method + " " + r.URL.Path {
+		case "GET /quality-gates/quality-gates/gate-id":
+			w.Write([]byte(`{"id":"gate-id","name":"My Gate","legacyId":42}`))
+		case "POST /api/qualitygates/set_as_default":
+			if err := r.ParseForm(); err != nil {
+				t.Errorf("cannot read the form: %v", err)
+			}
+			gotForm = r.PostForm
+			w.WriteHeader(http.StatusNoContent)
+		default:
+			t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer srv.Close()
+	if err := newTestClient(srv).SetDefaultQualityGate(t.Context(), "my-org", "gate-id"); err != nil {
+		t.Fatal(err)
+	}
+	if gotForm.Get("organization") != "my-org" || gotForm.Get("id") != "42" {
+		t.Errorf("form = %v", gotForm)
+	}
+}
+
+func TestSetDefaultQualityGateFailures(t *testing.T) {
+	t.Parallel()
+	for name, test := range map[string]struct {
+		status   int
+		answer   string
+		notFound bool
+	}{
+		"missing gate":         {status: http.StatusNotFound, notFound: true},
+		"no legacy identifier": {status: http.StatusOK, answer: `{"id":"gate-id","name":"My Gate"}`},
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method != http.MethodGet {
+					t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
+				}
+				w.WriteHeader(test.status)
+				w.Write([]byte(test.answer))
+			}))
+			defer srv.Close()
+			err := newTestClient(srv).SetDefaultQualityGate(t.Context(), "my-org", "gate-id")
+			if err == nil {
+				t.Fatal("no error")
+			}
+			if errors.Is(err, ErrNotFound) != test.notFound {
+				t.Errorf("error = %v, want ErrNotFound %t", err, test.notFound)
+			}
+		})
 	}
 }
