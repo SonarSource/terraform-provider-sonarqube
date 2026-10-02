@@ -53,7 +53,7 @@ type providerModel struct {
 }
 
 // Metadata sets the type name, which prefixes every resource and data source,
-// for example "sonarqube_organization".
+// for example "sonarqube_cloud_organization".
 func (p *sonarqubeProvider) Metadata(_ context.Context, _ provider.MetadataRequest, resp *provider.MetadataResponse) {
 	resp.TypeName = "sonarqube"
 	resp.Version = p.version
@@ -162,19 +162,19 @@ func (p *sonarqubeProvider) Configure(ctx context.Context, req provider.Configur
 
 func (p *sonarqubeProvider) Resources(_ context.Context) []func() resource.Resource {
 	return []func() resource.Resource{
-		NewOrganizationResource,
-		NewOrganizationBindingResource,
+		NewCloudOrganizationResource,
+		NewCloudOrganizationBindingResource,
 		NewProjectResource,
-		NewProjectBindingResource,
+		NewCloudProjectBindingResource,
 	}
 }
 
 func (p *sonarqubeProvider) DataSources(_ context.Context) []func() datasource.DataSource {
 	return []func() datasource.DataSource{
-		NewOrganizationDataSource,
-		NewOrganizationBindingDataSource,
-		NewDopApplicationsDataSource,
-		NewProjectBindingDataSource,
+		NewCloudOrganizationDataSource,
+		NewCloudOrganizationBindingDataSource,
+		NewCloudDopApplicationsDataSource,
+		NewCloudProjectBindingDataSource,
 	}
 }
 

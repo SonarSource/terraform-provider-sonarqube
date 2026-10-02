@@ -224,10 +224,10 @@ func TestProviderRegistersItsDataSources(t *testing.T) {
 	}
 
 	assertNames(t, "data sources", dataSourceNames, []string{
-		"sonarqube_organization",
-		"sonarqube_organization_binding",
-		"sonarqube_dop_applications",
-		"sonarqube_project_binding",
+		"sonarqube_cloud_organization",
+		"sonarqube_cloud_organization_binding",
+		"sonarqube_cloud_dop_applications",
+		"sonarqube_cloud_project_binding",
 	})
 
 	resourceNames := []string{}
@@ -242,10 +242,10 @@ func TestProviderRegistersItsDataSources(t *testing.T) {
 	}
 
 	assertNames(t, "resources", resourceNames, []string{
-		"sonarqube_organization",
-		"sonarqube_organization_binding",
+		"sonarqube_cloud_organization",
+		"sonarqube_cloud_organization_binding",
 		"sonarqube_project",
-		"sonarqube_project_binding",
+		"sonarqube_cloud_project_binding",
 	})
 }
 

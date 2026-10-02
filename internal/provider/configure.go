@@ -21,7 +21,7 @@ import (
 // yet, which is not a failure.
 //
 // subject names the thing that needs SonarQube Cloud, for example
-// "The sonarqube_organization resource manages an organization".
+// "The sonarqube_cloud_organization resource manages an organization".
 func requireCloudClient(providerData any, subject string) (*client.Client, diag.Diagnostics) {
 	var diagnostics diag.Diagnostics
 

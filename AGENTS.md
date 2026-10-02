@@ -42,11 +42,14 @@ it — do not decide unilaterally.
 - `internal/client`: SonarQube HTTP transport, authentication, API payloads,
   and API errors.
 - `internal/client/APIS.md`: inventory of consumed API endpoints.
+- `internal/provider/PRODUCTS.md`: the products that each resource and data
+  source supports, and why.
 - `.github/workflows`: GitHub Actions workflows.
 
 Use `terraform-plugin-framework` for provider implementations and
 `terraform-plugin-testing` for Terraform acceptance tests. Follow the
-existing organization data source and its tests when adding functionality.
+existing `sonarqube_cloud_organization` data source and its tests when
+adding functionality.
 
 ## Build and validation
 
@@ -87,7 +90,7 @@ and four more variables:
   that bind. Nothing can make one: install the application from
   `https://github.com/apps/<application_key>` on a GitHub organization that is
   not bound yet, and read the identifier from the address that GitHub shows.
-  The `sonarqube_dop_applications` data source reports the application key.
+  The `sonarqube_cloud_dop_applications` data source reports the application key.
 - `SONARQUBE_TEST_GITHUB_REPOSITORY`: a public repository, as `owner/name`,
   that the installation above can see, for the tests that bind a project.
   Write the slug with the case that GitHub shows. The test deletes its
@@ -129,9 +132,74 @@ checks that could not run.
   `/api/navigation/*`: these endpoints serve the web interface, and they can
   change without notice. Mark every internal endpoint in `APIS.md`.
 
+## SonarQube Cloud and SonarQube Server
+
+The provider will support SonarQube Cloud and SonarQube Server. The alpha
+supports SonarQube Cloud only. Do not add SonarQube Server code now, but do
+not make a choice that prevents it later.
+
+### Shared or product-specific
+
+A resource or data source is shared when the same configuration means the
+same thing on both products. A shared resource can have these differences:
+
+- Scope: the attribute that names the container of the object, such as
+  `organization` or `enterprise` on SonarQube Cloud. It is required on the
+  product that has the container and refused on the other product. Thus,
+  when both products are supported, the schema makes it optional, and the
+  provider checks it for the product. Only on the product that has the
+  container does the import ID start with the scope.
+- API: endpoints, authentication and internal identifiers. Keep them in
+  `internal/client`.
+- Permitted values that the server checks, such as permission keys or
+  metric keys. Let the server refuse a value that is not valid.
+
+Each of these differences makes the resource product-specific:
+
+- A required attribute, other than scope, that one product does not have.
+- An attribute that has the same name but a different meaning.
+- A different lifecycle. For example, delete removes the object on one
+  product but only removes it from state on the other, or a change updates
+  the object on one product but replaces it on the other.
+- A different import ID, other than the scope prefix.
+
+An optional attribute that only one product supports is permitted when the
+provider refuses it on the other product with a clear diagnostic. When a
+resource has more than a small number of such attributes, make it
+product-specific.
+
+### Names
+
+- `sonarqube_<name>`: shared.
+- `sonarqube_cloud_<name>`: SonarQube Cloud only.
+- `sonarqube_server_<name>`: SonarQube Server only.
+
+In `internal/provider`, the names of the Go files follow the Terraform name.
+The names of the types and constructors that contain the name of the
+resource or data source, such as the resource, data source and model types,
+also follow it. For example, `sonarqube_cloud_organization` is in
+`cloud_organization_resource.go`, with `cloudOrganizationResource`,
+`cloudOrganizationResourceModel` and `NewCloudOrganizationResource`. Helpers
+that have the name of an attribute or a task, such as plan modifiers, do not
+follow this rule. The names in `internal/client` describe API calls, so they
+do not follow this rule.
+
+A change from shared to product-specific, or the opposite, is a rename. A
+rename after a release breaks the configurations of users.
+
+### Before you add a resource or data source
+
+1. Read the APIs of both products, also when the change is for SonarQube
+   Cloud only.
+2. Use the rules above to decide if it is shared or product-specific.
+3. Add the decision and the reason to `internal/provider/PRODUCTS.md`, and
+   get agreement before you write code.
+
 ## Adding or changing a resource or data source
 
-1. Follow the existing implementation in the same package.
+1. Follow the existing implementation in the same package. For a new
+   resource or data source, first do the steps in "Before you add a
+   resource or data source".
 2. Add API operations to the appropriate domain file in `internal/client`.
 3. Implement the Terraform schema, configuration, and state handling.
 4. Register the constructor in the provider's `Resources` or `DataSources`.
