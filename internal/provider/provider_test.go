@@ -46,7 +46,7 @@ func TestProviderSchema(t *testing.T) {
 }
 
 func TestConfigureReadsTheEnvironment(t *testing.T) {
-	resp := configure(t, map[string]string{envToken: "token-from-the-environment"}, nil)
+	resp := configure(t, map[string]string{EnvToken: "token-from-the-environment"}, nil)
 
 	if resp.Diagnostics.HasError() {
 		t.Fatalf("unexpected diagnostics: %v", resp.Diagnostics)
@@ -68,8 +68,8 @@ func TestConfigureReadsTheEnvironment(t *testing.T) {
 func TestConfigurePrefersTheConfiguration(t *testing.T) {
 	resp := configure(t,
 		map[string]string{
-			envToken: "token-from-the-environment",
-			envURL:   "https://from-the-environment.example.com",
+			EnvToken: "token-from-the-environment",
+			EnvURL:   "https://from-the-environment.example.com",
 		},
 		map[string]tftypes.Value{
 			"url": tftypes.NewValue(tftypes.String, "https://from-the-configuration.example.com"),
@@ -89,7 +89,7 @@ func TestConfigurePrefersTheConfiguration(t *testing.T) {
 // the usual naming.
 func TestConfigureKeepsAnExplicitAPIURL(t *testing.T) {
 	resp := configure(t,
-		map[string]string{envToken: "a-token"},
+		map[string]string{EnvToken: "a-token"},
 		map[string]tftypes.Value{
 			"url":     tftypes.NewValue(tftypes.String, "https://dev.example.io"),
 			"api_url": tftypes.NewValue(tftypes.String, "https://api.example.com"),
@@ -115,7 +115,7 @@ func TestConfigureNeedsAToken(t *testing.T) {
 // release manages SonarQube Cloud only.
 func TestConfigureRefusesServer(t *testing.T) {
 	resp := configure(t,
-		map[string]string{envToken: "a-token"},
+		map[string]string{EnvToken: "a-token"},
 		map[string]tftypes.Value{
 			"product": tftypes.NewValue(tftypes.String, string(client.ProductServer)),
 		})
@@ -127,7 +127,7 @@ func TestConfigureRefusesServer(t *testing.T) {
 // the environment variable, which would authenticate as somebody else.
 func TestConfigureRefusesAnUnknownToken(t *testing.T) {
 	resp := configure(t,
-		map[string]string{envToken: "token-from-the-environment"},
+		map[string]string{EnvToken: "token-from-the-environment"},
 		map[string]tftypes.Value{
 			"token": tftypes.NewValue(tftypes.String, tftypes.UnknownValue),
 		})
@@ -149,7 +149,7 @@ func providerSchema(t *testing.T) *provider.SchemaResponse {
 func configure(t *testing.T, env map[string]string, attributes map[string]tftypes.Value) *provider.ConfigureResponse {
 	t.Helper()
 
-	for _, name := range []string{envURL, envAPIURL, envToken} {
+	for _, name := range []string{EnvURL, EnvAPIURL, EnvToken} {
 		t.Setenv(name, env[name])
 	}
 
@@ -224,10 +224,10 @@ func TestProviderRegistersItsDataSources(t *testing.T) {
 	}
 
 	assertNames(t, "data sources", dataSourceNames, []string{
-		"sonarqube_organization",
-		"sonarqube_organization_binding",
-		"sonarqube_dop_applications",
-		"sonarqube_project_binding",
+		"sonarqube_cloud_organization",
+		"sonarqube_cloud_organization_binding",
+		"sonarqube_cloud_dop_applications",
+		"sonarqube_cloud_project_binding",
 	})
 
 	resourceNames := []string{}
@@ -242,10 +242,10 @@ func TestProviderRegistersItsDataSources(t *testing.T) {
 	}
 
 	assertNames(t, "resources", resourceNames, []string{
-		"sonarqube_organization",
-		"sonarqube_organization_binding",
+		"sonarqube_cloud_organization",
+		"sonarqube_cloud_organization_binding",
 		"sonarqube_project",
-		"sonarqube_project_binding",
+		"sonarqube_cloud_project_binding",
 	})
 }
 
@@ -283,7 +283,7 @@ func assertNames(t *testing.T, subject string, got, want []string) {
 // with a message that names neither the attribute nor the value.
 func TestConfigureRefusesAnAddressWithNoScheme(t *testing.T) {
 	resp := configure(t,
-		map[string]string{envToken: "a-token"},
+		map[string]string{EnvToken: "a-token"},
 		map[string]tftypes.Value{
 			"url": tftypes.NewValue(tftypes.String, "sonarcloud.io"),
 		})
@@ -293,7 +293,7 @@ func TestConfigureRefusesAnAddressWithNoScheme(t *testing.T) {
 
 func TestConfigureRefusesAnInvalidAPIAddress(t *testing.T) {
 	resp := configure(t,
-		map[string]string{envToken: "a-token"},
+		map[string]string{EnvToken: "a-token"},
 		map[string]tftypes.Value{
 			"api_url": tftypes.NewValue(tftypes.String, "api.sonarcloud.io"),
 		})

@@ -16,15 +16,20 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 
 	"github.com/SonarSource/terraform-provider-sonarqube/internal/client"
+	"github.com/SonarSource/terraform-provider-sonarqube/internal/provider/cloud"
+	"github.com/SonarSource/terraform-provider-sonarqube/internal/provider/shared"
 )
 
+// The environment variables that the provider reads. The acceptance tests
+// read them too.
+//
 // The SONARQUBE_ prefix is deliberate. SONAR_TOKEN is already set in many
 // continuous integration jobs, where it holds an analysis token that cannot
 // administer an organization.
 const (
-	envURL    = "SONARQUBE_URL"
-	envAPIURL = "SONARQUBE_API_URL"
-	envToken  = "SONARQUBE_TOKEN"
+	EnvURL    = "SONARQUBE_URL"
+	EnvAPIURL = "SONARQUBE_API_URL"
+	EnvToken  = "SONARQUBE_TOKEN"
 )
 
 var _ provider.Provider = &sonarqubeProvider{}
@@ -53,7 +58,7 @@ type providerModel struct {
 }
 
 // Metadata sets the type name, which prefixes every resource and data source,
-// for example "sonarqube_organization".
+// for example "sonarqube_cloud_organization".
 func (p *sonarqubeProvider) Metadata(_ context.Context, _ provider.MetadataRequest, resp *provider.MetadataResponse) {
 	resp.TypeName = "sonarqube"
 	resp.Version = p.version
@@ -66,13 +71,13 @@ func (p *sonarqubeProvider) Schema(_ context.Context, _ provider.SchemaRequest, 
 			"url": schema.StringAttribute{
 				Optional: true,
 				Description: "Base address of the instance, for example `" + client.CloudURL +
-					"`. Can also be given with the `" + envURL + "` environment variable. " +
+					"`. Can also be given with the `" + EnvURL + "` environment variable. " +
 					"Defaults to `" + client.CloudURL + "` when `product` is `cloud`.",
 			},
 			"api_url": schema.StringAttribute{
 				Optional: true,
 				Description: "Base address of Web API v2, for example " +
-					"`https://api.sonarcloud.io`. Can also be given with the `" + envAPIURL +
+					"`https://api.sonarcloud.io`. Can also be given with the `" + EnvAPIURL +
 					"` environment variable. Derived from `url` when absent, which is right " +
 					"for every standard deployment.",
 			},
@@ -80,7 +85,7 @@ func (p *sonarqubeProvider) Schema(_ context.Context, _ provider.SchemaRequest, 
 				Optional:  true,
 				Sensitive: true,
 				Description: "Token that authenticates against the instance. Can also be " +
-					"given with the `" + envToken + "` environment variable.",
+					"given with the `" + EnvToken + "` environment variable.",
 			},
 			"product": schema.StringAttribute{
 				Optional: true,
@@ -103,9 +108,9 @@ func (p *sonarqubeProvider) Configure(ctx context.Context, req provider.Configur
 
 	// An unknown value comes from another resource that must be applied first.
 	// Falling back to the environment would authenticate as somebody else.
-	addUnknownError(resp, config.URL, "url", envURL)
-	addUnknownError(resp, config.APIURL, "api_url", envAPIURL)
-	addUnknownError(resp, config.Token, "token", envToken)
+	addUnknownError(resp, config.URL, "url", EnvURL)
+	addUnknownError(resp, config.APIURL, "api_url", EnvAPIURL)
+	addUnknownError(resp, config.Token, "token", EnvToken)
 	addUnknownError(resp, config.Product, "product", "")
 	if resp.Diagnostics.HasError() {
 		return
@@ -125,16 +130,16 @@ func (p *sonarqubeProvider) Configure(ctx context.Context, req provider.Configur
 		return
 	}
 
-	instanceURL := cmp.Or(config.URL.ValueString(), os.Getenv(envURL), client.CloudURL)
-	apiURL := cmp.Or(config.APIURL.ValueString(), os.Getenv(envAPIURL))
-	token := cmp.Or(config.Token.ValueString(), os.Getenv(envToken))
+	instanceURL := cmp.Or(config.URL.ValueString(), os.Getenv(EnvURL), client.CloudURL)
+	apiURL := cmp.Or(config.APIURL.ValueString(), os.Getenv(EnvAPIURL))
+	token := cmp.Or(config.Token.ValueString(), os.Getenv(EnvToken))
 
 	// url.Parse accepts an address with no scheme and leaves the host empty,
 	// so an address such as "sonarcloud.io" would fail on the first request
 	// with a message that names neither the attribute nor the value.
-	addressError(resp, instanceURL, "url", envURL)
+	addressError(resp, instanceURL, "url", EnvURL)
 	if apiURL != "" {
-		addressError(resp, apiURL, "api_url", envAPIURL)
+		addressError(resp, apiURL, "api_url", EnvAPIURL)
 	}
 	if resp.Diagnostics.HasError() {
 		return
@@ -143,7 +148,7 @@ func (p *sonarqubeProvider) Configure(ctx context.Context, req provider.Configur
 		resp.Diagnostics.AddAttributeError(
 			path.Root("token"),
 			"Missing token",
-			"Set the token attribute of the provider, or the "+envToken+
+			"Set the token attribute of the provider, or the "+EnvToken+
 				" environment variable.",
 		)
 		return
@@ -162,19 +167,19 @@ func (p *sonarqubeProvider) Configure(ctx context.Context, req provider.Configur
 
 func (p *sonarqubeProvider) Resources(_ context.Context) []func() resource.Resource {
 	return []func() resource.Resource{
-		NewOrganizationResource,
-		NewOrganizationBindingResource,
-		NewProjectResource,
-		NewProjectBindingResource,
+		cloud.NewOrganizationResource,
+		cloud.NewOrganizationBindingResource,
+		shared.NewProjectResource,
+		cloud.NewProjectBindingResource,
 	}
 }
 
 func (p *sonarqubeProvider) DataSources(_ context.Context) []func() datasource.DataSource {
 	return []func() datasource.DataSource{
-		NewOrganizationDataSource,
-		NewOrganizationBindingDataSource,
-		NewDopApplicationsDataSource,
-		NewProjectBindingDataSource,
+		cloud.NewOrganizationDataSource,
+		cloud.NewOrganizationBindingDataSource,
+		cloud.NewDopApplicationsDataSource,
+		cloud.NewProjectBindingDataSource,
 	}
 }
 
