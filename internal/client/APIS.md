@@ -107,6 +107,7 @@ repository was not tested.
 | `CreateQualityGate` | `POST {api_url}/quality-gates/quality-gates` | Web API v2 | [Public](https://api-docs.sonarsource.com/sonarqube-cloud/default/public-qualitygates-1-0-0) |
 | `UpdateQualityGate` | `PATCH {api_url}/quality-gates/quality-gates/{id}` | Web API v2 | [Public](https://api-docs.sonarsource.com/sonarqube-cloud/default/public-qualitygates-1-0-0) |
 | `DeleteQualityGate` | `DELETE {api_url}/quality-gates/quality-gates/{id}` | Web API v2 | [Public](https://api-docs.sonarsource.com/sonarqube-cloud/default/public-qualitygates-1-0-0) |
+| `SetDefaultQualityGate` | `PATCH {api_url}/quality-gates/quality-gates/defaults/{organizationId}` | Web API v2 | [Public](https://api-docs.sonarsource.com/sonarqube-cloud/default/public-qualitygates-1-0-0) |
 | `ListQualityGateConditions` | `GET {api_url}/quality-gates/conditions?qualityGateId=` | Web API v2 | [Public](https://api-docs.sonarsource.com/sonarqube-cloud/default/public-qualitygates-1-0-0) |
 | `CreateQualityGateCondition` | `POST {api_url}/quality-gates/conditions` | Web API v2 | [Public](https://api-docs.sonarsource.com/sonarqube-cloud/default/public-qualitygates-1-0-0) |
 | `UpdateQualityGateCondition` | `PATCH {api_url}/quality-gates/conditions/{id}` | Web API v2 | [Public](https://api-docs.sonarsource.com/sonarqube-cloud/default/public-qualitygates-1-0-0) |
@@ -115,3 +116,16 @@ repository was not tested.
 
 The metrics web service maps a Terraform metric key to the condition API's
 `legacyMetricId`. It also maps identifiers back to keys during refresh.
+
+`SetDefaultQualityGate` names the organization by its UUID in the path, and
+sends `{"qualityGateId": "<gate UUID>"}` as plain JSON. The gateway refuses
+`application/merge-patch+json` on this path with 403. An unknown gate gives
+404. No API removes a default: only a different gate can take its place.
+
+The organization must be on the Team or the Enterprise plan. Otherwise the
+call answers 403 "Your current plan does not allow you to perform this
+operation".
+
+The SonarQube Cloud web application still uses the older web service
+`api/qualitygates/set_as_default`, which takes the numeric `legacyId` of the
+gate. That web service is marked deprecated, so the provider does not use it.

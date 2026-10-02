@@ -17,7 +17,8 @@ const organizationAnswer = `[
     "name": "My Organization",
     "description": "Managed by Terraform",
     "url": "https://example.com",
-    "avatarUrl": "https://example.com/avatar.png"
+    "avatarUrl": "https://example.com/avatar.png",
+    "defaultQualityGateUuid": "default-gate-id"
   }
 ]`
 
@@ -58,6 +59,9 @@ func TestGetOrganization(t *testing.T) {
 	}
 	if got, want := org.UUIDV4, "00000000-0000-4000-8000-000000000001"; got != want {
 		t.Errorf("UUIDV4 = %q, want %q", got, want)
+	}
+	if got, want := org.DefaultQualityGateUUID, "default-gate-id"; got != want {
+		t.Errorf("DefaultQualityGateUUID = %q, want %q", got, want)
 	}
 }
 
