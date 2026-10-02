@@ -1,6 +1,7 @@
 package cloud_test
 
 import (
+	"errors"
 	"fmt"
 	"math/rand/v2"
 	"os"
@@ -14,10 +15,7 @@ import (
 	"github.com/SonarSource/terraform-provider-sonarqube/internal/client"
 )
 
-const (
-	projectQualityGateAddress = "sonarqube_cloud_project_quality_gate.test"
-	projectGateProjectAddress = "sonarqube_project.test"
-)
+const projectQualityGateAddress = "sonarqube_cloud_project_quality_gate.test"
 
 // A new organization is on the Free plan, which cannot assign a gate to a
 // project. The test therefore uses the organization of
@@ -25,8 +23,9 @@ const (
 // plan. The test makes its own project and gates, and does not change the
 // default gate of the organization.
 //
-// The destroy removes the assignment, so the project uses the default gate
-// again. The last check of the test reads this from the API.
+// The last step removes only the assignment from the configuration, and keeps
+// the project. Its check reads from the API that the project uses the default
+// gate again. The final destroy deletes the project too, so it cannot show this.
 func TestAccProjectQualityGateResource(t *testing.T) {
 	organization := os.Getenv(acctest.EnvTestOrganization)
 	suffix := rand.Uint32()
@@ -35,10 +34,10 @@ func TestAccProjectQualityGateResource(t *testing.T) {
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { acctest.PreCheck(t) },
 		ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories,
-		CheckDestroy:             testAccCheckProjectUsesDefaultGate(t, organization, projectKey),
+		CheckDestroy:             testAccCheckProjectDeleted(t, organization, projectKey),
 		Steps: []resource.TestStep{
 			{
-				Config: testAccProjectQualityGateConfig(organization, projectKey, suffix, "first"),
+				Config: testAccProjectQualityGateConfig(organization, projectKey, suffix, "first", true),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr(projectQualityGateAddress, "id", organization+"/"+projectKey),
 					resource.TestCheckResourceAttrPair(projectQualityGateAddress, "quality_gate_id",
@@ -48,7 +47,7 @@ func TestAccProjectQualityGateResource(t *testing.T) {
 			},
 			{
 				// A different gate changes the assignment in place.
-				Config: testAccProjectQualityGateConfig(organization, projectKey, suffix, "second"),
+				Config: testAccProjectQualityGateConfig(organization, projectKey, suffix, "second", true),
 				ConfigPlanChecks: resource.ConfigPlanChecks{
 					PreApply: []plancheck.PlanCheck{plancheck.ExpectResourceAction(projectQualityGateAddress, plancheck.ResourceActionUpdate)},
 				},
@@ -60,7 +59,7 @@ func TestAccProjectQualityGateResource(t *testing.T) {
 				// the default. The plan shows it, and the apply assigns the
 				// configured gate again.
 				PreConfig: func() { testAccRemoveProjectGate(t, organization, projectKey) },
-				Config:    testAccProjectQualityGateConfig(organization, projectKey, suffix, "second"),
+				Config:    testAccProjectQualityGateConfig(organization, projectKey, suffix, "second", true),
 				ConfigPlanChecks: resource.ConfigPlanChecks{
 					PreApply: []plancheck.PlanCheck{plancheck.ExpectResourceAction(projectQualityGateAddress, plancheck.ResourceActionCreate)},
 				},
@@ -70,6 +69,16 @@ func TestAccProjectQualityGateResource(t *testing.T) {
 				ImportState:       true,
 				ImportStateId:     organization + "/" + projectKey,
 				ImportStateVerify: true,
+			},
+			{
+				// The configuration drops the assignment and keeps the project.
+				// The destroy of the assignment must put the project back on
+				// the default gate.
+				Config: testAccProjectQualityGateConfig(organization, projectKey, suffix, "second", false),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{plancheck.ExpectResourceAction(projectQualityGateAddress, plancheck.ResourceActionDestroy)},
+				},
+				Check: testAccCheckProjectUsesDefaultGate(t, organization, projectKey),
 			},
 		},
 	})
@@ -102,28 +111,40 @@ func testAccReadProject(t *testing.T, c *client.Client, organization, projectKey
 	return org, project
 }
 
-// testAccCheckProjectUsesDefaultGate runs after the destroy. The project is
-// deleted by then, so the check accepts a missing project as well.
+// testAccCheckProjectUsesDefaultGate reads from the API that the project has
+// no gate of its own.
 func testAccCheckProjectUsesDefaultGate(t *testing.T, organization, projectKey string) resource.TestCheckFunc {
 	return func(*terraform.State) error {
 		c := acctest.Client()
-		project, err := c.GetProject(t.Context(), organization, projectKey)
-		if err != nil {
+		org, project := testAccReadProject(t, c, organization, projectKey)
+		_, err := c.FindQualityGateProjectAssociation(t.Context(), org.UUIDV4, project)
+		if errors.Is(err, client.ErrNotFound) {
 			return nil
 		}
-		org, err := c.GetOrganization(t.Context(), organization)
 		if err != nil {
 			return err
 		}
-		if _, err := c.FindQualityGateProjectAssociation(t.Context(), org.UUIDV4, project); err == nil {
-			return fmt.Errorf("project %s still has its own quality gate", projectKey)
-		}
-		return nil
+		return fmt.Errorf("project %s still has its own quality gate", projectKey)
 	}
 }
 
-func testAccProjectQualityGateConfig(organization, projectKey string, suffix uint32, gate string) string {
-	return fmt.Sprintf(`
+// testAccCheckProjectDeleted runs after the destroy. It accepts only a project
+// that is not found, and not any other error.
+func testAccCheckProjectDeleted(t *testing.T, organization, projectKey string) resource.TestCheckFunc {
+	return func(*terraform.State) error {
+		_, err := acctest.Client().GetProject(t.Context(), organization, projectKey)
+		if errors.Is(err, client.ErrNotFound) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		return fmt.Errorf("project %s still exists", projectKey)
+	}
+}
+
+func testAccProjectQualityGateConfig(organization, projectKey string, suffix uint32, gate string, assign bool) string {
+	config := fmt.Sprintf(`
 resource "sonarqube_project" "test" {
   organization = %[1]q
   key          = %[2]q
@@ -139,11 +160,15 @@ resource "sonarqube_cloud_quality_gate" "second" {
   organization = %[1]q
   name         = "Terraform project gate second %[3]d"
 }
-
+`, organization, projectKey, suffix)
+	if !assign {
+		return config
+	}
+	return config + fmt.Sprintf(`
 resource "sonarqube_cloud_project_quality_gate" "test" {
   organization    = %[1]q
   project_key     = sonarqube_project.test.key
-  quality_gate_id = sonarqube_cloud_quality_gate.%[4]s.id
+  quality_gate_id = sonarqube_cloud_quality_gate.%[2]s.id
 }
-`, organization, projectKey, suffix, gate)
+`, organization, gate)
 }
