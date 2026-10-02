@@ -135,6 +135,66 @@ func (c *Client) SetDefaultQualityGate(ctx context.Context, organization, gateID
 	return c.post(ctx, "/api/qualitygates/set_as_default", params)
 }
 
+// QualityGateProjectAssociation ties a project to a quality gate.
+type QualityGateProjectAssociation struct {
+	ID            string `json:"id"`
+	ProjectID     string `json:"projectId"`
+	QualityGateID string `json:"qualityGateId"`
+	// DefaultFallback is true when the project has no gate of its own and uses
+	// the default gate of the organization.
+	DefaultFallback bool `json:"defaultFallback"`
+}
+
+const projectAssociationsPath = "/quality-gates/project-associations"
+
+// FindQualityGateProjectAssociation reads the gate association of a project.
+//
+// A project that uses the default gate of the organization has no association
+// of its own, so it gives ErrNotFound. The API may report such a project as an
+// entry with defaultFallback set, or as no entry at all.
+func (c *Client) FindQualityGateProjectAssociation(ctx context.Context, organizationID string, project *Project) (*QualityGateProjectAssociation, error) {
+	params := url.Values{
+		"projectIds":     {project.LegacyID},
+		"organizationId": {organizationID},
+	}
+	var result struct {
+		Associations []QualityGateProjectAssociation `json:"projectAssociations"`
+	}
+	if err := c.apiGet(ctx, projectAssociationsPath, params, &result); err != nil {
+		return nil, err
+	}
+	for _, association := range result.Associations {
+		if association.ProjectID != project.LegacyID {
+			continue
+		}
+		if association.DefaultFallback {
+			return nil, ErrNotFound
+		}
+		return &association, nil
+	}
+	return nil, ErrNotFound
+}
+
+// CreateQualityGateProjectAssociation makes a project use a gate.
+func (c *Client) CreateQualityGateProjectAssociation(ctx context.Context, project *Project, gateID string) (*QualityGateProjectAssociation, error) {
+	var association QualityGateProjectAssociation
+	body := map[string]string{"projectId": project.LegacyID, "qualityGateId": gateID}
+	if err := c.apiPost(ctx, projectAssociationsPath, body, &association); err != nil {
+		return nil, err
+	}
+	return &association, nil
+}
+
+// DeleteQualityGateProjectAssociation puts a project back on the default gate
+// of its organization. A missing association is already deleted.
+func (c *Client) DeleteQualityGateProjectAssociation(ctx context.Context, id string) error {
+	err := c.apiSend(ctx, http.MethodDelete, projectAssociationsPath+"/"+url.PathEscape(id), nil, nil, nil)
+	if errors.Is(err, ErrNotFound) {
+		return nil
+	}
+	return err
+}
+
 // ListQualityGateConditions reads all conditions of a gate.
 func (c *Client) ListQualityGateConditions(ctx context.Context, gateID string) ([]QualityGateCondition, error) {
 	params := url.Values{"qualityGateId": {gateID}}
