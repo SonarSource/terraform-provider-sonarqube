@@ -108,6 +108,16 @@ func (c *Client) DeleteQualityGate(ctx context.Context, id string) error {
 	return err
 }
 
+// SetDefaultQualityGate makes a gate the default of an organization. No API
+// removes a default: only a different gate can take its place.
+//
+// The gateway refuses this call when the body is sent as a JSON merge patch,
+// so it goes as plain JSON. An unknown gate gives ErrNotFound.
+func (c *Client) SetDefaultQualityGate(ctx context.Context, organizationID, gateID string) error {
+	return c.apiPatch(ctx, qualityGatePath+"defaults/"+url.PathEscape(organizationID),
+		map[string]string{"qualityGateId": gateID}, nil)
+}
+
 // ListQualityGateConditions reads all conditions of a gate.
 func (c *Client) ListQualityGateConditions(ctx context.Context, gateID string) ([]QualityGateCondition, error) {
 	params := url.Values{"qualityGateId": {gateID}}

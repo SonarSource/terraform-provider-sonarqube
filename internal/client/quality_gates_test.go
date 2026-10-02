@@ -246,3 +246,42 @@ func TestQualityGateCreateFailure(t *testing.T) {
 		t.Error("create failure was ignored")
 	}
 }
+
+// The call names the organization by its UUID in the path, and sends the gate
+// as plain JSON, because the gateway refuses a JSON merge patch here.
+func TestSetDefaultQualityGate(t *testing.T) {
+	t.Parallel()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPatch || r.URL.Path != "/quality-gates/quality-gates/defaults/organization-uuid" {
+			t.Errorf("request = %s %s", r.Method, r.URL.Path)
+		}
+		if got := r.Header.Get("Content-Type"); got != "application/json" {
+			t.Errorf("Content-Type = %q, want application/json", got)
+		}
+		var body map[string]string
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Error(err)
+		}
+		if body["qualityGateId"] != "gate-id" || len(body) != 1 {
+			t.Errorf("body = %v", body)
+		}
+		w.Write([]byte(`{"qualityGateId":"gate-id"}`))
+	}))
+	defer srv.Close()
+	if err := newTestClient(srv).SetDefaultQualityGate(t.Context(), "organization-uuid", "gate-id"); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestSetDefaultQualityGateUnknownGate(t *testing.T) {
+	t.Parallel()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+		w.Write([]byte(`{"message":"Quality gate not found for id: gate-id"}`))
+	}))
+	defer srv.Close()
+	err := newTestClient(srv).SetDefaultQualityGate(t.Context(), "organization-uuid", "gate-id")
+	if !errors.Is(err, ErrNotFound) {
+		t.Errorf("error = %v, want ErrNotFound", err)
+	}
+}

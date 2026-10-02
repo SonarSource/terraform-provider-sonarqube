@@ -18,6 +18,9 @@ type Organization struct {
 	Description string `json:"description"`
 	URL         string `json:"url"`
 	AvatarURL   string `json:"avatarUrl"`
+	// DefaultQualityGateUUID is the gate of each project that has no gate of
+	// its own.
+	DefaultQualityGateUUID string `json:"defaultQualityGateUuid"`
 }
 
 // GetOrganization reads one organization by its key through Web API v2, which
