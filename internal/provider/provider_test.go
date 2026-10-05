@@ -248,6 +248,7 @@ func TestProviderRegistersItsDataSources(t *testing.T) {
 		"sonarqube_project",
 		"sonarqube_cloud_project_binding",
 		"sonarqube_cloud_quality_gate",
+		"sonarqube_cloud_organization_quality_gate_settings",
 		"sonarqube_cloud_organization_default_quality_gate",
 		"sonarqube_cloud_project_quality_gate",
 	})

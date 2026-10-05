@@ -14,6 +14,7 @@ will also work on SonarQube Server when the provider supports it.
 |---|---|---|
 | `sonarqube_project` | Shared | Only the scope is different. SonarQube Server has no organizations, so the provider will refuse `organization` and the import ID will be `key` there. The schema will then make `organization` optional, and the provider will require it on SonarQube Cloud. Both products create and delete a project with the same web service. |
 | `sonarqube_cloud_organization` | SonarQube Cloud | SonarQube Server has no organizations. |
+| `sonarqube_cloud_organization_quality_gate_settings` | SonarQube Cloud | SonarQube Server has no organization setting to ignore duplication and coverage conditions on small changes. |
 | `sonarqube_cloud_organization_binding` | SonarQube Cloud | SonarQube Server has no organizations. It connects to a DevOps platform through integration settings of the instance, which have a different schema. |
 | `sonarqube_cloud_project_binding` | SonarQube Cloud | A SonarQube Server binding needs the key of a DevOps platform integration and attributes for each platform. It also has a real delete, but on SonarQube Cloud a destroy only removes the binding from the state. |
 | `sonarqube_cloud_quality_gate` | SonarQube Cloud | Cloud gates use organization scope, UUIDs, an AI Code Assurance flag, and condition metric identifiers that Server does not share. The required schema and import ID therefore differ. |

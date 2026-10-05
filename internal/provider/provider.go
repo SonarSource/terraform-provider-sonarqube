@@ -168,6 +168,7 @@ func (p *sonarqubeProvider) Configure(ctx context.Context, req provider.Configur
 func (p *sonarqubeProvider) Resources(_ context.Context) []func() resource.Resource {
 	return []func() resource.Resource{
 		cloud.NewOrganizationResource,
+		cloud.NewOrganizationQualityGateSettingsResource,
 		cloud.NewOrganizationBindingResource,
 		shared.NewProjectResource,
 		cloud.NewProjectBindingResource,

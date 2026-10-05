@@ -10,15 +10,12 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
-	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
-	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 
 	"github.com/SonarSource/terraform-provider-sonarqube/internal/client"
 	"github.com/SonarSource/terraform-provider-sonarqube/internal/provider/configure"
-	"github.com/SonarSource/terraform-provider-sonarqube/internal/provider/validate"
 )
 
 var (
@@ -59,29 +56,14 @@ func (r *organizationDefaultQualityGateResource) Schema(_ context.Context, _ res
 			"the state and gives a warning, but the organization keeps its default. SonarQube " +
 			"Cloud refuses to delete the default gate, so before you destroy a gate that is the " +
 			"default, set a different gate as the default.",
-		Attributes: map[string]schema.Attribute{
-			"id": schema.StringAttribute{
-				Computed:      true,
-				Description:   "Key of the organization.",
-				PlanModifiers: []planmodifier.String{stringplanmodifier.UseStateForUnknown()},
-			},
-			"organization": schema.StringAttribute{
-				Required:    true,
-				Description: "Key of the organization. A change replaces this resource.",
-				Validators: []validator.String{
-					stringvalidator.LengthBetween(1, 255),
-					stringvalidator.RegexMatches(validate.OrganizationKeyPattern,
-						"must hold lower-case letters, digits and dashes only, with no leading and no trailing dash"),
-				},
-				PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()},
-			},
+		Attributes: organizationSettingAttributes(map[string]schema.Attribute{
 			"quality_gate_id": schema.StringAttribute{
 				Required: true,
 				Description: "UUID of the quality gate to set as the default. The gate must belong " +
 					"to the organization.",
 				Validators: []validator.String{stringvalidator.LengthAtLeast(1)},
 			},
-		},
+		}),
 	}
 }
 
@@ -148,21 +130,9 @@ func (r *organizationDefaultQualityGateResource) Read(ctx context.Context, req r
 	}
 	organization := state.Organization.ValueString()
 
-	org, err := r.client.GetOrganization(ctx, organization)
-	if errors.Is(err, client.ErrNotFound) {
-		// An organization that the token may not see gives the same answer as
-		// a deleted one, so the removal from the state is reported.
-		resp.Diagnostics.AddWarning(
-			"The organization "+organization+" was not found",
-			"Terraform removes the default quality gate of this organization from the state. "+
-				"The organization was deleted, or the token cannot read it any more. In the "+
-				"second case, the next apply fails, because the organization cannot be found.",
-		)
-		resp.State.RemoveResource(ctx)
-		return
-	}
-	if err != nil {
-		resp.Diagnostics.AddError("Cannot read the organization "+organization, err.Error())
+	org, ok := refreshOrganization(ctx, r.client, organization,
+		"the default quality gate of this organization", resp)
+	if !ok {
 		return
 	}
 
