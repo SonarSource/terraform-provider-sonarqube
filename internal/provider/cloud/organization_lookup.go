@@ -6,6 +6,7 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
+	"github.com/hashicorp/terraform-plugin-framework/resource"
 
 	"github.com/SonarSource/terraform-provider-sonarqube/internal/client"
 )
@@ -45,6 +46,37 @@ func lookupOrganization(
 			return nil, false
 		}
 		diagnostics.AddError("Cannot read the organization "+organizationKey, err.Error())
+		return nil, false
+	}
+	return org, true
+}
+
+// refreshOrganization reads the organization of a resource in a Read method,
+// and reports whether the caller may go on.
+//
+// An organization that the token may not see gives the same answer as a
+// deleted one, so a missing organization removes the resource from the state
+// with a warning, not with an error. subject names what the state loses.
+func refreshOrganization(
+	ctx context.Context,
+	c *client.Client,
+	organizationKey string,
+	subject string,
+	resp *resource.ReadResponse,
+) (*client.Organization, bool) {
+	org, err := c.GetOrganization(ctx, organizationKey)
+	if errors.Is(err, client.ErrNotFound) {
+		resp.Diagnostics.AddWarning(
+			"The organization "+organizationKey+" was not found",
+			"Terraform removes "+subject+" from the state. The organization was deleted, or "+
+				"the token cannot read it any more. In the second case, the next apply fails, "+
+				"because the organization cannot be found.",
+		)
+		resp.State.RemoveResource(ctx)
+		return nil, false
+	}
+	if err != nil {
+		resp.Diagnostics.AddError("Cannot read the organization "+organizationKey, err.Error())
 		return nil, false
 	}
 	return org, true

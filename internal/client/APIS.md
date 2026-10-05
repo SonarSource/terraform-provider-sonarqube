@@ -58,6 +58,19 @@ A binding to github.com accepts an installation of one of these applications
 only, because the server looks an installation up in its own records instead
 of asking GitHub.
 
+## Organization quality gate settings (`quality_gate_settings.go`)
+
+| Function | Endpoint | Surface | Public or internal |
+|---|---|---|---|
+| `GetOrganizationQualityGateSettings` | `GET {api_url}/quality-gates/settings?resourceId=&resourceType=ORGANIZATION` | Web API v2 | Internal |
+| `UpdateOrganizationQualityGateSettings` | `PATCH {api_url}/quality-gates/settings/{id}` | Web API v2 | Internal |
+
+The read names the organization by its UUID (`uuidV4`). The patch writes
+`ignoreSmallChanges`, and the server also writes the value to all projects of
+the organization. Thus the resource sends a patch only when the value changes.
+There is no delete operation. Terraform destroy only
+removes the setting from state.
+
 ## Projects (`projects.go`)
 
 | Function | Endpoint | Surface | Public or internal |
