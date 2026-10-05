@@ -22,11 +22,11 @@ func NewQualityGateDataSource() datasource.DataSource { return &qualityGateDataS
 type qualityGateDataSource struct{ client *client.Client }
 
 type qualityGateDataSourceModel struct {
-	ID              types.String `tfsdk:"id"`
-	Organization    types.String `tfsdk:"organization"`
-	Name            types.String `tfsdk:"name"`
-	AICodeAssurance types.Bool   `tfsdk:"ai_code_assurance"`
-	Conditions      types.Set    `tfsdk:"condition"`
+	ID           types.String `tfsdk:"id"`
+	Organization types.String `tfsdk:"organization"`
+	Name         types.String `tfsdk:"name"`
+	AIQualified  types.Bool   `tfsdk:"ai_qualified"`
+	Conditions   types.Set    `tfsdk:"condition"`
 }
 
 func (d *qualityGateDataSource) Metadata(_ context.Context, req datasource.MetadataRequest, resp *datasource.MetadataResponse) {
@@ -37,10 +37,10 @@ func (d *qualityGateDataSource) Schema(_ context.Context, _ datasource.SchemaReq
 	resp.Schema = schema.Schema{
 		Description: "Reads one SonarQube Cloud quality gate by name in an organization.",
 		Attributes: map[string]schema.Attribute{
-			"id":                schema.StringAttribute{Computed: true, Description: "UUID of the gate."},
-			"organization":      schema.StringAttribute{Required: true, Description: "Key of the organization that owns the gate."},
-			"name":              schema.StringAttribute{Required: true, Description: "Exact name of the gate."},
-			"ai_code_assurance": schema.BoolAttribute{Computed: true, Description: "Whether AI Code Assurance qualifies the gate."},
+			"id":           schema.StringAttribute{Computed: true, Description: "UUID of the gate."},
+			"organization": schema.StringAttribute{Required: true, Description: "Key of the organization that owns the gate."},
+			"name":         schema.StringAttribute{Required: true, Description: "Exact name of the gate."},
+			"ai_qualified": schema.BoolAttribute{Computed: true, Description: "Whether AI Code Assurance qualifies the gate."},
 			"condition": schema.SetNestedAttribute{Computed: true, Description: "Conditions of the gate.", NestedObject: schema.NestedAttributeObject{Attributes: map[string]schema.Attribute{
 				"metric":    schema.StringAttribute{Computed: true, Description: "Metric key."},
 				"operator":  schema.StringAttribute{Computed: true, Description: "Comparison operator: LT (less than) or GT (greater than)."},
@@ -78,7 +78,7 @@ func (d *qualityGateDataSource) Read(ctx context.Context, req datasource.ReadReq
 	}
 	model.ID = types.StringValue(gate.ID)
 	model.Name = types.StringValue(gate.Name)
-	model.AICodeAssurance = types.BoolValue(gate.AIQualified)
+	model.AIQualified = types.BoolValue(gate.AIQualified)
 	conditionSet, setDiagnostics := types.SetValueFrom(ctx, qualityGateConditionType(), conditions)
 	resp.Diagnostics.Append(setDiagnostics...)
 	if resp.Diagnostics.HasError() {

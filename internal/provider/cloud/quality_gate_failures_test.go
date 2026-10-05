@@ -44,7 +44,7 @@ func TestQualityGateResourceCreateRetainsIDAfterAIFailure(t *testing.T) {
 	r := &qualityGateResource{client: c}
 	s := qualityGateSchema(t)
 	plan := gateModel(t, "My Gate")
-	plan.AICodeAssurance = types.BoolValue(true)
+	plan.AIQualified = types.BoolValue(true)
 	resp := &resource.CreateResponse{State: providertest.EmptyState(t, s)}
 	r.Create(t.Context(), resource.CreateRequest{Plan: gatePlan(t, s, plan)}, resp)
 	providertest.AssertDiagnosticsContain(t, resp.Diagnostics, "access denied")

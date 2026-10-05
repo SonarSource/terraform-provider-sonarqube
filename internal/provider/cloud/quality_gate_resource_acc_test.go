@@ -50,7 +50,7 @@ func TestAccQualityGateResource(t *testing.T) {
 				Config: testAccQualityGateConfig(organization, gateName, "80", false),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttrSet(qualityGateAddress, "id"),
-					resource.TestCheckResourceAttr(qualityGateAddress, "ai_code_assurance", "false"),
+					resource.TestCheckResourceAttr(qualityGateAddress, "ai_qualified", "false"),
 					resource.TestCheckResourceAttr(qualityGateAddress, "condition.#", "2"),
 					resource.TestCheckTypeSetElemNestedAttrs(qualityGateAddress, "condition.*", map[string]string{
 						"metric": "new_coverage", "operator": "LT", "threshold": "80",
@@ -183,7 +183,7 @@ resource "sonarqube_cloud_organization" "test" {
 resource "sonarqube_cloud_quality_gate" "test" {
   organization      = sonarqube_cloud_organization.test.key
   name              = %[2]q
-  ai_code_assurance = false
+  ai_qualified = false
 
   condition {
     metric    = "new_coverage"

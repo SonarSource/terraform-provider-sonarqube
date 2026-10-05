@@ -40,11 +40,11 @@ type qualityGateConditionModel struct {
 }
 
 type qualityGateResourceModel struct {
-	ID              types.String `tfsdk:"id"`
-	Organization    types.String `tfsdk:"organization"`
-	Name            types.String `tfsdk:"name"`
-	AICodeAssurance types.Bool   `tfsdk:"ai_code_assurance"`
-	Conditions      types.Set    `tfsdk:"condition"`
+	ID           types.String `tfsdk:"id"`
+	Organization types.String `tfsdk:"organization"`
+	Name         types.String `tfsdk:"name"`
+	AIQualified  types.Bool   `tfsdk:"ai_qualified"`
+	Conditions   types.Set    `tfsdk:"condition"`
 }
 
 func qualityGateConditionType() attr.Type {
@@ -62,10 +62,10 @@ func (r *qualityGateResource) Schema(_ context.Context, _ resource.SchemaRequest
 	resp.Schema = schema.Schema{
 		Description: "Manages a SonarQube Cloud quality gate and all its conditions. The built-in Sonar way gate cannot be managed.",
 		Attributes: map[string]schema.Attribute{
-			"id":                schema.StringAttribute{Computed: true, Description: "UUID of the gate.", PlanModifiers: []planmodifier.String{stringplanmodifier.UseStateForUnknown()}},
-			"organization":      schema.StringAttribute{Required: true, Description: "Key of the organization that owns the gate.", PlanModifiers: replace},
-			"name":              schema.StringAttribute{Required: true, Description: "Name of the gate.", Validators: []validator.String{stringvalidator.LengthBetween(1, 255)}},
-			"ai_code_assurance": schema.BoolAttribute{Optional: true, Computed: true, Description: "Whether AI Code Assurance qualifies the gate. To set true, the organization must have the AI Code Assurance feature."},
+			"id":           schema.StringAttribute{Computed: true, Description: "UUID of the gate.", PlanModifiers: []planmodifier.String{stringplanmodifier.UseStateForUnknown()}},
+			"organization": schema.StringAttribute{Required: true, Description: "Key of the organization that owns the gate.", PlanModifiers: replace},
+			"name":         schema.StringAttribute{Required: true, Description: "Name of the gate.", Validators: []validator.String{stringvalidator.LengthBetween(1, 255)}},
+			"ai_qualified": schema.BoolAttribute{Optional: true, Computed: true, Description: "Whether AI Code Assurance qualifies the gate. To set true, the organization must have the AI Code Assurance feature."},
 		},
 		Blocks: map[string]schema.Block{
 			"condition": schema.SetNestedBlock{Description: "Conditions owned by this gate. Each metric may appear once.", NestedObject: schema.NestedBlockObject{Attributes: map[string]schema.Attribute{
@@ -138,14 +138,17 @@ func (r *qualityGateResource) Create(ctx context.Context, req resource.CreateReq
 		return
 	}
 	plan.ID = types.StringValue(gate.ID)
-	wantAI := plan.AICodeAssurance.ValueBool()
+	// An unknown value means that the configuration does not set the flag. Then
+	// the gate keeps the value that the API gives it.
+	writeAIQualified := !plan.AIQualified.IsUnknown() && plan.AIQualified.ValueBool() != gate.AIQualified
+	wantAIQualified := plan.AIQualified.ValueBool()
 	// Until the write below succeeds, the state holds the flag that the new gate has.
-	plan.AICodeAssurance = types.BoolValue(gate.AIQualified)
+	plan.AIQualified = types.BoolValue(gate.AIQualified)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	if wantAI && !gate.AIQualified && !r.setAICodeAssurance(ctx, gate.ID, true, &resp.Diagnostics) {
+	if writeAIQualified && !r.setAIQualified(ctx, gate.ID, wantAIQualified, &resp.Diagnostics) {
 		return
 	}
 	if !r.reconcileConditions(ctx, gate.ID, plan.Conditions, &resp.Diagnostics) {
@@ -185,11 +188,11 @@ func (r *qualityGateResource) Update(ctx context.Context, req resource.UpdateReq
 			return
 		}
 	}
-	if !plan.AICodeAssurance.IsUnknown() && plan.AICodeAssurance.ValueBool() != prior.AICodeAssurance.ValueBool() {
-		if !r.setAICodeAssurance(ctx, id, plan.AICodeAssurance.ValueBool(), &resp.Diagnostics) {
+	if !plan.AIQualified.IsUnknown() && plan.AIQualified.ValueBool() != prior.AIQualified.ValueBool() {
+		if !r.setAIQualified(ctx, id, plan.AIQualified.ValueBool(), &resp.Diagnostics) {
 			return
 		}
-		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("ai_code_assurance"), plan.AICodeAssurance)...)
+		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("ai_qualified"), plan.AIQualified)...)
 		if resp.Diagnostics.HasError() {
 			return
 		}
@@ -254,7 +257,7 @@ func (r *qualityGateResource) readIntoState(ctx context.Context, prior qualityGa
 	updated := prior
 	updated.ID = types.StringValue(gate.ID)
 	updated.Name = types.StringValue(gate.Name)
-	updated.AICodeAssurance = types.BoolValue(gate.AIQualified)
+	updated.AIQualified = types.BoolValue(gate.AIQualified)
 	if len(models) > 0 || !prior.Conditions.IsNull() {
 		var setDiagnostics diag.Diagnostics
 		updated.Conditions, setDiagnostics = types.SetValueFrom(ctx, qualityGateConditionType(), models)
@@ -266,21 +269,21 @@ func (r *qualityGateResource) readIntoState(ctx context.Context, prior qualityGa
 	diagnostics.Append(state.Set(ctx, &updated)...)
 }
 
-// setAICodeAssurance writes the flag and reads it back. For an organization
+// setAIQualified writes the flag and reads it back. For an organization
 // without the AI Code Assurance feature, the API accepts true but returns false.
-func (r *qualityGateResource) setAICodeAssurance(ctx context.Context, id string, want bool, diagnostics *diag.Diagnostics) bool {
+func (r *qualityGateResource) setAIQualified(ctx context.Context, id string, want bool, diagnostics *diag.Diagnostics) bool {
 	if err := r.client.UpdateQualityGate(ctx, id, map[string]any{"aiQualified": want}); err != nil {
-		diagnostics.AddError("Cannot set AI Code Assurance", err.Error())
+		diagnostics.AddError("Cannot set the AI qualification", err.Error())
 		return false
 	}
 	gate, err := r.client.GetQualityGate(ctx, id)
 	if err != nil {
-		diagnostics.AddError("Cannot read AI Code Assurance", err.Error())
+		diagnostics.AddError("Cannot read the AI qualification", err.Error())
 		return false
 	}
 	if gate.AIQualified != want {
-		diagnostics.AddAttributeError(path.Root("ai_code_assurance"), "AI Code Assurance is not available",
-			fmt.Sprintf("SonarQube Cloud did not set AI Code Assurance to %t on the quality gate. Make sure that the organization has the AI Code Assurance feature, or remove ai_code_assurance.", want))
+		diagnostics.AddAttributeError(path.Root("ai_qualified"), "AI qualification is not available",
+			fmt.Sprintf("SonarQube Cloud did not set the AI qualification to %t on the quality gate. Make sure that the organization has the AI Code Assurance feature, or remove ai_qualified.", want))
 		return false
 	}
 	return true

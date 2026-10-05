@@ -45,7 +45,7 @@ func TestQualityGateDataSourceRead(t *testing.T) {
 		t.Fatal(diagnostics)
 	}
 	model := providertest.ReadModel[qualityGateDataSourceModel](t, state)
-	if model.ID.ValueString() != "gate-id" || !model.AICodeAssurance.ValueBool() {
+	if model.ID.ValueString() != "gate-id" || !model.AIQualified.ValueBool() {
 		t.Errorf("state = %+v", model)
 	}
 }

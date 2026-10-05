@@ -5,7 +5,7 @@ resource "sonarqube_cloud_quality_gate" "example" {
   name         = "My quality gate"
 
   # The organization must have the AI Code Assurance feature to set true.
-  ai_code_assurance = false
+  ai_qualified = false
 
   condition {
     metric    = "new_coverage"

@@ -24,6 +24,7 @@ type fakeQualityGates struct {
 	ai                  bool
 	builtIn             bool
 	noAIFeature         bool
+	createAIQualified   bool
 	gateExists          bool
 	failedConditionPost bool
 	failedConditionRead bool
@@ -88,8 +89,8 @@ func (f *fakeQualityGates) serveGateCollection(w http.ResponseWriter, r *http.Re
 	}
 	var body map[string]string
 	json.NewDecoder(r.Body).Decode(&body)
-	f.name, f.gateExists = body["name"], true
-	json.NewEncoder(w).Encode(client.QualityGate{ID: "gate-id", Name: f.name})
+	f.name, f.gateExists, f.ai = body["name"], true, f.createAIQualified
+	json.NewEncoder(w).Encode(client.QualityGate{ID: "gate-id", Name: f.name, AIQualified: f.ai})
 }
 
 func (f *fakeQualityGates) serveGateItem(w http.ResponseWriter, r *http.Request) {
@@ -178,7 +179,7 @@ func gateModel(t *testing.T, name string, values ...qualityGateConditionModel) q
 	}
 	return qualityGateResourceModel{
 		ID: types.StringUnknown(), Organization: types.StringValue("my-org"), Name: types.StringValue(name),
-		AICodeAssurance: types.BoolValue(false), Conditions: set,
+		AIQualified: types.BoolValue(false), Conditions: set,
 	}
 }
 
@@ -392,7 +393,7 @@ func TestQualityGateResourceRenameAndAI(t *testing.T) {
 	}
 	plan := gateModel(t, "New Gate")
 	plan.ID = types.StringValue("gate-id")
-	plan.AICodeAssurance = types.BoolValue(true)
+	plan.AIQualified = types.BoolValue(true)
 	resp := &resource.UpdateResponse{State: prior}
 	r.Update(t.Context(), resource.UpdateRequest{Plan: gatePlan(t, s, plan), State: prior}, resp)
 	if resp.Diagnostics.HasError() {
@@ -401,7 +402,7 @@ func TestQualityGateResourceRenameAndAI(t *testing.T) {
 	if fake.name != "New Gate" || !fake.ai {
 		t.Errorf("gate after update = %+v", fake)
 	}
-	if got := providertest.ReadModel[qualityGateResourceModel](t, resp.State); got.Name.ValueString() != "New Gate" || !got.AICodeAssurance.ValueBool() {
+	if got := providertest.ReadModel[qualityGateResourceModel](t, resp.State); got.Name.ValueString() != "New Gate" || !got.AIQualified.ValueBool() {
 		t.Errorf("state = %+v", got)
 	}
 }
@@ -412,7 +413,7 @@ func TestQualityGateResourceCreateWithAI(t *testing.T) {
 	r := &qualityGateResource{client: c}
 	s := qualityGateSchema(t)
 	plan := gateModel(t, "My Gate")
-	plan.AICodeAssurance = types.BoolValue(true)
+	plan.AIQualified = types.BoolValue(true)
 	resp := &resource.CreateResponse{State: providertest.EmptyState(t, s)}
 	r.Create(t.Context(), resource.CreateRequest{Plan: gatePlan(t, s, plan)}, resp)
 	if resp.Diagnostics.HasError() {
@@ -423,6 +424,50 @@ func TestQualityGateResourceCreateWithAI(t *testing.T) {
 	}
 }
 
+// The API creates every gate with aiQualified false today, but its contract
+// does not say so. These tests cover a new gate that is qualified.
+func TestQualityGateResourceCreateClearsAIQualified(t *testing.T) {
+	t.Parallel()
+	fake, c := newFakeQualityGates(t)
+	fake.createAIQualified = true
+	r := &qualityGateResource{client: c}
+	s := qualityGateSchema(t)
+	resp := &resource.CreateResponse{State: providertest.EmptyState(t, s)}
+	r.Create(t.Context(), resource.CreateRequest{Plan: gatePlan(t, s, gateModel(t, "My Gate"))}, resp)
+	if resp.Diagnostics.HasError() {
+		t.Fatal(resp.Diagnostics)
+	}
+	if fake.ai {
+		t.Error("the configured false was not written")
+	}
+	if got := providertest.ReadModel[qualityGateResourceModel](t, resp.State); got.AIQualified.ValueBool() {
+		t.Errorf("state = %+v", got)
+	}
+}
+
+func TestQualityGateResourceCreateKeepsDefaultAIQualified(t *testing.T) {
+	t.Parallel()
+	fake, c := newFakeQualityGates(t)
+	fake.createAIQualified = true
+	r := &qualityGateResource{client: c}
+	s := qualityGateSchema(t)
+	plan := gateModel(t, "My Gate")
+	plan.AIQualified = types.BoolUnknown()
+	resp := &resource.CreateResponse{State: providertest.EmptyState(t, s)}
+	r.Create(t.Context(), resource.CreateRequest{Plan: gatePlan(t, s, plan)}, resp)
+	if resp.Diagnostics.HasError() {
+		t.Fatal(resp.Diagnostics)
+	}
+	for _, write := range fake.writes {
+		if write == "PATCH /quality-gates/quality-gates/gate-id" {
+			t.Error("the flag was written although the configuration does not set it")
+		}
+	}
+	if got := providertest.ReadModel[qualityGateResourceModel](t, resp.State); !got.AIQualified.ValueBool() {
+		t.Errorf("state = %+v", got)
+	}
+}
+
 func TestQualityGateResourceCreateWithoutAIFeature(t *testing.T) {
 	t.Parallel()
 	fake, c := newFakeQualityGates(t)
@@ -430,12 +475,12 @@ func TestQualityGateResourceCreateWithoutAIFeature(t *testing.T) {
 	r := &qualityGateResource{client: c}
 	s := qualityGateSchema(t)
 	plan := gateModel(t, "My Gate", gateCondition("new_coverage", "80"))
-	plan.AICodeAssurance = types.BoolValue(true)
+	plan.AIQualified = types.BoolValue(true)
 	resp := &resource.CreateResponse{State: providertest.EmptyState(t, s)}
 	r.Create(t.Context(), resource.CreateRequest{Plan: gatePlan(t, s, plan)}, resp)
 	providertest.AssertDiagnosticsContain(t, resp.Diagnostics, "AI Code Assurance feature")
 	state := providertest.ReadModel[qualityGateResourceModel](t, resp.State)
-	if state.ID.ValueString() != "gate-id" || state.AICodeAssurance.ValueBool() {
+	if state.ID.ValueString() != "gate-id" || state.AIQualified.ValueBool() {
 		t.Errorf("state must keep the gate and the flag that the API has: %+v", state)
 	}
 }
@@ -453,11 +498,11 @@ func TestQualityGateResourceUpdateWithoutAIFeature(t *testing.T) {
 		t.Fatal(diags)
 	}
 	plan := priorModel
-	plan.AICodeAssurance = types.BoolValue(true)
+	plan.AIQualified = types.BoolValue(true)
 	resp := &resource.UpdateResponse{State: prior}
 	r.Update(t.Context(), resource.UpdateRequest{Plan: gatePlan(t, s, plan), State: prior}, resp)
 	providertest.AssertDiagnosticsContain(t, resp.Diagnostics, "AI Code Assurance feature")
-	if got := providertest.ReadModel[qualityGateResourceModel](t, resp.State); got.AICodeAssurance.ValueBool() {
+	if got := providertest.ReadModel[qualityGateResourceModel](t, resp.State); got.AIQualified.ValueBool() {
 		t.Errorf("state = %+v", got)
 	}
 }
@@ -469,12 +514,12 @@ func TestQualityGateResourceCreateFailureStoresKnownAI(t *testing.T) {
 	r := &qualityGateResource{client: c}
 	s := qualityGateSchema(t)
 	plan := gateModel(t, "My Gate", gateCondition("new_coverage", "80"))
-	plan.AICodeAssurance = types.BoolUnknown()
+	plan.AIQualified = types.BoolUnknown()
 	resp := &resource.CreateResponse{State: providertest.EmptyState(t, s)}
 	r.Create(t.Context(), resource.CreateRequest{Plan: gatePlan(t, s, plan)}, resp)
 	providertest.AssertDiagnosticsContain(t, resp.Diagnostics, "Cannot create quality gate condition")
 	state := providertest.ReadModel[qualityGateResourceModel](t, resp.State)
-	if state.ID.ValueString() != "gate-id" || state.AICodeAssurance.IsUnknown() || state.AICodeAssurance.IsNull() || state.AICodeAssurance.ValueBool() {
+	if state.ID.ValueString() != "gate-id" || state.AIQualified.IsUnknown() || state.AIQualified.IsNull() || state.AIQualified.ValueBool() {
 		t.Errorf("partial state = %+v", state)
 	}
 }
