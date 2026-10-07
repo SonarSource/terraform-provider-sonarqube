@@ -1,0 +1,55 @@
+name: Acceptance tests
+
+on:
+  push:
+    branches:
+      - master
+  workflow_dispatch:
+
+# Run only one test run against staging at a time. Each run makes
+# organizations with a random key, so two runs do not use the same
+# organization. The limit keeps the load on staging low. GitHub keeps
+# a maximum of one pending run in each group. A new push cancels the
+# older pending run. Thus, when many pushes to master occur quickly,
+# only the first and the last commit get a test run.
+concurrency:
+  group: acceptance-tests
+  cancel-in-progress: false
+
+jobs:
+  acceptance-tests:
+    # For guidance on runner selection, visit:
+    # https://xtranet-sonarsource.atlassian.net/wiki/spaces/Platform/pages/3694231566/GitHub+Actions+Runner+-+GitHub
+    runs-on: sonar-s
+    name: Acceptance tests
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Go
+        uses: ./.github/actions/setup-go
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        with:
+          terraform_wrapper: false
+
+      - name: Run the acceptance tests against SonarQube Cloud staging
+        env:
+          TF_ACC: "1"
+          SONARQUBE_URL: https://sc-staging.io
+          # The tests make and delete organizations only on a host that
+          # this variable names. Without it, these tests stop the run.
+          SONARQUBE_TEST_ALLOWED_HOSTS: sc-staging.io
+          # A repository secret is a stopgap for SC-58198. See that ticket
+          # for details. This workflow never runs on pull_request. So a pull
+          # request from a fork cannot read the secret that way. But any
+          # user with write access to this public repo can read the secret
+          # from a branch. A follow-up moves the secret to Vault. This is
+          # the same way build.yml manages the SONAR_TOKEN secret.
+          SONARQUBE_TOKEN: ${{ secrets.SONARQUBE_STAGING_TOKEN }}
+          SONARQUBE_TEST_ORGANIZATION: ${{ vars.SONARQUBE_STAGING_ORGANIZATION }}
+        run: go test -v -count=1 -timeout 25m -run '^TestAcc' ./internal/provider/...
