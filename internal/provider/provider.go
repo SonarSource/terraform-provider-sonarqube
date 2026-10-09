@@ -167,6 +167,7 @@ func (p *sonarqubeProvider) Configure(ctx context.Context, req provider.Configur
 
 func (p *sonarqubeProvider) Resources(_ context.Context) []func() resource.Resource {
 	return []func() resource.Resource{
+		shared.NewGroupResource,
 		cloud.NewOrganizationResource,
 		cloud.NewOrganizationQualityGateSettingsResource,
 		cloud.NewOrganizationBindingResource,
@@ -180,6 +181,7 @@ func (p *sonarqubeProvider) Resources(_ context.Context) []func() resource.Resou
 
 func (p *sonarqubeProvider) DataSources(_ context.Context) []func() datasource.DataSource {
 	return []func() datasource.DataSource{
+		shared.NewGroupDataSource,
 		cloud.NewOrganizationDataSource,
 		cloud.NewOrganizationBindingDataSource,
 		cloud.NewDopApplicationsDataSource,
