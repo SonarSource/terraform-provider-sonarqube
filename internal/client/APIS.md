@@ -11,6 +11,26 @@ answers at the instance host and takes the token as the basic-auth user name.
 
 An endpoint is "Public" only when SonarSource's own docs link one as public.
 
+## Groups (`groups.go`)
+
+| Function | Endpoint | Surface | Public or internal |
+|---|---|---|---|
+| `CreateGroup` | `POST {url}/api/user_groups/create` | Web API v1 | [Public](https://sonarcloud.io/web_api/api/user_groups/create) |
+| `UpdateGroup` | `POST {url}/api/user_groups/update` | Web API v1 | [Public](https://sonarcloud.io/web_api/api/user_groups/update) |
+| `DeleteGroup` | `POST {url}/api/user_groups/delete` | Web API v1 | [Public](https://sonarcloud.io/web_api/api/user_groups/delete) |
+| `ListGroups` | `GET {url}/api/user_groups/search?organization=&p=&ps=&q=` | Web API v1 | [Public](https://sonarcloud.io/web_api/api/user_groups/search) |
+
+The Cloud search uses numeric group IDs. The Server Web API v2 uses UUIDs and
+supports create, update, delete, and search at `api/v2/authorizations/groups`.
+The provider supports only Cloud in the alpha.
+
+The Cloud group search is eventually consistent. After a create, an update
+or a delete, it can answer with the old data for about five seconds. The
+create and update answers hold the new group, so the resource keeps the plan
+in the state and does not search after a write. A read that does not find a
+group by its id searches again for about ten seconds before the resource
+leaves the state.
+
 ## Organizations (`organizations.go`)
 
 | Function | Endpoint | Surface | Public or internal |
