@@ -11,6 +11,38 @@ answers at the instance host and takes the token as the basic-auth user name.
 
 An endpoint is "Public" only when SonarSource's own docs link one as public.
 
+## Groups (`groups.go`)
+
+| Function | Endpoint | Surface | Public or internal |
+|---|---|---|---|
+| `CreateGroup` | `POST {api_url}/users/groups` | Web API v2 | [Public](https://api-docs.sonarsource.com/sonarqube-cloud/default/public-externalusers-0-0#/groups/createGroup) |
+| `GetGroup` | `GET {api_url}/users/groups?organizationIds=&ids=` | Web API v2 | [Public](https://api-docs.sonarsource.com/sonarqube-cloud/default/public-externalusers-0-0#/groups/searchGroups) |
+| `FindGroupByName` | `GET {api_url}/users/groups?organizationIds=&q=&pageIndex=&pageSize=` | Web API v2 | [Public](https://api-docs.sonarsource.com/sonarqube-cloud/default/public-externalusers-0-0#/groups/searchGroups) |
+| `UpdateGroup` | `PATCH {api_url}/users/groups/{id}` | Web API v2 | [Public](https://api-docs.sonarsource.com/sonarqube-cloud/default/public-externalusers-0-0#/groups/patchGroup) |
+| `DeleteGroup` | `DELETE {api_url}/users/groups/{id}` | Web API v2 | [Public](https://api-docs.sonarsource.com/sonarqube-cloud/default/public-externalusers-0-0#/groups/deleteGroup) |
+
+Each call except update and delete reads the organization first
+(`GetOrganization`), because the group API takes the UUID of the organization
+and not its key. The group API answers 403 for an organization that does not
+exist, so that read is the one that finds a missing organization.
+
+There is no read of one group by its id. The `ids` filter of the list gives
+the same result. The `q` filter is a search on the name that ignores the
+case, so the client finds the exact name. The page size is 500 at most. An update takes a
+JSON merge patch, and an empty description removes the description. A delete
+of a group that is already gone answers 204.
+
+Group ids are UUIDs. The Server Web API v2 also uses UUIDs, at
+`api/v2/authorizations/groups`. The provider supports only Cloud in the alpha.
+
+The group list is eventually consistent. A new group shows in less than a
+second, but an update or a delete can take about five seconds to show. The
+`ids` filter and the `q` filter lag independently. The create and update
+answers hold the new group, so the resource keeps the plan in the state and
+does not read the group back after a write. When Read does not find the
+group, or finds a name or a description that differs from the state, it reads
+again for about six seconds before it takes the answer.
+
 ## Organizations (`organizations.go`)
 
 | Function | Endpoint | Surface | Public or internal |

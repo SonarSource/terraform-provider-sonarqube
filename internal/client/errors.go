@@ -12,6 +12,12 @@ import (
 // the same error, so a caller has one condition to test.
 var ErrNotFound = errors.New("not found")
 
+// ErrOrganizationNotFound reports that a search inside an organization
+// answered 404. The organization does not exist, or the token cannot read it.
+// It does not match ErrNotFound, so that a caller can tell it apart from an
+// entity that the organization does not hold.
+var ErrOrganizationNotFound = errors.New("organization not found")
+
 // APIError is a response with a status outside the 2xx range.
 type APIError struct {
 	StatusCode int
