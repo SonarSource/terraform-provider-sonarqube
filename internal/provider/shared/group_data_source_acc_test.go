@@ -22,6 +22,8 @@ func TestAccGroupDataSourceReadsBuiltInGroup(t *testing.T) {
 		Steps: []resource.TestStep{{Config: config, Check: resource.ComposeAggregateTestCheckFunc(
 			resource.TestCheckResourceAttr("data.sonarqube_group.members", "name", "Members"),
 			resource.TestCheckResourceAttrSet("data.sonarqube_group.members", "id"),
+			resource.TestCheckResourceAttr("data.sonarqube_group.members", "built_in", "true"),
+			resource.TestCheckResourceAttr("data.sonarqube_group.members", "managed", "false"),
 		)}},
 	})
 }

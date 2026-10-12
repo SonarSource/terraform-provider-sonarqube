@@ -5,8 +5,8 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"net/url"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -46,10 +46,11 @@ type fakeGroup struct {
 	ID          string
 	Name        string
 	Description string
-	Default     bool
+	BuiltIn     bool
 	Managed     bool
 }
 
+// fakeGroups serves the organization read and the group API of Web API v2.
 type fakeGroups struct {
 	groups map[string]*fakeGroup
 	nextID int
@@ -58,8 +59,8 @@ type fakeGroups struct {
 	// of SonarQube Cloud can do after a write.
 	searches       int
 	hiddenSearches int
-	// lastUpdate is the form of the last update call.
-	lastUpdate url.Values
+	// lastUpdate is the body of the last update call.
+	lastUpdate map[string]string
 }
 
 func newFakeGroups(t *testing.T) (*fakeGroups, *client.Client) {
@@ -70,60 +71,64 @@ func newFakeGroups(t *testing.T) (*fakeGroups, *client.Client) {
 	return f, providertest.NewCloudClient(srv)
 }
 
-func (f *fakeGroups) search(w http.ResponseWriter) {
+func (f *fakeGroups) search(w http.ResponseWriter, r *http.Request) {
 	f.searches++
 	groups := make([]map[string]any, 0, len(f.groups))
 	if f.hiddenSearches > 0 {
 		f.hiddenSearches--
-		_ = json.NewEncoder(w).Encode(map[string]any{"groups": groups, "paging": map[string]int{"total": 0}})
-		return
+	} else {
+		ids, q := r.URL.Query().Get("ids"), r.URL.Query().Get("q")
+		for _, group := range f.groups {
+			if (ids == "" || ids == group.ID) && strings.Contains(group.Name, q) {
+				groups = append(groups, map[string]any{"id": group.ID, "name": group.Name,
+					"description": group.Description, "builtIn": group.BuiltIn, "managed": group.Managed})
+			}
+		}
 	}
-	for _, group := range f.groups {
-		id, _ := strconv.Atoi(group.ID)
-		groups = append(groups, map[string]any{"id": id, "name": group.Name,
-			"description": group.Description, "default": group.Default})
+	_ = json.NewEncoder(w).Encode(map[string]any{"groups": groups, "page": map[string]int{"total": len(groups)}})
+}
+
+func (f *fakeGroups) refuseManaged(w http.ResponseWriter, id string) bool {
+	if group := f.groups[id]; group != nil && group.Managed {
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = w.Write([]byte(`{"message":"IdP-managed group cannot be changed"}`))
+		return true
 	}
-	_ = json.NewEncoder(w).Encode(map[string]any{"groups": groups, "paging": map[string]int{"total": len(groups)}})
+	return false
 }
 
 func (f *fakeGroups) serve(w http.ResponseWriter, r *http.Request) {
-	_ = r.ParseForm()
-	switch r.URL.Path {
-	case "/api/user_groups/search":
-		f.search(w)
-	case "/api/user_groups/create":
-		id := strconv.Itoa(f.nextID)
+	var body map[string]string
+	_ = json.NewDecoder(r.Body).Decode(&body)
+	id := strings.TrimPrefix(r.URL.Path, "/users/groups/")
+	switch {
+	case r.URL.Path == "/organizations/organizations":
+		_, _ = w.Write([]byte(`[{"key":"my-org","uuidV4":"00000000-0000-4000-8000-000000000001"}]`))
+	case r.URL.Path == "/users/groups" && r.Method == http.MethodGet:
+		f.search(w, r)
+	case r.URL.Path == "/users/groups" && r.Method == http.MethodPost:
+		group := &fakeGroup{ID: strconv.Itoa(f.nextID), Name: body["name"], Description: body["description"]}
 		f.nextID++
-		group := &fakeGroup{ID: id, Name: r.PostForm.Get("name"), Description: r.PostForm.Get("description")}
-		f.groups[id] = group
-		_ = json.NewEncoder(w).Encode(map[string]any{"group": map[string]any{
-			"id": f.nextID - 1, "name": group.Name, "description": group.Description}})
-	case "/api/user_groups/update":
-		f.lastUpdate = r.PostForm
-		group := f.groups[r.PostForm.Get("id")]
+		f.groups[group.ID] = group
+		w.WriteHeader(http.StatusCreated)
+		_ = json.NewEncoder(w).Encode(map[string]any{"id": group.ID, "name": group.Name, "description": group.Description})
+	case r.Method == http.MethodPatch:
+		f.lastUpdate = body
+		group := f.groups[id]
 		if group == nil {
 			w.WriteHeader(http.StatusNotFound)
 			return
 		}
-		if group.Managed {
-			w.WriteHeader(http.StatusBadRequest)
-			_, _ = w.Write([]byte(`{"errors":[{"msg":"IdP-managed group cannot be updated"}]}`))
+		if f.refuseManaged(w, id) {
 			return
 		}
-		if values, ok := r.PostForm["name"]; ok {
-			group.Name = values[0]
-		}
-		if values, ok := r.PostForm["description"]; ok {
-			group.Description = values[0]
-		}
-		w.WriteHeader(http.StatusNoContent)
-	case "/api/user_groups/delete":
-		if group := f.groups[r.PostForm.Get("id")]; group != nil && group.Managed {
-			w.WriteHeader(http.StatusBadRequest)
-			_, _ = w.Write([]byte(`{"errors":[{"msg":"IdP-managed group cannot be deleted"}]}`))
+		group.Name, group.Description = body["name"], body["description"]
+		_ = json.NewEncoder(w).Encode(map[string]any{"id": group.ID, "name": group.Name})
+	case r.Method == http.MethodDelete:
+		if f.refuseManaged(w, id) {
 			return
 		}
-		delete(f.groups, r.PostForm.Get("id"))
+		delete(f.groups, id)
 		w.WriteHeader(http.StatusNoContent)
 	default:
 		w.WriteHeader(http.StatusNotFound)
@@ -302,7 +307,7 @@ func TestGroupResourceUpdateSendsNameWithDescriptionChange(t *testing.T) {
 	}
 	// The server writes back the fields that an update does not send, from a
 	// copy that can be old. The name must thus go with each update.
-	if f.lastUpdate.Get("name") != "Developers" || f.lastUpdate.Get("description") != "New" {
+	if f.lastUpdate["name"] != "Developers" || f.lastUpdate["description"] != "New" {
 		t.Errorf("update form = %v, want the name and the description", f.lastUpdate)
 	}
 }
@@ -312,7 +317,7 @@ func TestGroupResourceReadSearchesAgainForNewGroup(t *testing.T) {
 	f, c := newFakeGroups(t)
 	f.groups["4"] = &fakeGroup{ID: "4", Name: "New"}
 	f.hiddenSearches = 2
-	r := &groupResource{client: c, missingRetries: []time.Duration{0, 0, 0}}
+	r := &groupResource{client: c, readRetries: []time.Duration{0, 0, 0}}
 	s := groupSchema(t)
 	state := tfsdk.State{Schema: s, Raw: providertest.SchemaValue(t, s, map[string]string{
 		"id": "4", "organization": "my-org", "name": "New",
@@ -327,10 +332,49 @@ func TestGroupResourceReadSearchesAgainForNewGroup(t *testing.T) {
 	}
 }
 
+func TestGroupResourceReadWaitsForStaleValues(t *testing.T) {
+	t.Parallel()
+	f, c := newFakeGroups(t)
+	f.groups["4"] = &fakeGroup{ID: "4", Name: "Old"}
+	r := &groupResource{client: c, readRetries: []time.Duration{0, 0}}
+	s := groupSchema(t)
+	state := tfsdk.State{Schema: s, Raw: providertest.SchemaValue(t, s, map[string]string{
+		"id": "4", "organization": "my-org", "name": "New", "description": "",
+	})}
+	resp := &resource.ReadResponse{State: state}
+	r.Read(t.Context(), resource.ReadRequest{State: state}, resp)
+	if resp.Diagnostics.HasError() {
+		t.Fatal(resp.Diagnostics)
+	}
+	// The server keeps the old name after all retries, so this is real drift.
+	if got := providertest.ReadModel[groupResourceModel](t, resp.State).Name.ValueString(); got != "Old" || f.searches != 3 {
+		t.Errorf("name = %q after %d searches, want Old after 3", got, f.searches)
+	}
+}
+
+func TestGroupResourceReadAfterImportDoesNotWaitForDescription(t *testing.T) {
+	t.Parallel()
+	f, c := newFakeGroups(t)
+	f.groups["4"] = &fakeGroup{ID: "4", Name: "Imported", Description: "From the server"}
+	r := &groupResource{client: c, readRetries: []time.Duration{0, 0}}
+	s := groupSchema(t)
+	state := tfsdk.State{Schema: s, Raw: providertest.SchemaValue(t, s, map[string]string{
+		"id": "4", "organization": "my-org", "name": "Imported",
+	})}
+	resp := &resource.ReadResponse{State: state}
+	r.Read(t.Context(), resource.ReadRequest{State: state}, resp)
+	if resp.Diagnostics.HasError() || f.searches != 1 {
+		t.Fatalf("searches = %d, want 1: %v", f.searches, resp.Diagnostics)
+	}
+	if got := providertest.ReadModel[groupResourceModel](t, resp.State).Description.ValueString(); got != "From the server" {
+		t.Errorf("description = %q", got)
+	}
+}
+
 func TestGroupResourceReadRemovesGroupAfterRetries(t *testing.T) {
 	t.Parallel()
 	f, c := newFakeGroups(t)
-	r := &groupResource{client: c, missingRetries: []time.Duration{0, 0}}
+	r := &groupResource{client: c, readRetries: []time.Duration{0, 0}}
 	s := groupSchema(t)
 	state := tfsdk.State{Schema: s, Raw: providertest.SchemaValue(t, s, map[string]string{
 		"id": "4", "organization": "my-org", "name": "Gone",
@@ -366,13 +410,13 @@ func TestGroupResourceKeepsManagedGroupOnRejectedChanges(t *testing.T) {
 		Raw: providertest.SchemaValue(t, s, map[string]string{
 			"id": "10", "organization": "my-org", "name": "Renamed",
 		})}}, update)
-	providertest.AssertDiagnosticsContain(t, update.Diagnostics, "IdP-managed group cannot be updated")
+	providertest.AssertDiagnosticsContain(t, update.Diagnostics, "IdP-managed group cannot be changed")
 	if providertest.ReadModel[groupResourceModel](t, update.State).Name.ValueString() != "Managed" {
 		t.Error("a rejected update changed state")
 	}
 	deletion := &resource.DeleteResponse{}
 	r.Delete(t.Context(), resource.DeleteRequest{State: prior}, deletion)
-	providertest.AssertDiagnosticsContain(t, deletion.Diagnostics, "IdP-managed group cannot be deleted")
+	providertest.AssertDiagnosticsContain(t, deletion.Diagnostics, "IdP-managed group cannot be changed")
 	if f.groups["10"] == nil {
 		t.Error("a rejected delete removed the group")
 	}

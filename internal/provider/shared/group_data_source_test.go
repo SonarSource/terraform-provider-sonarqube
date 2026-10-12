@@ -14,7 +14,7 @@ import (
 func TestGroupDataSourceReadsBuiltInGroup(t *testing.T) {
 	t.Parallel()
 	f, c := newFakeGroups(t)
-	f.groups["7"] = &fakeGroup{ID: "7", Name: "Members", Default: true}
+	f.groups["7"] = &fakeGroup{ID: "7", Name: "Members", BuiltIn: true}
 	d := &groupDataSource{client: c}
 	schemaResponse := &datasource.SchemaResponse{}
 	d.Schema(t.Context(), datasource.SchemaRequest{}, schemaResponse)
@@ -44,7 +44,7 @@ func TestGroupDataSourceReadsBuiltInGroup(t *testing.T) {
 		t.Fatal(resp.Diagnostics)
 	}
 	state := providertest.ReadModel[groupDataSourceModel](t, resp.State)
-	if state.ID.ValueString() != "7" || !state.Default.ValueBool() || state.Name.ValueString() != "Members" {
+	if state.ID.ValueString() != "7" || !state.BuiltIn.ValueBool() || state.Managed.ValueBool() || state.Name.ValueString() != "Members" {
 		t.Errorf("built-in group state = %+v", state)
 	}
 }

@@ -29,16 +29,15 @@ var (
 
 // NewGroupResource returns the sonarqube_group resource.
 func NewGroupResource() resource.Resource {
-	return &groupResource{missingRetries: []time.Duration{time.Second, 2 * time.Second, 3 * time.Second, 4 * time.Second}}
+	return &groupResource{readRetries: []time.Duration{time.Second, 2 * time.Second, 3 * time.Second}}
 }
 
 type groupResource struct {
 	client *client.Client
-	// missingRetries are the waits before a new search for a group that the
-	// search does not hold. The search of SonarQube Cloud is eventually
-	// consistent: it can omit a new group, or show old values, for some
-	// seconds after a write.
-	missingRetries []time.Duration
+	// readRetries are the waits before Read reads a group again. The group
+	// list of SonarQube Cloud is eventually consistent: for some seconds after
+	// a write, it can omit a new group or show the old name and description.
+	readRetries []time.Duration
 }
 
 type groupResourceModel struct {
@@ -66,8 +65,10 @@ func (r *groupResource) Schema(_ context.Context, _ resource.SchemaRequest, resp
 			"the permission and permission template grants of the group. The SonarQube Cloud " +
 			"documentation does not say if it does the same. Do not expect a new group with " +
 			"the same name to get the grants back.\n\n" +
-			"The group search of SonarQube Cloud is eventually consistent. For some seconds " +
-			"after an apply, a refresh can show the old name or description as a change.\n\n" +
+			"The group list of SonarQube Cloud is eventually consistent. When a refresh finds " +
+			"a name or a description that differs from the state, it reads the group again " +
+			"for about six seconds. A change outside Terraform thus shows some seconds later " +
+			"than other changes.\n\n" +
 			"Import a group with `<organization>/<name>`.",
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{Computed: true, Description: "Opaque group identifier.",
@@ -103,7 +104,7 @@ func (r *groupResource) Create(ctx context.Context, req resource.CreateRequest, 
 		return
 	}
 	// Create and Update put the plan in the state and do not read the group
-	// back: the group search of SonarQube Cloud can answer with old values for
+	// back: the group list of SonarQube Cloud can answer with old values for
 	// some seconds after a write.
 	plan.ID = types.StringValue(group.ID)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
@@ -116,7 +117,7 @@ func (r *groupResource) Read(ctx context.Context, req resource.ReadRequest, resp
 		return
 	}
 	organization := state.Organization.ValueString()
-	group, err := r.getGroupWithRetries(ctx, organization, state.ID.ValueString())
+	group, err := r.readGroup(ctx, state)
 	switch {
 	case errors.Is(err, client.ErrOrganizationNotFound):
 		resp.Diagnostics.AddWarning(
@@ -178,7 +179,7 @@ func (r *groupResource) ImportState(ctx context.Context, req resource.ImportStat
 		resp.Diagnostics.AddError("Invalid group import ID", "Use <organization>/<name>.")
 		return
 	}
-	if r.client.IsCloud() && (name == "Members" || name == "Owners") {
+	if name == "Members" || name == "Owners" {
 		resp.Diagnostics.AddError("Cannot import the "+name+" group",
 			"SonarQube Cloud makes the "+name+" group for each organization. "+
 				"Use the sonarqube_group data source to read it.")
@@ -194,14 +195,21 @@ func (r *groupResource) ImportState(ctx context.Context, req resource.ImportStat
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("name"), name)...)
 }
 
-// getGroupWithRetries reads a group by id. It searches again when the group is
-// not in the list, so that a group made a few seconds ago is not taken for a
-// deleted one. Any other answer ends the retries.
-func (r *groupResource) getGroupWithRetries(ctx context.Context, organization, id string) (*client.Group, error) {
+// readGroup reads the group of the state by id. While the group is missing,
+// or its name or description differs from the state, it reads again after
+// each wait of readRetries. A group made or changed a few seconds ago is thus
+// not taken for a deleted or changed one. A real change outside Terraform
+// shows after the last wait. Any error other than a missing group ends the
+// retries.
+func (r *groupResource) readGroup(ctx context.Context, state groupResourceModel) (*client.Group, error) {
+	organization, id := state.Organization.ValueString(), state.ID.ValueString()
 	group, err := r.client.GetGroup(ctx, organization, id)
-	for _, wait := range r.missingRetries {
-		if !errors.Is(err, client.ErrNotFound) {
-			return group, err
+	for _, wait := range r.readRetries {
+		if err != nil && !errors.Is(err, client.ErrNotFound) {
+			return nil, err
+		}
+		if err == nil && matchesState(group, state) {
+			return group, nil
 		}
 		select {
 		case <-ctx.Done():
@@ -211,6 +219,14 @@ func (r *groupResource) getGroupWithRetries(ctx context.Context, organization, i
 		group, err = r.client.GetGroup(ctx, organization, id)
 	}
 	return group, err
+}
+
+// matchesState reports a group that has the name and the description of the
+// state. An import has no description in the state yet, so any description
+// matches it.
+func matchesState(group *client.Group, state groupResourceModel) bool {
+	return group.Name == state.Name.ValueString() &&
+		(state.Description.IsNull() || group.Description == state.Description.ValueString())
 }
 
 // groupLookupDetail explains why a lookup by name found no group, for import

@@ -1,6 +1,7 @@
 package shared_test
 
 import (
+	"errors"
 	"fmt"
 	"math/rand/v2"
 	"os"
@@ -31,12 +32,24 @@ func TestAccGroupResource(t *testing.T) {
   name         = %q
 }`, organization, renamed)
 	address := "sonarqube_group.test"
-	// The group search is eventually consistent, so each step waits until
-	// the search shows the change before Terraform refreshes.
+	// The group list is eventually consistent, so each step waits until a
+	// read by id, as Read does, shows the change. Then Terraform refreshes.
+	var id string
 	shows := func(groupName, description string) resource.TestCheckFunc {
-		return func(*terraform.State) error {
-			return waitForGroup(t, organization, groupName, func(group *client.Group) bool {
-				return group != nil && group.Description == description
+		return func(state *terraform.State) error {
+			id = state.RootModule().Resources[address].Primary.ID
+			if err := waitForGroup(t, organization, id, func(group *client.Group) bool {
+				return group != nil && group.Name == groupName && group.Description == description
+			}); err != nil {
+				return err
+			}
+			// Import finds the group by name, and the name filter has its own lag.
+			return waitFor(func() (bool, error) {
+				group, err := acctest.Client().FindGroupByName(t.Context(), organization, groupName)
+				if errors.Is(err, client.ErrNotFound) {
+					return false, nil
+				}
+				return err == nil && group.ID == id, err
 			})
 		}
 	}
@@ -48,6 +61,9 @@ func TestAccGroupResource(t *testing.T) {
 			}
 		},
 		ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories,
+		CheckDestroy: func(*terraform.State) error {
+			return waitForGroup(t, organization, id, func(group *client.Group) bool { return group == nil })
+		},
 		Steps: []resource.TestStep{
 			{Config: config(name, "Initial"), Check: resource.ComposeAggregateTestCheckFunc(
 				resource.TestCheckResourceAttr(address, "name", name),
@@ -62,27 +78,21 @@ func TestAccGroupResource(t *testing.T) {
 			{ResourceName: address, ImportState: true, ImportStateId: organization + "/" + renamed, ImportStateVerify: true},
 			{Config: withoutDescription, Check: shows(renamed, "")},
 			{Config: withoutDescription, PreConfig: func() {
-				group, err := acctest.Client().FindGroupByName(t.Context(), organization, renamed)
-				if err != nil {
+				if err := acctest.Client().UpdateGroup(t.Context(), id, outsideName, ""); err != nil {
 					t.Fatal(err)
 				}
-				if err := acctest.Client().UpdateGroup(t.Context(), group.ID, outsideName, group.Description); err != nil {
-					t.Fatal(err)
-				}
-				if err := waitForGroup(t, organization, outsideName, func(group *client.Group) bool { return group != nil }); err != nil {
+				if err := waitForGroup(t, organization, id, func(group *client.Group) bool {
+					return group != nil && group.Name == outsideName
+				}); err != nil {
 					t.Fatal(err)
 				}
 			}, PlanOnly: true, ExpectNonEmptyPlan: true},
 			{Config: withoutDescription, Check: shows(renamed, "")},
 			{Config: withoutDescription, PreConfig: func() {
-				group, err := acctest.Client().FindGroupByName(t.Context(), organization, renamed)
-				if err != nil {
+				if err := acctest.Client().DeleteGroup(t.Context(), id); err != nil {
 					t.Fatal(err)
 				}
-				if err := acctest.Client().DeleteGroup(t.Context(), group.ID); err != nil {
-					t.Fatal(err)
-				}
-				if err := waitForGroup(t, organization, renamed, func(group *client.Group) bool { return group == nil }); err != nil {
+				if err := waitForGroup(t, organization, id, func(group *client.Group) bool { return group == nil }); err != nil {
 					t.Fatal(err)
 				}
 			}, PlanOnly: true, ExpectNonEmptyPlan: true},
@@ -91,27 +101,30 @@ func TestAccGroupResource(t *testing.T) {
 	})
 }
 
-// waitForGroup searches the organization until done accepts the group with the
-// name, or nil when the search does not hold it.
-func waitForGroup(t *testing.T, organization, name string, done func(*client.Group) bool) error {
+// waitForGroup reads the group by id until done accepts it, or nil when the
+// organization does not hold it.
+func waitForGroup(t *testing.T, organization, id string, done func(*client.Group) bool) error {
 	t.Helper()
+	return waitFor(func() (bool, error) {
+		group, err := acctest.Client().GetGroup(t.Context(), organization, id)
+		if errors.Is(err, client.ErrNotFound) {
+			group, err = nil, nil
+		}
+		return err == nil && done(group), err
+	})
+}
+
+// waitFor calls check each second until it reports true, an error, or 60
+// seconds pass.
+func waitFor(check func() (bool, error)) error {
 	deadline := time.Now().Add(60 * time.Second)
 	for {
-		groups, err := acctest.Client().ListGroups(t.Context(), organization, "")
-		if err != nil {
+		ok, err := check()
+		if err != nil || ok {
 			return err
 		}
-		var found *client.Group
-		for i := range groups {
-			if groups[i].Name == name {
-				found = &groups[i]
-			}
-		}
-		if done(found) {
-			return nil
-		}
 		if time.Now().After(deadline) {
-			return fmt.Errorf("the search did not show the expected state of group %q in 60 seconds; last seen: %+v", name, found)
+			return fmt.Errorf("the group list did not show the expected state in 60 seconds")
 		}
 		time.Sleep(time.Second)
 	}

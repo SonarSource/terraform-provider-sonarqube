@@ -27,7 +27,8 @@ type groupDataSourceModel struct {
 	Organization types.String `tfsdk:"organization"`
 	Name         types.String `tfsdk:"name"`
 	Description  types.String `tfsdk:"description"`
-	Default      types.Bool   `tfsdk:"default"`
+	BuiltIn      types.Bool   `tfsdk:"built_in"`
+	Managed      types.Bool   `tfsdk:"managed"`
 }
 
 func (d *groupDataSource) Metadata(_ context.Context, req datasource.MetadataRequest, resp *datasource.MetadataResponse) {
@@ -43,7 +44,8 @@ func (d *groupDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, 
 				Validators: validate.OrganizationKey()},
 			"name":        schema.StringAttribute{Required: true, Description: "Exact group name."},
 			"description": schema.StringAttribute{Computed: true, Description: "Group description."},
-			"default":     schema.BoolAttribute{Computed: true, Description: "Whether this is the default group for new members."},
+			"built_in":    schema.BoolAttribute{Computed: true, Description: "Whether SonarQube Cloud made the group for the organization, as for Members."},
+			"managed":     schema.BoolAttribute{Computed: true, Description: "Whether an identity provider synchronizes the group through SCIM."},
 		},
 	}
 }
@@ -68,6 +70,7 @@ func (d *groupDataSource) Read(ctx context.Context, req datasource.ReadRequest, 
 	}
 	config.ID = types.StringValue(group.ID)
 	config.Description = types.StringValue(group.Description)
-	config.Default = types.BoolValue(group.Default)
+	config.BuiltIn = types.BoolValue(group.BuiltIn)
+	config.Managed = types.BoolValue(group.Managed)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &config)...)
 }

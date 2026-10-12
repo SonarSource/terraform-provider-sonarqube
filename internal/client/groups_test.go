@@ -4,25 +4,39 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
-	"net/url"
 	"strconv"
-	"strings"
 	"testing"
 )
 
-func TestListGroupsReadsEveryPageWithoutNameFilter(t *testing.T) {
+const groupOrganizationUUID = "00000000-0000-4000-8000-000000000001"
+
+// groupServer answers the organization read, and hands every other request to
+// groups.
+func groupServer(t *testing.T, groups http.HandlerFunc) *httptest.Server {
+	t.Helper()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/organizations/organizations" {
+			fmt.Fprint(w, projectOrganizationAnswer)
+			return
+		}
+		groups(w, r)
+	}))
+	t.Cleanup(srv.Close)
+	return srv
+}
+
+func TestListGroupsReadsEveryPage(t *testing.T) {
 	t.Parallel()
 	var pages []int
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/api/user_groups/search" || r.URL.Query().Get("organization") != "my-org" || r.URL.Query().Get("ps") != "500" {
+	srv := groupServer(t, func(w http.ResponseWriter, r *http.Request) {
+		query := r.URL.Query()
+		if r.URL.Path != groupsPath || query.Get("organizationIds") != groupOrganizationUUID || query.Get("pageSize") != "500" {
 			t.Errorf("unexpected group search: %s?%s", r.URL.Path, r.URL.RawQuery)
 		}
-		if _, present := r.URL.Query()["q"]; present {
-			t.Error("search must not filter by a substring")
-		}
-		page, _ := strconv.Atoi(r.URL.Query().Get("p"))
+		page, _ := strconv.Atoi(query.Get("pageIndex"))
 		pages = append(pages, page)
 		count := 500
 		if page == 2 {
@@ -31,135 +45,31 @@ func TestListGroupsReadsEveryPageWithoutNameFilter(t *testing.T) {
 		groups := make([]map[string]any, count)
 		for i := range groups {
 			id := (page-1)*500 + i + 1
-			groups[i] = map[string]any{"id": id, "name": fmt.Sprintf("group-%d", id)}
+			groups[i] = map[string]any{"id": fmt.Sprintf("group-id-%d", id), "name": fmt.Sprintf("group-%d", id)}
 		}
-		json.NewEncoder(w).Encode(map[string]any{"groups": groups, "paging": map[string]int{"total": 501}})
-	}))
-	defer srv.Close()
+		json.NewEncoder(w).Encode(map[string]any{"groups": groups, "page": map[string]int{"total": 501}})
+	})
 
-	groups, err := newTestClient(srv).ListGroups(t.Context(), "my-org", "")
+	groups, err := newTestClient(srv).listGroups(t.Context(), "my-org", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(groups) != 501 {
-		t.Fatalf("groups=%d, want 501", len(groups))
-	}
-	if groups[500].ID != "501" || len(pages) != 2 || pages[0] != 1 || pages[1] != 2 {
-		t.Errorf("final=%+v, pages=%v", groups[500], pages)
-	}
-}
-
-func TestGroupLookupsKeepIdentityAndExactName(t *testing.T) {
-	t.Parallel()
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		fmt.Fprint(w, `{"groups":[{"id":12,"name":"New name"},{"id":13,"name":"New name extra"}],"paging":{"total":2}}`)
-	}))
-	defer srv.Close()
-	c := newTestClient(srv)
-	byID, err := c.GetGroup(t.Context(), "my-org", "12")
-	if err != nil || byID.Name != "New name" {
-		t.Fatalf("GetGroup = %+v, %v", byID, err)
-	}
-	byName, err := c.FindGroupByName(t.Context(), "my-org", "New name")
-	if err != nil || byName.ID != "12" {
-		t.Fatalf("FindGroupByName = %+v, %v", byName, err)
-	}
-	_, err = c.FindGroupByName(t.Context(), "my-org", "New")
-	if !errors.Is(err, ErrNotFound) {
-		t.Errorf("substring lookup returned %v, want ErrNotFound", err)
-	}
-}
-
-func TestCreateAndUpdateGroupUseNumericID(t *testing.T) {
-	t.Parallel()
-	var forms []url.Values
-	var paths []string
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if err := r.ParseForm(); err != nil {
-			t.Error(err)
-		}
-		forms = append(forms, r.PostForm)
-		paths = append(paths, r.URL.Path)
-		if r.URL.Path == "/api/user_groups/create" {
-			fmt.Fprint(w, `{"group":{"id":42,"name":"First","description":"Initial"}}`)
-		} else {
-			w.WriteHeader(http.StatusNoContent)
-		}
-	}))
-	defer srv.Close()
-	c := newTestClient(srv)
-	group, err := c.CreateGroup(t.Context(), "my-org", "First", "")
-	if err != nil || group.ID != "42" {
-		t.Fatalf("CreateGroup = %+v, %v", group, err)
-	}
-	if err := c.UpdateGroup(t.Context(), group.ID, "Second", ""); err != nil {
-		t.Fatal(err)
-	}
-	if paths[0] != "/api/user_groups/create" || forms[0].Get("organization") != "my-org" {
-		t.Errorf("create path and form: %s, %v", paths[0], forms[0])
-	}
-	if values, present := forms[0]["description"]; !present || values[0] != "" {
-		t.Errorf("create description = %v, want an empty value", values)
-	}
-	if paths[1] != "/api/user_groups/update" || forms[1].Get("id") != "42" || forms[1].Get("name") != "Second" {
-		t.Errorf("update path and form: %s, %v", paths[1], forms[1])
-	}
-	if _, present := forms[1]["description"]; !present {
-		t.Error("update did not clear the description")
-	}
-}
-
-func TestDeleteGroupAcceptsMissingGroup(t *testing.T) {
-	t.Parallel()
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/api/user_groups/delete" {
-			t.Errorf("path = %q", r.URL.Path)
-		}
-		w.WriteHeader(http.StatusNotFound)
-	}))
-	defer srv.Close()
-	if err := newTestClient(srv).DeleteGroup(t.Context(), "42"); err != nil {
-		t.Fatal(err)
-	}
-}
-
-func TestGroupSearch404IsOrganizationNotFound(t *testing.T) {
-	t.Parallel()
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusNotFound)
-	}))
-	defer srv.Close()
-	_, err := newTestClient(srv).GetGroup(t.Context(), "my-org", "42")
-	if !errors.Is(err, ErrOrganizationNotFound) || errors.Is(err, ErrNotFound) {
-		t.Errorf("search 404 returned %v, want ErrOrganizationNotFound and not ErrNotFound", err)
-	}
-}
-
-func TestGroupMissingFromListIsPlainNotFound(t *testing.T) {
-	t.Parallel()
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		fmt.Fprint(w, `{"groups":[],"paging":{"total":0}}`)
-	}))
-	defer srv.Close()
-	_, err := newTestClient(srv).GetGroup(t.Context(), "my-org", "42")
-	if !errors.Is(err, ErrNotFound) || errors.Is(err, ErrOrganizationNotFound) {
-		t.Errorf("missing group returned %v, want ErrNotFound only", err)
+	if len(groups) != 501 || groups[500].ID != "group-id-501" || len(pages) != 2 || pages[0] != 1 || pages[1] != 2 {
+		t.Errorf("groups=%d, final=%+v, pages=%v", len(groups), groups[len(groups)-1], pages)
 	}
 }
 
 func TestListGroupsFollowsTotalWhenServerCapsPageSize(t *testing.T) {
 	t.Parallel()
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		page, _ := strconv.Atoi(r.URL.Query().Get("p"))
+	srv := groupServer(t, func(w http.ResponseWriter, r *http.Request) {
+		page, _ := strconv.Atoi(r.URL.Query().Get("pageIndex"))
 		groups := make([]map[string]any, 100)
 		for i := range groups {
-			id := (page-1)*100 + i + 1
-			groups[i] = map[string]any{"id": id, "name": fmt.Sprintf("group-%d", id)}
+			groups[i] = map[string]any{"id": fmt.Sprintf("group-id-%d", (page-1)*100+i+1)}
 		}
-		json.NewEncoder(w).Encode(map[string]any{"groups": groups, "paging": map[string]int{"total": 200}})
-	}))
-	defer srv.Close()
-	groups, err := newTestClient(srv).ListGroups(t.Context(), "my-org", "")
+		json.NewEncoder(w).Encode(map[string]any{"groups": groups, "page": map[string]int{"total": 200}})
+	})
+	groups, err := newTestClient(srv).listGroups(t.Context(), "my-org", nil)
 	if err != nil || len(groups) != 200 {
 		t.Fatalf("groups=%d, err=%v, want 200", len(groups), err)
 	}
@@ -167,41 +77,133 @@ func TestListGroupsFollowsTotalWhenServerCapsPageSize(t *testing.T) {
 
 func TestListGroupsRefusesEmptyPageBeforeTotal(t *testing.T) {
 	t.Parallel()
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		fmt.Fprint(w, `{"groups":[],"paging":{"total":3}}`)
-	}))
-	defer srv.Close()
-	if _, err := newTestClient(srv).ListGroups(t.Context(), "my-org", ""); err == nil {
+	srv := groupServer(t, func(w http.ResponseWriter, _ *http.Request) {
+		fmt.Fprint(w, `{"groups":[],"page":{"total":3}}`)
+	})
+	if _, err := newTestClient(srv).listGroups(t.Context(), "my-org", nil); err == nil {
 		t.Error("an empty page before the total was accepted")
+	}
+}
+
+func TestGetGroupFiltersByID(t *testing.T) {
+	t.Parallel()
+	srv := groupServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if ids := r.URL.Query().Get("ids"); ids != "group-id-12" {
+			t.Errorf("ids = %q, want group-id-12", ids)
+		}
+		fmt.Fprint(w, `{"groups":[{"id":"group-id-12","name":"New name","builtIn":false,"managed":true}],"page":{"total":1}}`)
+	})
+	group, err := newTestClient(srv).GetGroup(t.Context(), "my-org", "group-id-12")
+	if err != nil || group.Name != "New name" || !group.Managed || group.Description != "" {
+		t.Fatalf("GetGroup = %+v, %v", group, err)
+	}
+}
+
+func TestGetGroupMissingIsNotFound(t *testing.T) {
+	t.Parallel()
+	srv := groupServer(t, func(w http.ResponseWriter, _ *http.Request) {
+		fmt.Fprint(w, `{"groups":[],"page":{"total":0}}`)
+	})
+	_, err := newTestClient(srv).GetGroup(t.Context(), "my-org", "group-id-12")
+	if !errors.Is(err, ErrNotFound) || errors.Is(err, ErrOrganizationNotFound) {
+		t.Errorf("missing group returned %v, want ErrNotFound only", err)
+	}
+}
+
+func TestGroupCallsReportMissingOrganization(t *testing.T) {
+	t.Parallel()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	t.Cleanup(srv.Close)
+	_, err := newTestClient(srv).GetGroup(t.Context(), "my-org", "group-id-12")
+	if !errors.Is(err, ErrOrganizationNotFound) || errors.Is(err, ErrNotFound) {
+		t.Errorf("organization 404 returned %v, want ErrOrganizationNotFound and not ErrNotFound", err)
+	}
+}
+
+func TestFindGroupByNameMatchesExactName(t *testing.T) {
+	t.Parallel()
+	srv := groupServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if q := r.URL.Query().Get("q"); q != "Developers" {
+			t.Errorf("q = %q, want Developers", q)
+		}
+		fmt.Fprint(w, `{"groups":[{"id":"group-id-1","name":"Developers-extra"},{"id":"group-id-2","name":"Developers"}],"page":{"total":2}}`)
+	})
+	group, err := newTestClient(srv).FindGroupByName(t.Context(), "my-org", "Developers")
+	if err != nil || group.ID != "group-id-2" {
+		t.Fatalf("FindGroupByName = %+v, %v", group, err)
+	}
+}
+
+func TestCreateGroupSendsOrganizationUUID(t *testing.T) {
+	t.Parallel()
+	var body map[string]string
+	srv := groupServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != groupsPath {
+			t.Errorf("request = %s %s", r.Method, r.URL.Path)
+		}
+		raw, _ := io.ReadAll(r.Body)
+		json.Unmarshal(raw, &body)
+		w.WriteHeader(http.StatusCreated)
+		fmt.Fprint(w, `{"id":"group-id-42","name":"First","builtIn":false,"managed":false}`)
+	})
+	group, err := newTestClient(srv).CreateGroup(t.Context(), "my-org", "First", "")
+	if err != nil || group.ID != "group-id-42" {
+		t.Fatalf("CreateGroup = %+v, %v", group, err)
+	}
+	if body["organizationId"] != groupOrganizationUUID || body["name"] != "First" || body["description"] != "" {
+		t.Errorf("create body = %v", body)
 	}
 }
 
 func TestCreateGroupRefusesAnswerWithoutID(t *testing.T) {
 	t.Parallel()
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/api/user_groups/create" {
-			t.Errorf("path = %q, want only the create call", r.URL.Path)
-		}
+	srv := groupServer(t, func(w http.ResponseWriter, _ *http.Request) {
 		fmt.Fprint(w, `{}`)
-	}))
-	defer srv.Close()
+	})
 	_, err := newTestClient(srv).CreateGroup(t.Context(), "my-org", "First", "")
-	if err == nil || !strings.Contains(err.Error(), "import it") {
-		t.Fatalf("CreateGroup error = %v, want the import hint", err)
+	if err == nil {
+		t.Fatal("an answer without an id was accepted")
 	}
 }
 
-func TestFindGroupByNameNarrowsSearchByQuery(t *testing.T) {
+func TestUpdateGroupSendsMergePatchWithBothFields(t *testing.T) {
 	t.Parallel()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if q := r.URL.Query().Get("q"); q != "Developers" {
-			t.Errorf("q = %q, want Developers", q)
+		if r.Method != http.MethodPatch || r.URL.Path != groupsPath+"/group-id-42" {
+			t.Errorf("request = %s %s", r.Method, r.URL.Path)
 		}
-		fmt.Fprint(w, `{"groups":[{"id":1,"name":"Developers-extra"},{"id":2,"name":"Developers"}],"paging":{"total":2}}`)
+		if ct := r.Header.Get("Content-Type"); ct != "application/merge-patch+json" {
+			t.Errorf("Content-Type = %q", ct)
+		}
+		var body map[string]string
+		raw, _ := io.ReadAll(r.Body)
+		json.Unmarshal(raw, &body)
+		if body["name"] != "Second" {
+			t.Errorf("update body = %v", body)
+		}
+		if description, present := body["description"]; !present || description != "" {
+			t.Errorf("update body = %v, want an empty description that removes it", body)
+		}
+		fmt.Fprint(w, `{"id":"group-id-42","name":"Second"}`)
 	}))
-	defer srv.Close()
-	group, err := newTestClient(srv).FindGroupByName(t.Context(), "my-org", "Developers")
-	if err != nil || group.ID != "2" {
-		t.Fatalf("FindGroupByName = %+v, %v", group, err)
+	t.Cleanup(srv.Close)
+	if err := newTestClient(srv).UpdateGroup(t.Context(), "group-id-42", "Second", ""); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestDeleteGroupAcceptsMissingGroup(t *testing.T) {
+	t.Parallel()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodDelete || r.URL.Path != groupsPath+"/group-id-42" {
+			t.Errorf("request = %s %s", r.Method, r.URL.Path)
+		}
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	t.Cleanup(srv.Close)
+	if err := newTestClient(srv).DeleteGroup(t.Context(), "group-id-42"); err != nil {
+		t.Fatal(err)
 	}
 }
