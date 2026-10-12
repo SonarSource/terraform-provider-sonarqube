@@ -15,11 +15,11 @@ An endpoint is "Public" only when SonarSource's own docs link one as public.
 
 | Function | Endpoint | Surface | Public or internal |
 |---|---|---|---|
-| `CreateGroup` | `POST {api_url}/users/groups` | Web API v2 | [Public](https://api-docs.sonarsource.com/sonarqube-cloud/default/landing) |
-| `GetGroup` | `GET {api_url}/users/groups?organizationIds=&ids=` | Web API v2 | [Public](https://api-docs.sonarsource.com/sonarqube-cloud/default/landing) |
-| `FindGroupByName` | `GET {api_url}/users/groups?organizationIds=&q=&pageIndex=&pageSize=` | Web API v2 | [Public](https://api-docs.sonarsource.com/sonarqube-cloud/default/landing) |
-| `UpdateGroup` | `PATCH {api_url}/users/groups/{id}` | Web API v2 | [Public](https://api-docs.sonarsource.com/sonarqube-cloud/default/landing) |
-| `DeleteGroup` | `DELETE {api_url}/users/groups/{id}` | Web API v2 | [Public](https://api-docs.sonarsource.com/sonarqube-cloud/default/landing) |
+| `CreateGroup` | `POST {api_url}/users/groups` | Web API v2 | [Public](https://api-docs.sonarsource.com/sonarqube-cloud/default/public-externalusers-0-0#/groups/createGroup) |
+| `GetGroup` | `GET {api_url}/users/groups?organizationIds=&ids=` | Web API v2 | [Public](https://api-docs.sonarsource.com/sonarqube-cloud/default/public-externalusers-0-0#/groups/searchGroups) |
+| `FindGroupByName` | `GET {api_url}/users/groups?organizationIds=&q=&pageIndex=&pageSize=` | Web API v2 | [Public](https://api-docs.sonarsource.com/sonarqube-cloud/default/public-externalusers-0-0#/groups/searchGroups) |
+| `UpdateGroup` | `PATCH {api_url}/users/groups/{id}` | Web API v2 | [Public](https://api-docs.sonarsource.com/sonarqube-cloud/default/public-externalusers-0-0#/groups/patchGroup) |
+| `DeleteGroup` | `DELETE {api_url}/users/groups/{id}` | Web API v2 | [Public](https://api-docs.sonarsource.com/sonarqube-cloud/default/public-externalusers-0-0#/groups/deleteGroup) |
 
 Each call except update and delete reads the organization first
 (`GetOrganization`), because the group API takes the UUID of the organization
@@ -27,8 +27,8 @@ and not its key. The group API answers 403 for an organization that does not
 exist, so that read is the one that finds a missing organization.
 
 There is no read of one group by its id. The `ids` filter of the list gives
-the same result. The `q` filter keeps the names that hold the value, so the
-client finds the exact name. The page size is 500 at most. An update takes a
+the same result. The `q` filter is a search on the name that ignores the
+case, so the client finds the exact name. The page size is 500 at most. An update takes a
 JSON merge patch, and an empty description removes the description. A delete
 of a group that is already gone answers 204.
 
