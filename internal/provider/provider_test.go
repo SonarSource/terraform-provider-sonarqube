@@ -246,6 +246,7 @@ func TestProviderRegistersItsDataSources(t *testing.T) {
 	assertNames(t, "resources", resourceNames, []string{
 		"sonarqube_group",
 		"sonarqube_cloud_organization",
+		"sonarqube_cloud_organization_permissions",
 		"sonarqube_cloud_organization_binding",
 		"sonarqube_project",
 		"sonarqube_cloud_project_binding",

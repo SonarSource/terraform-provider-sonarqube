@@ -11,6 +11,27 @@ answers at the instance host and takes the token as the basic-auth user name.
 
 An endpoint is "Public" only when SonarSource's own docs link one as public.
 
+## Permissions (`permissions.go`)
+
+| Function | Endpoint | Surface | Public or internal |
+|---|---|---|---|
+| `CurrentUserLogin` | `GET {url}/api/users/current` | Web API v1 | Internal |
+| `GetPermissions` | `GET {url}/api/permissions/groups?organization=&projectKey=&q=&p=&ps=` | Web API v1 | Internal |
+| `GetPermissions` | `GET {url}/api/permissions/users?organization=&projectKey=&q=&p=&ps=` | Web API v1 | Internal |
+| `AddPermission` | `POST {url}/api/permissions/add_group` | Web API v1 | [Public](https://sonarcloud.io/web_api/api/permissions/add_group) |
+| `RemovePermission` | `POST {url}/api/permissions/remove_group` | Web API v1 | [Public](https://sonarcloud.io/web_api/api/permissions/remove_group) |
+| `AddPermission` | `POST {url}/api/permissions/add_user` | Web API v1 | [Public](https://sonarcloud.io/web_api/api/permissions/add_user) |
+| `RemovePermission` | `POST {url}/api/permissions/remove_user` | Web API v1 | [Public](https://sonarcloud.io/web_api/api/permissions/remove_user) |
+
+The read endpoints list the groups or the organization members, also the ones
+without permissions. `q` keeps the names and logins that hold the value (for
+users, also the display names), so the client reads every page and matches
+the exact name. The server refuses a `q` shorter than 3 characters, so the
+client then omits `q`. It also refuses a `ps` above 100. A 404 on a read
+means that the organization is missing. A permission change shows in the next
+read. A scope can name an organization or a project, so the same operations
+can serve project permissions later.
+
 ## Groups (`groups.go`)
 
 | Function | Endpoint | Surface | Public or internal |
