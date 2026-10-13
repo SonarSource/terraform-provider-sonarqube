@@ -10,6 +10,7 @@ import (
 
 	"github.com/SonarSource/terraform-provider-sonarqube/internal/client"
 	"github.com/SonarSource/terraform-provider-sonarqube/internal/provider/configure"
+	"github.com/SonarSource/terraform-provider-sonarqube/internal/provider/validate"
 )
 
 var (
@@ -38,7 +39,7 @@ func (d *qualityGateDataSource) Schema(_ context.Context, _ datasource.SchemaReq
 		Description: "Reads one SonarQube Cloud quality gate by name in an organization.",
 		Attributes: map[string]schema.Attribute{
 			"id":           schema.StringAttribute{Computed: true, Description: "UUID of the gate."},
-			"organization": schema.StringAttribute{Required: true, Description: "Key of the organization that owns the gate."},
+			"organization": schema.StringAttribute{Required: true, Description: "Key of the organization that owns the gate.", Validators: validate.OrganizationKey()},
 			"name":         schema.StringAttribute{Required: true, Description: "Exact name of the gate."},
 			"ai_qualified": schema.BoolAttribute{Computed: true, Description: "Whether AI Code Assurance qualifies the gate."},
 			"condition": schema.SetNestedAttribute{Computed: true, Description: "Conditions of the gate.", NestedObject: schema.NestedAttributeObject{Attributes: map[string]schema.Attribute{

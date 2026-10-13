@@ -20,6 +20,7 @@ import (
 
 	"github.com/SonarSource/terraform-provider-sonarqube/internal/client"
 	"github.com/SonarSource/terraform-provider-sonarqube/internal/provider/configure"
+	"github.com/SonarSource/terraform-provider-sonarqube/internal/provider/validate"
 )
 
 var (
@@ -76,6 +77,7 @@ func (r *organizationBindingResource) Schema(_ context.Context, _ resource.Schem
 				Description: "Key of the SonarQube Cloud organization to bind. The provider " +
 					"reads the organization to find the internal identifier that the bindings " +
 					"API needs.",
+				Validators: validate.OrganizationKey(),
 				// A different organization is a different binding. The
 				// organization that was bound before stays bound, because a
 				// binding cannot be deleted; the destroy says so.

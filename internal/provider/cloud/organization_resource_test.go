@@ -89,8 +89,8 @@ func TestOrganizationResourceConfigureWithoutProvider(t *testing.T) {
 func TestOrganizationKeyPattern(t *testing.T) {
 	t.Parallel()
 
-	valid := []string{"a", "my-org", "org-1", "1-2-3"}
-	invalid := []string{"-leading", "trailing-", "Upper", "under_score", "with space", "dot.dot"}
+	valid := []string{"a", "my-org", "org-1", "1-2-3", "under_score", "a+b"}
+	invalid := []string{"-leading", "trailing-", "double--dash", "Upper", "with space", "dot.dot"}
 
 	for _, key := range valid {
 		if !validate.OrganizationKeyPattern.MatchString(key) {

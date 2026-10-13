@@ -59,14 +59,9 @@ func (r *projectResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 				Description: "Project key.",
 			},
 			"key": schema.StringAttribute{
-				Required:    true,
-				Description: "Key of the project. Must be unique.",
-				Validators: []validator.String{
-					stringvalidator.LengthBetween(1, 400),
-					stringvalidator.RegexMatches(validate.ProjectKeyPattern,
-						"must hold letters, digits, dashes, underscores, dots and colons only, "+
-							"with at least one character that is not a digit"),
-				},
+				Required:      true,
+				Description:   "Key of the project. Must be unique.",
+				Validators:    validate.ProjectKey(),
 				PlanModifiers: replace,
 			},
 			"name": schema.StringAttribute{
@@ -81,13 +76,9 @@ func (r *projectResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 				PlanModifiers: replace,
 			},
 			"organization": schema.StringAttribute{
-				Required:    true,
-				Description: "Key of the organization that owns the project.",
-				Validators: []validator.String{
-					stringvalidator.LengthBetween(1, 255),
-					stringvalidator.RegexMatches(validate.OrganizationKeyPattern,
-						"must hold lower-case letters, digits and dashes only, with no leading and no trailing dash"),
-				},
+				Required:      true,
+				Description:   "Key of the organization that owns the project.",
+				Validators:    validate.OrganizationKey(),
 				PlanModifiers: replace,
 			},
 		},

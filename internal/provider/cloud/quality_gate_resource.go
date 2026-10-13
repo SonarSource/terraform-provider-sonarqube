@@ -20,6 +20,7 @@ import (
 
 	"github.com/SonarSource/terraform-provider-sonarqube/internal/client"
 	"github.com/SonarSource/terraform-provider-sonarqube/internal/provider/configure"
+	"github.com/SonarSource/terraform-provider-sonarqube/internal/provider/validate"
 )
 
 var (
@@ -63,7 +64,7 @@ func (r *qualityGateResource) Schema(_ context.Context, _ resource.SchemaRequest
 		Description: "Manages a SonarQube Cloud quality gate and all its conditions. The built-in Sonar way gate cannot be managed.",
 		Attributes: map[string]schema.Attribute{
 			"id":           schema.StringAttribute{Computed: true, Description: "UUID of the gate.", PlanModifiers: []planmodifier.String{stringplanmodifier.UseStateForUnknown()}},
-			"organization": schema.StringAttribute{Required: true, Description: "Key of the organization that owns the gate.", PlanModifiers: replace},
+			"organization": schema.StringAttribute{Required: true, Description: "Key of the organization that owns the gate.", Validators: validate.OrganizationKey(), PlanModifiers: replace},
 			"name":         schema.StringAttribute{Required: true, Description: "Name of the gate.", Validators: []validator.String{stringvalidator.LengthBetween(1, 255)}},
 			"ai_qualified": schema.BoolAttribute{Optional: true, Computed: true, Description: "Whether AI Code Assurance qualifies the gate. To set true, the organization must have the AI Code Assurance feature."},
 		},
