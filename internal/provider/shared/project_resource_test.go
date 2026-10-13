@@ -340,12 +340,12 @@ func TestProjectResourceValidatesTheKeyAndTheName(t *testing.T) {
 	refused := map[string][]string{
 		"key":          {"", "my project", "my/project", "42", strings.Repeat("a", 401)},
 		"name":         {"", strings.Repeat("a", 501)},
-		"organization": {"", "My-Org", "-my-org", "my-org-", "my_org", strings.Repeat("a", 256)},
+		"organization": {"", "My-Org", "-my-org", "my-org-", "my--org", strings.Repeat("a", 256)},
 	}
 	allowed := map[string][]string{
 		"key":          {"a", "my-project", "my_project.one:two", "42a", strings.Repeat("a", 400)},
 		"name":         {"My Project", strings.Repeat("a", 500)},
-		"organization": {"a", "my-org", "my-org-1", strings.Repeat("a", 255)},
+		"organization": {"a", "my-org", "my-org-1", "my_org", strings.Repeat("a", 255)},
 	}
 
 	for name, values := range refused {

@@ -65,11 +65,7 @@ func (r *organizationResource) Schema(_ context.Context, _ resource.SchemaReques
 				Required: true,
 				Description: "Key of the organization. Must be unique. A new key renames the " +
 					"organization in place and keeps its projects.",
-				Validators: []validator.String{
-					stringvalidator.LengthBetween(1, 255),
-					stringvalidator.RegexMatches(validate.OrganizationKeyPattern,
-						"must hold lower-case letters, digits and dashes only, with no leading and no trailing dash"),
-				},
+				Validators: validate.OrganizationKey(),
 			},
 			"name": schema.StringAttribute{
 				Required:    true,

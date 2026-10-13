@@ -10,6 +10,7 @@ import (
 
 	"github.com/SonarSource/terraform-provider-sonarqube/internal/client"
 	"github.com/SonarSource/terraform-provider-sonarqube/internal/provider/configure"
+	"github.com/SonarSource/terraform-provider-sonarqube/internal/provider/validate"
 )
 
 var (
@@ -46,6 +47,7 @@ func (d *organizationDataSource) Schema(_ context.Context, _ datasource.SchemaRe
 			"key": schema.StringAttribute{
 				Required:    true,
 				Description: "Key of the organization to read.",
+				Validators:  validate.OrganizationKey(),
 			},
 			"name": schema.StringAttribute{
 				Computed:    true,

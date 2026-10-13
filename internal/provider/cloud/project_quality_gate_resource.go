@@ -70,24 +70,15 @@ func (r *projectQualityGateResource) Schema(_ context.Context, _ resource.Schema
 				PlanModifiers: []planmodifier.String{stringplanmodifier.UseStateForUnknown()},
 			},
 			"organization": schema.StringAttribute{
-				Required:    true,
-				Description: "Key of the organization that owns the project. A change replaces this resource.",
-				Validators: []validator.String{
-					stringvalidator.LengthBetween(1, 255),
-					stringvalidator.RegexMatches(validate.OrganizationKeyPattern,
-						"must hold lower-case letters, digits and dashes only, with no leading and no trailing dash"),
-				},
+				Required:      true,
+				Description:   "Key of the organization that owns the project. A change replaces this resource.",
+				Validators:    validate.OrganizationKey(),
 				PlanModifiers: replace,
 			},
 			"project_key": schema.StringAttribute{
-				Required:    true,
-				Description: "Key of the project. A change replaces this resource.",
-				Validators: []validator.String{
-					stringvalidator.LengthBetween(1, 400),
-					stringvalidator.RegexMatches(validate.ProjectKeyPattern,
-						"must hold letters, digits, dashes, underscores, dots and colons only, "+
-							"with at least one character that is not a digit"),
-				},
+				Required:      true,
+				Description:   "Key of the project. A change replaces this resource.",
+				Validators:    validate.ProjectKey(),
 				PlanModifiers: replace,
 			},
 			"quality_gate_id": schema.StringAttribute{

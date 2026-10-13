@@ -9,6 +9,7 @@ import (
 
 	"github.com/SonarSource/terraform-provider-sonarqube/internal/client"
 	"github.com/SonarSource/terraform-provider-sonarqube/internal/provider/configure"
+	"github.com/SonarSource/terraform-provider-sonarqube/internal/provider/validate"
 )
 
 var (
@@ -37,10 +38,12 @@ func (d *projectBindingDataSource) Schema(_ context.Context, _ datasource.Schema
 			"organization": schema.StringAttribute{
 				Required:    true,
 				Description: "Key of the organization that owns the project.",
+				Validators:  validate.OrganizationKey(),
 			},
 			"project_key": schema.StringAttribute{
 				Required:    true,
 				Description: "Key of the project whose binding is read.",
+				Validators:  validate.ProjectKey(),
 			},
 			"id": schema.StringAttribute{
 				Computed:    true,
