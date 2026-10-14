@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 )
 
@@ -102,4 +103,14 @@ func newAPIError(status int, body []byte) *APIError {
 		}
 	}
 	return apiErr
+}
+
+// hasMessagePrefix reports a message of an API error that starts with prefix.
+func hasMessagePrefix(messages []string, prefix string) bool {
+	return slices.ContainsFunc(messages, func(message string) bool { return strings.HasPrefix(message, prefix) })
+}
+
+// hasMessageContaining reports a message of an API error that holds part.
+func hasMessageContaining(messages []string, part string) bool {
+	return slices.ContainsFunc(messages, func(message string) bool { return strings.Contains(message, part) })
 }

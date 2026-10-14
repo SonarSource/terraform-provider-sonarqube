@@ -203,22 +203,14 @@ func (r *groupResource) ImportState(ctx context.Context, req resource.ImportStat
 // retries.
 func (r *groupResource) readGroup(ctx context.Context, state groupResourceModel) (*client.Group, error) {
 	organization, id := state.Organization.ValueString(), state.ID.ValueString()
-	group, err := r.client.GetGroup(ctx, organization, id)
-	for _, wait := range r.readRetries {
-		if err != nil && !errors.Is(err, client.ErrNotFound) {
-			return nil, err
-		}
-		if err == nil && matchesState(group, state) {
-			return group, nil
-		}
-		select {
-		case <-ctx.Done():
-			return nil, ctx.Err()
-		case <-time.After(wait):
-		}
-		group, err = r.client.GetGroup(ctx, organization, id)
-	}
-	return group, err
+	return readAgain(ctx, r.readRetries,
+		func() (*client.Group, error) { return r.client.GetGroup(ctx, organization, id) },
+		func(group *client.Group, err error) bool {
+			if err != nil {
+				return !errors.Is(err, client.ErrNotFound)
+			}
+			return matchesState(group, state)
+		})
 }
 
 // matchesState reports a group that has the name and the description of the
