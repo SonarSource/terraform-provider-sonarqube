@@ -70,6 +70,36 @@ does not read the group back after a write. When Read does not find the
 group, or finds a name or a description that differs from the state, it reads
 again for about six seconds before it takes the answer.
 
+## Group members (`group_members.go`)
+
+| Function | Endpoint | Surface | Public or internal |
+|---|---|---|---|
+| `AddGroupMember` | `POST {url}/api/user_groups/add_user` | Web API v1 | [Public](https://sonarcloud.io/web_api/api/user_groups/add_user) |
+| `RemoveGroupMember` | `POST {url}/api/user_groups/remove_user` | Web API v1 | [Public](https://sonarcloud.io/web_api/api/user_groups/remove_user) |
+| `IsGroupMember` | `GET {url}/api/user_groups/users?organization=&name=&selected=selected&q=&p=&ps=` | Web API v1 | [Public](https://sonarcloud.io/web_api/api/user_groups/users) |
+
+The calls name the group by `organization` and `name`, which are case
+sensitive, like `login`. A 404 names the missing part: `No organization with
+key '<key>'`, `No group with name '<name>' in organization '<key>'`, or
+`Could not find a user with login '<login>'`. The client tells them apart by
+the message.
+
+An add of a user that is already in the group, and a remove of a user that is
+not in it, answer 204. An add of a user that is not a member of the
+organization answers 400. Both writes refuse the default group `Members` with
+400. A remove answers 400 `The last administrator user cannot be removed`
+from any group when no user has a direct `admin` grant and no other group
+that has `admin` has another member.
+
+The read lists the members of the group. `q` keeps the users whose login or
+name holds the value, without regard to case, so the client reads every page
+and matches the exact login. `ps` is 500 at most: the server answers 500 to a
+larger value. The list can show the old members for about two seconds after
+a change.
+
+The Web API v2 `group-memberships` endpoints are internal and require the
+root role, so the client does not use them.
+
 ## Organizations (`organizations.go`)
 
 | Function | Endpoint | Surface | Public or internal |

@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
-	"slices"
 	"strconv"
 	"strings"
 	"unicode/utf8"
@@ -176,9 +175,7 @@ func isProjectNotFound(err error, scope PermissionScope) bool {
 	if scope.ProjectKey == "" || !errors.As(err, &apiErr) {
 		return false
 	}
-	return slices.ContainsFunc(apiErr.Messages, func(message string) bool {
-		return strings.HasPrefix(message, "Project key ")
-	})
+	return hasMessagePrefix(apiErr.Messages, "Project key ")
 }
 
 // isLastAdminMessage matches "Last user with permission 'admin'. ..." and

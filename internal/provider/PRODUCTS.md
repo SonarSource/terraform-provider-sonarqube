@@ -13,6 +13,7 @@ will also work on SonarQube Server when the provider supports it.
 | Resource | Products | Reason |
 |---|---|---|
 | `sonarqube_group` | Shared | Name and description have the same meaning on both products. Only Cloud requires an organization. Both products rename a group in place and delete it. Cloud imports `<organization>/<name>`; Server imports `<name>`. Both Web API v2 group APIs use a UUID as the group id. |
+| `sonarqube_group_member` | Shared | A group name and a login identify the membership on both products, and destroy removes the user from the group on both. Only Cloud requires an organization. Cloud imports `<organization>/<group_name>/<login>`; Server will import `<group_name>/<login>`. Only the API differs: Cloud uses `api/user_groups/*`, and Server uses the Web API v2 group memberships, because it deprecates `api/user_groups/add_user` since 10.4. |
 | `sonarqube_project` | Shared | Only the scope is different. SonarQube Server has no organizations, so the provider will refuse `organization` and the import ID will be `key` there. The schema will then make `organization` optional, and the provider will require it on SonarQube Cloud. Both products create and delete a project with the same web service. |
 | `sonarqube_cloud_organization` | SonarQube Cloud | SonarQube Server has no organizations. |
 | `sonarqube_cloud_organization_permissions` | SonarQube Cloud | The grants belong to an organization. SonarQube Server has no organizations, so the required scope and import ID differ. |
