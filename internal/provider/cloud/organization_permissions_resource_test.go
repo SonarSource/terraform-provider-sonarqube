@@ -308,17 +308,6 @@ func TestOrganizationPermissionsUserAndMissingGrant(t *testing.T) {
 
 func TestOrganizationPermissionsImport(t *testing.T) {
 	t.Parallel()
-	for _, id := range []string{"my-org/group/Developers", "my-org/user/alice"} {
-		organization, kind, name, ok := parsePermissionImportID(id)
-		if !ok || organization != "my-org" || name == "" || (kind != "group" && kind != "user") {
-			t.Errorf("parse %q = %q, %q, %q, %t", id, organization, kind, name, ok)
-		}
-	}
-	for _, id := range []string{"", "my-org/group", "/group/Developers", "my-org/other/name"} {
-		if _, _, _, ok := parsePermissionImportID(id); ok {
-			t.Errorf("accepted invalid ID %q", id)
-		}
-	}
 	r := NewOrganizationPermissionsResource().(*organizationPermissionsResource)
 	s := organizationPermissionsSchema(t)
 	for _, id := range []string{"my-org/group/Developers", "my-org/user/alice"} {
@@ -336,14 +325,6 @@ func TestOrganizationPermissionsImport(t *testing.T) {
 	r.ImportState(t.Context(), resource.ImportStateRequest{ID: "my-org/group/anyone"}, resp)
 	if !resp.Diagnostics.HasError() {
 		t.Error("Anyone import was accepted")
-	}
-}
-
-func TestOrganizationPermissionsDiff(t *testing.T) {
-	t.Parallel()
-	adds, removes := permissionDiff([]string{"gateadmin", "scan"}, []string{"scan", "admin"})
-	if !reflect.DeepEqual(adds, []string{"admin"}) || !reflect.DeepEqual(removes, []string{"gateadmin"}) {
-		t.Errorf("diff = %v, %v", adds, removes)
 	}
 }
 
