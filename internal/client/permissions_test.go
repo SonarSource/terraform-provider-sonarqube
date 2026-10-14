@@ -98,6 +98,62 @@ func TestGetPermissionsErrors(t *testing.T) {
 	}
 }
 
+func TestGetPermissionsProjectErrors(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name   string
+		body   string
+		want   error
+		key    string
+		reject []error
+	}{
+		{"missing project", `{"errors":[{"msg":"Project key 'my-project' not found"}]}`, ErrProjectNotFound, "my-project", []error{ErrNotFound, ErrOrganizationNotFound}},
+		{"missing organization", `{"errors":[{"msg":"No organization with key 'my-org'"}]}`, ErrOrganizationNotFound, "my-org", []error{ErrNotFound, ErrProjectNotFound}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Query().Get("projectKey") != "my-project" {
+					t.Errorf("query = %s", r.URL.RawQuery)
+				}
+				w.WriteHeader(http.StatusNotFound)
+				fmt.Fprint(w, tc.body)
+			}))
+			t.Cleanup(srv.Close)
+			scope := PermissionScope{Organization: "my-org", ProjectKey: "my-project"}
+			_, err := newTestClient(srv).GetPermissions(t.Context(), scope, testGroup)
+			assertScopeNotFound(t, err, tc.want, tc.key, tc.reject)
+		})
+	}
+}
+
+func assertScopeNotFound(t *testing.T, err, want error, key string, reject []error) {
+	t.Helper()
+	var missing *ScopeNotFoundError
+	if !errors.Is(err, want) || !errors.As(err, &missing) || missing.Key != key {
+		t.Errorf("error = %v, want %v for the key %q", err, want, key)
+	}
+	for _, other := range reject {
+		if errors.Is(err, other) {
+			t.Errorf("error = %v also matches %v", err, other)
+		}
+	}
+}
+
+func TestPermissionWriteReportsMissingProject(t *testing.T) {
+	t.Parallel()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+		fmt.Fprint(w, `{"errors":[{"msg":"Project key 'my-project' not found"}]}`)
+	}))
+	t.Cleanup(srv.Close)
+	scope := PermissionScope{Organization: "my-org", ProjectKey: "my-project"}
+	err := newTestClient(srv).AddPermission(t.Context(), scope, testGroup, "scan")
+	if !errors.Is(err, ErrProjectNotFound) || errors.Is(err, ErrNotFound) {
+		t.Errorf("error = %v", err)
+	}
+}
+
 func TestGetPermissionsRefusesEarlyEmptyPage(t *testing.T) {
 	t.Parallel()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {

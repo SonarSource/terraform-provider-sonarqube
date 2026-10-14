@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"slices"
 	"strconv"
 	"strings"
 	"unicode/utf8"
@@ -24,6 +25,15 @@ func (s PermissionScope) parameters() url.Values {
 		values.Set("projectKey", s.ProjectKey)
 	}
 	return values
+}
+
+// notFound tells which part of the scope a 404 names: the project when the
+// server says so, else the organization.
+func (s PermissionScope) notFound(err error) *ScopeNotFoundError {
+	if isProjectNotFound(err, s) {
+		return &ScopeNotFoundError{Kind: ScopeProject, Key: s.ProjectKey, Cause: err}
+	}
+	return &ScopeNotFoundError{Kind: ScopeOrganization, Key: s.Organization, Cause: err}
 }
 
 // PermissionPrincipal is the group or the user that holds permissions. Name is
@@ -83,7 +93,7 @@ func (c *Client) GetPermissions(ctx context.Context, scope PermissionScope, prin
 	}
 	entries, err := c.listPermissions(ctx, "/api/permissions/"+principal.kind()+"s", params)
 	if errors.Is(err, ErrNotFound) {
-		return nil, fmt.Errorf("%w: %q: %s", ErrOrganizationNotFound, scope.Organization, err)
+		return nil, scope.notFound(err)
 	}
 	if err != nil {
 		return nil, fmt.Errorf("cannot read the permissions of %s %q: %w", principal.kind(), principal.Name, err)
@@ -147,6 +157,8 @@ func (c *Client) changePermission(ctx context.Context, action string, scope Perm
 	switch {
 	case err == nil:
 		return nil
+	case errors.Is(err, ErrNotFound) && isProjectNotFound(err, scope):
+		return scope.notFound(err)
 	case errors.Is(err, ErrNotFound):
 		return fmt.Errorf("%s %q was not found: %w", principal.kind(), principal.Name, err)
 	case errors.As(err, &apiErr) && apiErr.StatusCode == http.StatusBadRequest && isLastAdminMessage(apiErr.Messages):
@@ -154,6 +166,19 @@ func (c *Client) changePermission(ctx context.Context, action string, scope Perm
 	default:
 		return err
 	}
+}
+
+// isProjectNotFound tells a missing project from a missing organization or
+// principal. All of them answer 404, and only a missing project answers
+// "Project key '<key>' not found".
+func isProjectNotFound(err error, scope PermissionScope) bool {
+	var apiErr *APIError
+	if scope.ProjectKey == "" || !errors.As(err, &apiErr) {
+		return false
+	}
+	return slices.ContainsFunc(apiErr.Messages, func(message string) bool {
+		return strings.HasPrefix(message, "Project key ")
+	})
 }
 
 // isLastAdminMessage matches "Last user with permission 'admin'. ..." and
