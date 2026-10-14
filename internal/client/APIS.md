@@ -27,10 +27,16 @@ The read endpoints list the groups or the organization members, also the ones
 without permissions. `q` keeps the names and logins that hold the value (for
 users, also the display names), so the client reads every page and matches
 the exact name. The server refuses a `q` shorter than 3 characters, so the
-client then omits `q`. It also refuses a `ps` above 100. A 404 on a read
-means that the organization is missing. A permission change shows in the next
-read. A scope can name an organization or a project, so the same operations
-can serve project permissions later.
+client then omits `q`. It also refuses a `ps` above 100. A permission change
+shows in the next read.
+
+A scope names an organization, or a project with `projectKey`. The project
+permissions use the same endpoints. A 404 means that the organization is
+missing (`No organization with key '<key>'`), or with `projectKey`, that the
+project is missing (`Project key '<key>' not found`). The client tells them
+apart by the message. On a public project, the server answers 204 to a grant
+of `user` or `codeviewer` but does not store it. The provider reads the
+project visibility with `GetProject` before it sends these grants.
 
 ## Groups (`groups.go`)
 

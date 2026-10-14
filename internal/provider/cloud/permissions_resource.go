@@ -48,6 +48,9 @@ type permissionsResource[M any, P permissionsModelPointer[M]] struct {
 	scopeAttributes []string
 	// typeSuffix follows the provider type name, for example "_cloud_project_permissions".
 	typeSuffix string
+	// checkApply, when set, can refuse the permissions that create or update
+	// would add, before any change is sent.
+	checkApply func(ctx context.Context, c *client.Client, scope client.PermissionScope, adds []string) diag.Diagnostics
 }
 
 // noun names the managed grants in diagnostics, for example "project permissions".
@@ -101,6 +104,13 @@ func (r *permissionsResource[M, P]) apply(ctx context.Context, planned tfsdk.Pla
 		r.addReadError(diagnostics, err, model)
 		return
 	}
+	if r.checkApply != nil {
+		adds, _ := permissionDiff(current, desired)
+		diagnostics.Append(r.checkApply(ctx, r.client, model.scope(), adds)...)
+		if diagnostics.HasError() {
+			return
+		}
+	}
 	if err := r.applyDiff(ctx, model, current, desired); err != nil {
 		diagnostics.AddError("Cannot change "+r.noun(), err.Error())
 		return
@@ -119,11 +129,12 @@ func (r *permissionsResource[M, P]) Read(ctx context.Context, req resource.ReadR
 	}
 	model := P(&state)
 	current, err := r.client.GetPermissions(ctx, model.scope(), model.principal())
+	var missing *client.ScopeNotFoundError
 	switch {
-	case errors.Is(err, client.ErrOrganizationNotFound):
+	case errors.As(err, &missing):
 		resp.Diagnostics.AddWarning(
-			"The organization "+model.scope().Organization+" was not found",
-			"Terraform removes the permissions from the state. The organization was deleted, or "+
+			"The "+missing.Kind+" "+missing.Key+" was not found",
+			"Terraform removes the permissions from the state. The "+missing.Kind+" was deleted, or "+
 				"the token cannot read it any more.",
 		)
 		resp.State.RemoveResource(ctx)
@@ -153,7 +164,8 @@ func (r *permissionsResource[M, P]) Delete(ctx context.Context, req resource.Del
 	}
 	model := P(&state)
 	current, err := r.client.GetPermissions(ctx, model.scope(), model.principal())
-	if errors.Is(err, client.ErrNotFound) || errors.Is(err, client.ErrOrganizationNotFound) {
+	var missing *client.ScopeNotFoundError
+	if errors.Is(err, client.ErrNotFound) || errors.As(err, &missing) {
 		return
 	}
 	if err != nil {
@@ -275,9 +287,10 @@ func permissionDiff(current, desired []string) (adds, removes []string) {
 }
 
 func permissionReadDetail(err error, scope client.PermissionScope, principal client.PermissionPrincipal) string {
+	var missing *client.ScopeNotFoundError
 	switch {
-	case errors.Is(err, client.ErrOrganizationNotFound):
-		return "The organization " + scope.Organization + " was not found. Check the key, and check that the token can read the organization."
+	case errors.As(err, &missing):
+		return "The " + missing.Kind + " " + missing.Key + " was not found. Check the key, and check that the token can read the " + missing.Kind + "."
 	case errors.Is(err, client.ErrNotFound):
 		if principal.Group {
 			return "No group " + principal.Name + " is in the organization " + scope.Organization + ". The name must match exactly, with the same case."

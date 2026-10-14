@@ -18,6 +18,45 @@ var ErrNotFound = errors.New("not found")
 // entity that the organization does not hold.
 var ErrOrganizationNotFound = errors.New("organization not found")
 
+// ErrProjectNotFound reports that a call inside a project answered 404 because
+// the project does not exist, or the token cannot read it. It does not match
+// ErrNotFound or ErrOrganizationNotFound.
+var ErrProjectNotFound = errors.New("project not found")
+
+// Scope kinds of a ScopeNotFoundError.
+const (
+	ScopeOrganization = "organization"
+	ScopeProject      = "project"
+)
+
+// ScopeNotFoundError reports which part of a scope answered 404. It matches
+// ErrOrganizationNotFound or ErrProjectNotFound, after its Kind, and not
+// ErrNotFound.
+type ScopeNotFoundError struct {
+	// Kind is ScopeOrganization or ScopeProject.
+	Kind string
+	// Key is the key of the organization or of the project.
+	Key string
+	// Cause is the error of the call.
+	Cause error
+}
+
+func (e *ScopeNotFoundError) Error() string {
+	return fmt.Sprintf("%s not found: %q: %s", e.Kind, e.Key, e.Cause)
+}
+
+// Is makes errors.Is match the sentinel of the kind.
+func (e *ScopeNotFoundError) Is(target error) bool {
+	switch target {
+	case ErrOrganizationNotFound:
+		return e.Kind == ScopeOrganization
+	case ErrProjectNotFound:
+		return e.Kind == ScopeProject
+	default:
+		return false
+	}
+}
+
 // APIError is a response with a status outside the 2xx range.
 type APIError struct {
 	StatusCode int
