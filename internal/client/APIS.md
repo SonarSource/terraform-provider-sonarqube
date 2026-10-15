@@ -38,6 +38,40 @@ apart by the message. On a public project, the server answers 204 to a grant
 of `user` or `codeviewer` but does not store it. The provider reads the
 project visibility with `GetProject` before it sends these grants.
 
+## Permission templates (`permission_templates.go`)
+
+| Function | Endpoint | Surface | Public or internal |
+|---|---|---|---|
+| `CreatePermissionTemplate` | `POST {url}/api/permissions/create_template` | Web API v1 | [Public](https://sonarcloud.io/web_api/api/permissions/create_template) |
+| `UpdatePermissionTemplate` | `POST {url}/api/permissions/update_template` | Web API v1 | [Public](https://sonarcloud.io/web_api/api/permissions/update_template) |
+| `DeletePermissionTemplate` | `POST {url}/api/permissions/delete_template` | Web API v1 | [Public](https://sonarcloud.io/web_api/api/permissions/delete_template) |
+| `GetPermissionTemplate`, `FindPermissionTemplateID` | `GET {url}/api/permissions/search_templates?organization=` | Web API v1 | [Public](https://sonarcloud.io/web_api/api/permissions/search_templates) |
+| `GetPermissionTemplate` | `GET {url}/api/permissions/template_groups?organization=&templateId=&p=&ps=` | Web API v1 | Internal |
+| `GetPermissionTemplate` | `GET {url}/api/permissions/template_users?organization=&templateId=&p=&ps=` | Web API v1 | Internal |
+| `AddPermissionTemplateGrant` | `POST {url}/api/permissions/add_group_to_template` | Web API v1 | [Public](https://sonarcloud.io/web_api/api/permissions/add_group_to_template) |
+| `AddPermissionTemplateGrant` | `POST {url}/api/permissions/add_user_to_template` | Web API v1 | [Public](https://sonarcloud.io/web_api/api/permissions/add_user_to_template) |
+| `AddPermissionTemplateGrant` | `POST {url}/api/permissions/add_project_creator_to_template` | Web API v1 | [Public](https://sonarcloud.io/web_api/api/permissions/add_project_creator_to_template) |
+| `RemovePermissionTemplateGrant` | `POST {url}/api/permissions/remove_group_from_template` | Web API v1 | [Public](https://sonarcloud.io/web_api/api/permissions/remove_group_from_template) |
+| `RemovePermissionTemplateGrant` | `POST {url}/api/permissions/remove_user_from_template` | Web API v1 | [Public](https://sonarcloud.io/web_api/api/permissions/remove_user_from_template) |
+| `RemovePermissionTemplateGrant` | `POST {url}/api/permissions/remove_project_creator_from_template` | Web API v1 | [Public](https://sonarcloud.io/web_api/api/permissions/remove_project_creator_from_template) |
+
+A template has a string id. `search_templates` has no pages and gives all
+the templates of the organization. It shows the grants of groups and users
+only as counts, and the project creator grants as `withProjectCreator` on
+each permission. `template_groups` and `template_users` list all the groups,
+the Anyone group (without an id) and the organization members, also the ones
+without permissions, so the client keeps only the ones that have a
+permission. They refuse a `ps` above 100.
+
+`update_template` keeps a parameter that is not sent, so the client sends
+each one, and an empty value removes the description or the pattern. A
+template name is unique in an organization without regard to case. The
+grant changes are idempotent. A user must be a member of the organization.
+On an organization without the Team or the Enterprise plan, create and the
+grant changes answer 403 `Organization '<key>' is not allowed to use custom
+permission templates`. The server refuses to delete the default template
+(400).
+
 ## Groups (`groups.go`)
 
 | Function | Endpoint | Surface | Public or internal |
