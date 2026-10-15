@@ -11,10 +11,19 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
+	"github.com/hashicorp/terraform-plugin-framework/types"
 
 	"github.com/SonarSource/terraform-provider-sonarqube/internal/client"
 	"github.com/SonarSource/terraform-provider-sonarqube/internal/provider/providertest"
 )
+
+// organizationDefaultQualityGateModel reads the state of the resource in the
+// tests.
+type organizationDefaultQualityGateModel struct {
+	ID            types.String `tfsdk:"id"`
+	Organization  types.String `tfsdk:"organization"`
+	QualityGateID types.String `tfsdk:"quality_gate_id"`
+}
 
 // fakeDefaultGateInstance holds the organization my-org and the gates
 // gate-a and gate-b.
@@ -130,7 +139,7 @@ func TestOrganizationDefaultQualityGateResourceSchema(t *testing.T) {
 func TestOrganizationDefaultQualityGateResourceConfigureNeedsCloud(t *testing.T) {
 	t.Parallel()
 
-	r := &organizationDefaultQualityGateResource{}
+	r := &organizationDefaultResource{organizationDefault: defaultQualityGate}
 	resp := &resource.ConfigureResponse{}
 	r.Configure(context.Background(), resource.ConfigureRequest{ProviderData: client.New(client.Config{
 		URL: "https://dev.example.io", Product: client.ProductServer,
@@ -145,7 +154,7 @@ func TestOrganizationDefaultQualityGateResourceLifecycle(t *testing.T) {
 	t.Parallel()
 
 	instance := newFakeDefaultGateInstance()
-	r := &organizationDefaultQualityGateResource{client: instance.start(t)}
+	r := &organizationDefaultResource{client: instance.start(t), organizationDefault: defaultQualityGate}
 	s := defaultGateResourceSchema(t)
 
 	created := &resource.CreateResponse{State: providertest.EmptyState(t, s)}
@@ -201,7 +210,7 @@ func TestOrganizationDefaultQualityGateResourceReadReportsDrift(t *testing.T) {
 
 	instance := newFakeDefaultGateInstance()
 	instance.defaultGate = "gate-b"
-	r := &organizationDefaultQualityGateResource{client: instance.start(t)}
+	r := &organizationDefaultResource{client: instance.start(t), organizationDefault: defaultQualityGate}
 	s := defaultGateResourceSchema(t)
 	state := defaultGateState(t, s, "gate-a")
 
@@ -220,7 +229,7 @@ func TestOrganizationDefaultQualityGateResourceReadOfAMissingOrganization(t *tes
 
 	instance := newFakeDefaultGateInstance()
 	instance.organizationExists = false
-	r := &organizationDefaultQualityGateResource{client: instance.start(t)}
+	r := &organizationDefaultResource{client: instance.start(t), organizationDefault: defaultQualityGate}
 	s := defaultGateResourceSchema(t)
 	state := defaultGateState(t, s, "gate-a")
 
@@ -244,7 +253,7 @@ func TestOrganizationDefaultQualityGateResourceReadRefusesAnEmptyDefault(t *test
 
 	instance := newFakeDefaultGateInstance()
 	instance.defaultGate = ""
-	r := &organizationDefaultQualityGateResource{client: instance.start(t)}
+	r := &organizationDefaultResource{client: instance.start(t), organizationDefault: defaultQualityGate}
 	s := defaultGateResourceSchema(t)
 	state := defaultGateState(t, s, "gate-a")
 
@@ -286,7 +295,7 @@ func TestOrganizationDefaultQualityGateResourceCreateFailures(t *testing.T) {
 
 			instance := newFakeDefaultGateInstance()
 			test.prepare(instance)
-			r := &organizationDefaultQualityGateResource{client: instance.start(t)}
+			r := &organizationDefaultResource{client: instance.start(t), organizationDefault: defaultQualityGate}
 			s := defaultGateResourceSchema(t)
 
 			resp := &resource.CreateResponse{State: providertest.EmptyState(t, s)}
@@ -304,7 +313,7 @@ func TestOrganizationDefaultQualityGateResourceImportState(t *testing.T) {
 
 	s := defaultGateResourceSchema(t)
 	resp := &resource.ImportStateResponse{State: providertest.EmptyState(t, s)}
-	NewOrganizationDefaultQualityGateResource().(*organizationDefaultQualityGateResource).ImportState(
+	NewOrganizationDefaultQualityGateResource().(*organizationDefaultResource).ImportState(
 		context.Background(), resource.ImportStateRequest{ID: "my-org"}, resp)
 	if resp.Diagnostics.HasError() {
 		t.Fatal(resp.Diagnostics)
