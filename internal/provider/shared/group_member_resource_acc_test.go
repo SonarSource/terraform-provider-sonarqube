@@ -103,7 +103,7 @@ func (m groupMembers) member(group string) string {
 // can show the old members for some seconds after a change.
 func (m groupMembers) isMember(group string, want bool) resource.TestCheckFunc {
 	return func(*terraform.State) error {
-		return waitFor(func() (bool, error) {
+		return acctest.WaitFor(func() (bool, error) {
 			member, err := acctest.Client().IsGroupMember(m.t.Context(), m.organization, group, m.login)
 			return err == nil && member == want, err
 		})
@@ -113,7 +113,7 @@ func (m groupMembers) isMember(group string, want bool) resource.TestCheckFunc {
 // goneFrom waits until the user is not in the group. A deleted group holds
 // nobody.
 func (m groupMembers) goneFrom(group string) error {
-	return waitFor(func() (bool, error) {
+	return acctest.WaitFor(func() (bool, error) {
 		member, err := acctest.Client().IsGroupMember(m.t.Context(), m.organization, group, m.login)
 		if errors.Is(err, client.ErrNotFound) {
 			return true, nil

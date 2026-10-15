@@ -9,6 +9,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/hashicorp/terraform-plugin-framework/providerserver"
 	"github.com/hashicorp/terraform-plugin-go/tfprotov6"
@@ -190,3 +191,24 @@ func PreCheckBinding(t *testing.T) {
 // project that the test makes is public, and the server refuses to bind a
 // public project to a private repository.
 const EnvTestRepository = "SONARQUBE_TEST_GITHUB_REPOSITORY"
+
+// WaitFor calls check each second until it reports true, an error, or 60
+// seconds pass. Some lists of SonarQube Cloud show a change only after some
+// seconds.
+func WaitFor(check func() (bool, error)) error {
+	return waitFor(check, 60*time.Second, time.Second)
+}
+
+func waitFor(check func() (bool, error), timeout, interval time.Duration) error {
+	deadline := time.Now().Add(timeout)
+	for {
+		ok, err := check()
+		if err != nil || ok {
+			return err
+		}
+		if time.Now().After(deadline) {
+			return fmt.Errorf("the API did not show the expected state in %s", timeout)
+		}
+		time.Sleep(interval)
+	}
+}

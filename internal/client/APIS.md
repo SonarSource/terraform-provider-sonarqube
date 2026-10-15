@@ -45,7 +45,8 @@ project visibility with `GetProject` before it sends these grants.
 | `CreatePermissionTemplate` | `POST {url}/api/permissions/create_template` | Web API v1 | [Public](https://sonarcloud.io/web_api/api/permissions/create_template) |
 | `UpdatePermissionTemplate` | `POST {url}/api/permissions/update_template` | Web API v1 | [Public](https://sonarcloud.io/web_api/api/permissions/update_template) |
 | `DeletePermissionTemplate` | `POST {url}/api/permissions/delete_template` | Web API v1 | [Public](https://sonarcloud.io/web_api/api/permissions/delete_template) |
-| `GetPermissionTemplate`, `FindPermissionTemplateID` | `GET {url}/api/permissions/search_templates?organization=` | Web API v1 | [Public](https://sonarcloud.io/web_api/api/permissions/search_templates) |
+| `GetPermissionTemplate`, `FindPermissionTemplateID`, `GetDefaultPermissionTemplateID`, `SetDefaultPermissionTemplate` | `GET {url}/api/permissions/search_templates?organization=` | Web API v1 | [Public](https://sonarcloud.io/web_api/api/permissions/search_templates) |
+| `SetDefaultPermissionTemplate` | `POST {url}/api/permissions/set_default_template` | Web API v1 | [Public](https://sonarcloud.io/web_api/api/permissions/set_default_template) |
 | `GetPermissionTemplate` | `GET {url}/api/permissions/template_groups?organization=&templateId=&p=&ps=` | Web API v1 | Internal |
 | `GetPermissionTemplate` | `GET {url}/api/permissions/template_users?organization=&templateId=&p=&ps=` | Web API v1 | Internal |
 | `AddPermissionTemplateGrant` | `POST {url}/api/permissions/add_group_to_template` | Web API v1 | [Public](https://sonarcloud.io/web_api/api/permissions/add_group_to_template) |
@@ -71,6 +72,15 @@ On an organization without the Team or the Enterprise plan, create and the
 grant changes answer 403 `Organization '<key>' is not allowed to use custom
 permission templates`. The server refuses to delete the default template
 (400).
+
+`search_templates` gives the default in `defaultTemplates`, with the
+qualifier `TRK` for projects. SonarQube Cloud has no applications or
+portfolios there. `set_default_template` takes `TRK` when no qualifier is
+sent. No web service removes a default; only a different template can take
+its place. `set_default_template` finds the template by its id in any
+organization and changes the default of the organization of the template,
+so `SetDefaultPermissionTemplate` first checks that the template is in the
+organization.
 
 ## Groups (`groups.go`)
 

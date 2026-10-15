@@ -194,7 +194,7 @@ func (p permissionTemplates) gone(name string) error {
 // groupGone waits until the group list does not show the group, because the
 // list can show a deleted group for some seconds.
 func (p permissionTemplates) groupGone() error {
-	return waitFor(func() (bool, error) {
+	return acctest.WaitFor(func() (bool, error) {
 		_, err := acctest.Client().FindGroupByName(p.t.Context(), p.organization, p.group)
 		if errors.Is(err, client.ErrNotFound) {
 			return true, nil
