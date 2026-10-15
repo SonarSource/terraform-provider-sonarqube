@@ -221,11 +221,16 @@ func (c *Client) get(ctx context.Context, path string, params url.Values, out an
 // in Web API v2. It discards the answer, so a caller that needs the entity
 // reads the entity back itself.
 func (c *Client) post(ctx context.Context, path string, params url.Values) error {
+	return c.postFor(ctx, path, params, nil)
+}
+
+// postFor is post that decodes the answer into out.
+func (c *Client) postFor(ctx context.Context, path string, params url.Values, out any) error {
 	return c.send(ctx, http.MethodPost, c.url+path, nil, strings.NewReader(params.Encode()),
 		func(req *http.Request) {
 			req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 			c.webServiceAuth(req)
-		}, nil)
+		}, out)
 }
 
 // postIgnoringNotFound calls a write action and accepts an entity that is
