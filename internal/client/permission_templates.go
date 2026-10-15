@@ -110,6 +110,10 @@ func (c *Client) DeletePermissionTemplate(ctx context.Context, organization, id 
 
 type permissionTemplateList struct {
 	PermissionTemplates []permissionTemplateAnswer `json:"permissionTemplates"`
+	DefaultTemplates    []struct {
+		TemplateID string `json:"templateId"`
+		Qualifier  string `json:"qualifier"`
+	} `json:"defaultTemplates"`
 }
 
 // listPermissionTemplates reads all the templates of the organization. The web
@@ -187,6 +191,37 @@ func (c *Client) FindPermissionTemplateID(ctx context.Context, organization, nam
 		}
 	}
 	return "", ErrNotFound
+}
+
+// GetDefaultPermissionTemplateID returns the ID of the default template for
+// projects, which has the qualifier TRK.
+func (c *Client) GetDefaultPermissionTemplateID(ctx context.Context, organization string) (string, error) {
+	list, err := c.listPermissionTemplates(ctx, organization)
+	if err != nil {
+		return "", err
+	}
+	for _, defaultTemplate := range list.DefaultTemplates {
+		if defaultTemplate.Qualifier == "TRK" {
+			return defaultTemplate.TemplateID, nil
+		}
+	}
+	return "", nil
+}
+
+// SetDefaultPermissionTemplate makes the template the default for projects.
+// The web service finds the template by its id in any organization and
+// changes the default of the organization of the template, so a template that
+// is not in the organization is ErrNotFound here. The API cannot remove a
+// default. Only a different template can take its place.
+func (c *Client) SetDefaultPermissionTemplate(ctx context.Context, organization, id string) error {
+	list, err := c.listPermissionTemplates(ctx, organization)
+	if err != nil {
+		return err
+	}
+	if _, err := findByKey(list.PermissionTemplates, id, func(t permissionTemplateAnswer) string { return t.ID }); err != nil {
+		return err
+	}
+	return permissionTemplateError(c.post(ctx, "/api/permissions/set_default_template", templateParameters(organization, id)), organization)
 }
 
 // AddPermissionTemplateGrant makes the template give the grant. A grant that

@@ -1,6 +1,11 @@
 package acctest
 
-import "testing"
+import (
+	"errors"
+	"strings"
+	"testing"
+	"time"
+)
 
 // The variable holds the names of the instances, so this repository holds
 // none.
@@ -70,5 +75,30 @@ func TestRequireSafeTargetWithNoAllowedHosts(t *testing.T) {
 	}
 	if err := RequireSafeTarget("http://localhost:9000"); err != nil {
 		t.Errorf("a local instance was refused: %v", err)
+	}
+}
+
+func TestWaitForReturnsWhenCheckIsDone(t *testing.T) {
+	calls := 0
+	err := WaitFor(func() (bool, error) {
+		calls++
+		return calls == 2, nil
+	})
+	if err != nil || calls != 2 {
+		t.Fatalf("calls = %d, err = %v", calls, err)
+	}
+}
+
+func TestWaitForReturnsTheErrorOfCheck(t *testing.T) {
+	failure := errors.New("refused")
+	if err := WaitFor(func() (bool, error) { return false, failure }); !errors.Is(err, failure) {
+		t.Fatalf("err = %v", err)
+	}
+}
+
+func TestWaitForStopsAfterTimeout(t *testing.T) {
+	err := waitFor(func() (bool, error) { return false, nil }, time.Millisecond, time.Millisecond)
+	if err == nil || !strings.Contains(err.Error(), "did not show the expected state") {
+		t.Fatalf("err = %v", err)
 	}
 }

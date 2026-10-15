@@ -256,3 +256,67 @@ func TestAddPermissionTemplateGrantExplainsNonMember(t *testing.T) {
 		t.Fatalf("err = %v", err)
 	}
 }
+
+func TestGetDefaultPermissionTemplateID(t *testing.T) {
+	t.Parallel()
+	id, err := newTestClient(templateServer(t, nil)).GetDefaultPermissionTemplateID(t.Context(), "my-org")
+	if err != nil || id != "template-1" {
+		t.Fatalf("id = %q, err = %v", id, err)
+	}
+}
+
+func TestSetDefaultPermissionTemplateChecksOrganization(t *testing.T) {
+	t.Parallel()
+	var calls []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if err := r.ParseForm(); err != nil {
+			t.Fatal(err)
+		}
+		calls = append(calls, r.URL.Path+" "+r.Form.Get("templateId"))
+		if r.URL.Path == "/api/permissions/search_templates" {
+			fmt.Fprint(w, testTemplateList)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	t.Cleanup(srv.Close)
+	c := newTestClient(srv)
+	if err := c.SetDefaultPermissionTemplate(t.Context(), "my-org", "template-2"); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.SetDefaultPermissionTemplate(t.Context(), "my-org", "other-org-template"); !errors.Is(err, ErrNotFound) {
+		t.Errorf("a template of another organization: err = %v", err)
+	}
+	want := []string{"/api/permissions/search_templates ", "/api/permissions/set_default_template template-2", "/api/permissions/search_templates "}
+	if !reflect.DeepEqual(calls, want) {
+		t.Errorf("calls = %v", calls)
+	}
+}
+
+func TestGetDefaultPermissionTemplateIDWithoutProjectDefault(t *testing.T) {
+	t.Parallel()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		fmt.Fprint(w, `{"permissionTemplates":[],"defaultTemplates":[{"templateId":"template-9","qualifier":"VW"}]}`)
+	}))
+	t.Cleanup(srv.Close)
+	id, err := newTestClient(srv).GetDefaultPermissionTemplateID(t.Context(), "my-org")
+	if err != nil || id != "" {
+		t.Fatalf("id = %q, err = %v", id, err)
+	}
+}
+
+func TestDefaultPermissionTemplateReportsMissingOrganization(t *testing.T) {
+	t.Parallel()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+		fmt.Fprint(w, `{"errors":[{"msg":"No organization with key 'my-org'"}]}`)
+	}))
+	t.Cleanup(srv.Close)
+	c := newTestClient(srv)
+	if _, err := c.GetDefaultPermissionTemplateID(t.Context(), "my-org"); !errors.Is(err, ErrOrganizationNotFound) {
+		t.Errorf("get: err = %v", err)
+	}
+	if err := c.SetDefaultPermissionTemplate(t.Context(), "my-org", "template-2"); !errors.Is(err, ErrOrganizationNotFound) {
+		t.Errorf("set: err = %v", err)
+	}
+}

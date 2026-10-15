@@ -6,7 +6,6 @@ import (
 	"math/rand/v2"
 	"os"
 	"testing"
-	"time"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 	"github.com/hashicorp/terraform-plugin-testing/terraform"
@@ -44,7 +43,7 @@ func TestAccGroupResource(t *testing.T) {
 				return err
 			}
 			// Import finds the group by name, and the name filter has its own lag.
-			return waitFor(func() (bool, error) {
+			return acctest.WaitFor(func() (bool, error) {
 				group, err := acctest.Client().FindGroupByName(t.Context(), organization, groupName)
 				if errors.Is(err, client.ErrNotFound) {
 					return false, nil
@@ -105,27 +104,11 @@ func TestAccGroupResource(t *testing.T) {
 // organization does not hold it.
 func waitForGroup(t *testing.T, organization, id string, done func(*client.Group) bool) error {
 	t.Helper()
-	return waitFor(func() (bool, error) {
+	return acctest.WaitFor(func() (bool, error) {
 		group, err := acctest.Client().GetGroup(t.Context(), organization, id)
 		if errors.Is(err, client.ErrNotFound) {
 			group, err = nil, nil
 		}
 		return err == nil && done(group), err
 	})
-}
-
-// waitFor calls check each second until it reports true, an error, or 60
-// seconds pass.
-func waitFor(check func() (bool, error)) error {
-	deadline := time.Now().Add(60 * time.Second)
-	for {
-		ok, err := check()
-		if err != nil || ok {
-			return err
-		}
-		if time.Now().After(deadline) {
-			return fmt.Errorf("the group list did not show the expected state in 60 seconds")
-		}
-		time.Sleep(time.Second)
-	}
 }
