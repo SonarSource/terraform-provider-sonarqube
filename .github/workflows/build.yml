@@ -72,7 +72,7 @@ jobs:
 
       - name: SonarQube Cloud analysis
         if: env.SONAR_ANALYSIS_ENABLED == 'true'
-        uses: SonarSource/sonarqube-scan-action@ba9859eae8dd6bd29e412f25ddbbef3d032000f4 # v8.2.2
+        uses: SonarSource/sonarqube-scan-action@d209202bc7d53ff1cc128f7f907dac145c9d6ae9 # v8.3.0
         env:
           # The `|| '{}'` is necessary. GitHub evaluates the env block of a
           # step even when the condition of that step is false. On a pull
@@ -93,7 +93,7 @@ jobs:
       actions: read
     runs-on: sonar-xs
     steps:
-      - uses: SonarSource/release-github-actions/notify-failure@279e14e6c7636163516a5ccb93b0e29005bbd776 # v1.9.15
+      - uses: SonarSource/release-github-actions/notify-failure@e9a93a9d84a482a3a90d750cd3079d645b7d423a # 1.9.16
         with:
           project-name: terraform-provider-sonarqube
           slack-channel: squad-dopex-on-call
