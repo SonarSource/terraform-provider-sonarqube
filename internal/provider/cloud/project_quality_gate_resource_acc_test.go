@@ -29,7 +29,7 @@ const projectQualityGateAddress = "sonarqube_cloud_project_quality_gate.test"
 func TestAccProjectQualityGateResource(t *testing.T) {
 	organization := os.Getenv(acctest.EnvTestOrganization)
 	suffix := rand.Uint32()
-	projectKey := fmt.Sprintf("%s_%s%d", organization, acctest.KeyPrefix, suffix)
+	projectKey := fmt.Sprintf("%s%d", acctest.KeyPrefix, suffix)
 
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { acctest.PreCheck(t) },
@@ -153,14 +153,14 @@ resource "sonarqube_project" "test" {
 
 resource "sonarqube_cloud_quality_gate" "first" {
   organization = %[1]q
-  name         = "Terraform project gate first %[3]d"
+  name         = "%[4]sgate-first-%[3]d"
 }
 
 resource "sonarqube_cloud_quality_gate" "second" {
   organization = %[1]q
-  name         = "Terraform project gate second %[3]d"
+  name         = "%[4]sgate-second-%[3]d"
 }
-`, organization, projectKey, suffix)
+`, organization, projectKey, suffix, acctest.KeyPrefix)
 	if !assign {
 		return config
 	}

@@ -107,6 +107,25 @@ and four more variables:
   organization at the end, which removes the binding, so one repository
   serves every run.
 
+Each test gives the prefix `acctest.KeyPrefix` (`tf-acc-test-`) to what it
+makes. When a run stops before its cleanup, the sweepers in
+`internal/acctest/sweep.go` delete what starts with the prefix: the
+organizations of the token user, and the projects, groups, permission
+templates and quality gates of `SONARQUBE_TEST_ORGANIZATION`. They never
+delete `SONARQUBE_TEST_ORGANIZATION` itself. Run them with the same variables:
+
+```bash
+go test ./internal/provider/cloud -v -sweep=all -sweep-allow-failures
+```
+
+`-sweep-allow-failures` lets each sweeper run when another one fails. A
+sweeper keeps a default template or a default gate, because the server cannot
+delete it, and logs a warning. Run them on one package only, because the
+sweepers are the same in each package that imports `acctest`. `-sweep` acts
+only where `TestMain` calls `resource.TestMain`. A package without that
+`TestMain` ignores the flag, and `go test` refuses it in a package that does
+not import `helper/resource`.
+
 When imports or dependencies change, run `go mod tidy` and review both
 `go.mod` and `go.sum`.
 

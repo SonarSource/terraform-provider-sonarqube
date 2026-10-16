@@ -3,6 +3,7 @@ package client
 import (
 	"context"
 	"net/url"
+	"strconv"
 )
 
 // Project is a SonarQube Cloud project.
@@ -59,4 +60,28 @@ func (c *Client) DeleteProject(ctx context.Context, key string) error {
 	params := url.Values{}
 	params.Set("project", key)
 	return c.postIgnoringNotFound(ctx, "/api/projects/delete", params)
+}
+
+// SearchProjectKeys returns the keys of the projects of an organization whose
+// key or name holds text.
+func (c *Client) SearchProjectKeys(ctx context.Context, organization, text string) ([]string, error) {
+	return collectPages("project", func(page int) ([]string, int, error) {
+		params := url.Values{"organization": {organization}, "q": {text}, "p": {strconv.Itoa(page)}, "ps": {"500"}}
+		var answer struct {
+			Components []struct {
+				Key string `json:"key"`
+			} `json:"components"`
+			Paging struct {
+				Total int `json:"total"`
+			} `json:"paging"`
+		}
+		if err := c.get(ctx, "/api/projects/search", params, &answer); err != nil {
+			return nil, 0, err
+		}
+		keys := make([]string, len(answer.Components))
+		for i, project := range answer.Components {
+			keys[i] = project.Key
+		}
+		return keys, answer.Paging.Total, nil
+	})
 }

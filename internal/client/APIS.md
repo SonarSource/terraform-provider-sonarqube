@@ -45,7 +45,7 @@ project visibility with `GetProject` before it sends these grants.
 | `CreatePermissionTemplate` | `POST {url}/api/permissions/create_template` | Web API v1 | [Public](https://sonarcloud.io/web_api/api/permissions/create_template) |
 | `UpdatePermissionTemplate` | `POST {url}/api/permissions/update_template` | Web API v1 | [Public](https://sonarcloud.io/web_api/api/permissions/update_template) |
 | `DeletePermissionTemplate` | `POST {url}/api/permissions/delete_template` | Web API v1 | [Public](https://sonarcloud.io/web_api/api/permissions/delete_template) |
-| `GetPermissionTemplate`, `FindPermissionTemplateID`, `GetDefaultPermissionTemplateID`, `SetDefaultPermissionTemplate` | `GET {url}/api/permissions/search_templates?organization=` | Web API v1 | [Public](https://sonarcloud.io/web_api/api/permissions/search_templates) |
+| `GetPermissionTemplate`, `FindPermissionTemplateID`, `GetDefaultPermissionTemplateID`, `SetDefaultPermissionTemplate`, `ListPermissionTemplateNames` | `GET {url}/api/permissions/search_templates?organization=` | Web API v1 | [Public](https://sonarcloud.io/web_api/api/permissions/search_templates) |
 | `SetDefaultPermissionTemplate` | `POST {url}/api/permissions/set_default_template` | Web API v1 | [Public](https://sonarcloud.io/web_api/api/permissions/set_default_template) |
 | `GetPermissionTemplate` | `GET {url}/api/permissions/template_groups?organization=&templateId=&p=&ps=` | Web API v1 | Internal |
 | `GetPermissionTemplate` | `GET {url}/api/permissions/template_users?organization=&templateId=&p=&ps=` | Web API v1 | Internal |
@@ -88,7 +88,7 @@ organization.
 |---|---|---|---|
 | `CreateGroup` | `POST {api_url}/users/groups` | Web API v2 | [Public](https://api-docs.sonarsource.com/sonarqube-cloud/default/public-externalusers-0-0#/groups/createGroup) |
 | `GetGroup` | `GET {api_url}/users/groups?organizationIds=&ids=` | Web API v2 | [Public](https://api-docs.sonarsource.com/sonarqube-cloud/default/public-externalusers-0-0#/groups/searchGroups) |
-| `FindGroupByName` | `GET {api_url}/users/groups?organizationIds=&q=&pageIndex=&pageSize=` | Web API v2 | [Public](https://api-docs.sonarsource.com/sonarqube-cloud/default/public-externalusers-0-0#/groups/searchGroups) |
+| `FindGroupByName`, `SearchGroups` | `GET {api_url}/users/groups?organizationIds=&q=&pageIndex=&pageSize=` | Web API v2 | [Public](https://api-docs.sonarsource.com/sonarqube-cloud/default/public-externalusers-0-0#/groups/searchGroups) |
 | `UpdateGroup` | `PATCH {api_url}/users/groups/{id}` | Web API v2 | [Public](https://api-docs.sonarsource.com/sonarqube-cloud/default/public-externalusers-0-0#/groups/patchGroup) |
 | `DeleteGroup` | `DELETE {api_url}/users/groups/{id}` | Web API v2 | [Public](https://api-docs.sonarsource.com/sonarqube-cloud/default/public-externalusers-0-0#/groups/deleteGroup) |
 
@@ -153,6 +153,7 @@ root role, so the client does not use them.
 | `UpdateOrganization` | `POST {url}/api/organizations/update` | Web API v1 | Internal |
 | `UpdateOrganizationKey` | `POST {url}/api/organizations/update_key` | Web API v1 | Internal |
 | `DeleteOrganization` | `POST {url}/api/organizations/delete` | Web API v1 | Internal |
+| `ListMemberOrganizationKeys` | `GET {url}/api/organizations/search?member=true&p=&ps=` | Web API v1 | [Public](https://sonarcloud.io/web_api/api/organizations/search) |
 
 Web API v2 has no create, update, rename or delete for an organization today,
 so every write goes through the internal v1 surface.
@@ -211,6 +212,7 @@ removes the setting from state.
 | `GetProject` | `GET {api_url}/projects/projects?keys=&organizationIds=` | Web API v2 | [Public](https://api-docs.sonarsource.com/sonarqube-cloud/default/public-projectsexternal-0-0-1#/Projects/getProjects) |
 | `CreateProject` | `POST {url}/api/projects/create` | Web API v1 | [Public](https://sonarcloud.io/web_api/api/projects/create) |
 | `DeleteProject` | `POST {url}/api/projects/delete` | Web API v1 | [Public](https://sonarcloud.io/web_api/api/projects/delete) |
+| `SearchProjectKeys` | `GET {url}/api/projects/search?organization=&q=&p=&ps=` | Web API v1 | [Public](https://sonarcloud.io/web_api/api/projects/search) |
 
 `GetProject` first reads the organization to get its UUID, because the list call
 filters by UUID. A project that is missing answers 200 with an empty list.

@@ -5,6 +5,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/SonarSource/terraform-provider-sonarqube/internal/client"
 )
 
 // The variable holds the names of the instances, so this repository holds
@@ -34,6 +36,7 @@ func TestRequireSafeTarget(t *testing.T) {
 		"https://eu.test.example.com",
 		"https://another.example.net",
 		"http://localhost:9000",
+		"http://api.localhost:9000",
 		"http://127.0.0.1:9000",
 	}
 
@@ -74,6 +77,17 @@ func TestRequireSafeTargetWithNoAllowedHosts(t *testing.T) {
 		t.Error("an instance was allowed although the variable is empty")
 	}
 	if err := RequireSafeTarget("http://localhost:9000"); err != nil {
+		t.Errorf("a local instance was refused: %v", err)
+	}
+}
+
+// The client derives the Web API v2 address api.localhost from a local
+// instance, and that address is local too.
+func TestRequireSafeClientAllowsALocalInstance(t *testing.T) {
+	t.Setenv(EnvAllowedHosts, "")
+	c := client.New(client.Config{URL: "http://localhost:9000", Product: client.ProductCloud})
+
+	if err := requireSafeClient(c); err != nil {
 		t.Errorf("a local instance was refused: %v", err)
 	}
 }

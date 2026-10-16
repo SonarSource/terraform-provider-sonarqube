@@ -38,9 +38,9 @@ func TestAccOrganizationDefaultPermissionTemplateResource(t *testing.T) {
 	organization := os.Getenv(acctest.EnvTestOrganization)
 	suffix := rand.Uint32()
 	d := defaultTemplates{t: t, organization: organization,
-		group:    fmt.Sprintf("terraform-default-template-%d", suffix),
-		template: fmt.Sprintf("terraform-default-template-%d", suffix),
-		project:  fmt.Sprintf("%s_terraform-default-template-%d", organization, suffix)}
+		group:    fmt.Sprintf("%sdefault-template-%d", acctest.KeyPrefix, suffix),
+		template: fmt.Sprintf("%sdefault-template-%d", acctest.KeyPrefix, suffix),
+		project:  fmt.Sprintf("%sdefault-template-%d", acctest.KeyPrefix, suffix)}
 	d.original = d.prepare()
 
 	resource.Test(t, resource.TestCase{

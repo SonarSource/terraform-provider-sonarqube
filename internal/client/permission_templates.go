@@ -224,6 +224,20 @@ func (c *Client) SetDefaultPermissionTemplate(ctx context.Context, organization,
 	return permissionTemplateError(c.post(ctx, "/api/permissions/set_default_template", templateParameters(organization, id)), organization)
 }
 
+// ListPermissionTemplateNames returns the id and the name of each template of
+// the organization. The grants stay empty.
+func (c *Client) ListPermissionTemplateNames(ctx context.Context, organization string) ([]PermissionTemplate, error) {
+	list, err := c.listPermissionTemplates(ctx, organization)
+	if err != nil {
+		return nil, err
+	}
+	templates := make([]PermissionTemplate, len(list.PermissionTemplates))
+	for i, answer := range list.PermissionTemplates {
+		templates[i] = PermissionTemplate{ID: answer.ID, Name: answer.Name}
+	}
+	return templates, nil
+}
+
 // AddPermissionTemplateGrant makes the template give the grant. A grant that
 // is already there is success. A user must be a member of the organization.
 func (c *Client) AddPermissionTemplateGrant(ctx context.Context, organization, id string, grant TemplateGrant) error {
