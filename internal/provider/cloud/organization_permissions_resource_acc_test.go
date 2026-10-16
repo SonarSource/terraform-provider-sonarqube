@@ -17,7 +17,7 @@ import (
 
 func TestAccOrganizationPermissionsGroupResource(t *testing.T) {
 	organization := os.Getenv(acctest.EnvTestOrganization)
-	name := fmt.Sprintf("terraform-permissions-%d", rand.Uint32())
+	name := fmt.Sprintf("%spermissions-%d", acctest.KeyPrefix, rand.Uint32())
 	address := "sonarqube_cloud_organization_permissions.test"
 	api := acctest.Client()
 	config := func(permissions string) string {

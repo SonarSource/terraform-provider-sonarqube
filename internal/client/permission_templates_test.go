@@ -320,3 +320,23 @@ func TestDefaultPermissionTemplateReportsMissingOrganization(t *testing.T) {
 		t.Errorf("set: err = %v", err)
 	}
 }
+
+func TestListPermissionTemplateNames(t *testing.T) {
+	t.Parallel()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/permissions/search_templates" || r.URL.Query().Get("organization") != "my-org" {
+			t.Errorf("unexpected template search: %s?%s", r.URL.Path, r.URL.RawQuery)
+		}
+		fmt.Fprint(w, `{"permissionTemplates":[{"id":"t1","name":"tf-acc-test-1"},{"id":"t2","name":"Default template"}]}`)
+	}))
+	t.Cleanup(srv.Close)
+
+	templates, err := newTestClient(srv).ListPermissionTemplateNames(t.Context(), "my-org")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []PermissionTemplate{{ID: "t1", Name: "tf-acc-test-1"}, {ID: "t2", Name: "Default template"}}
+	if !reflect.DeepEqual(templates, want) {
+		t.Errorf("templates=%+v", templates)
+	}
+}

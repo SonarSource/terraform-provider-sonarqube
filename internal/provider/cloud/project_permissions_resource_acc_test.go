@@ -29,8 +29,8 @@ resource "sonarqube_group" "test" {
 func TestAccProjectPermissionsGroupResource(t *testing.T) {
 	organization := os.Getenv(acctest.EnvTestOrganization)
 	suffix := rand.Uint32()
-	projectKey := fmt.Sprintf("terraform-permissions-%d", suffix)
-	name := fmt.Sprintf("terraform-project-permissions-%d", suffix)
+	projectKey := fmt.Sprintf("%spermissions-%d", acctest.KeyPrefix, suffix)
+	name := fmt.Sprintf("%sproject-permissions-%d", acctest.KeyPrefix, suffix)
 	address := "sonarqube_cloud_project_permissions.test"
 	api := acctest.Client()
 	base := testAccProjectPermissionsBase(organization, projectKey, name)
@@ -100,7 +100,7 @@ func TestAccProjectPermissionsUserResource(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	projectKey := fmt.Sprintf("terraform-permissions-user-%d", rand.Uint32())
+	projectKey := fmt.Sprintf("%spermissions-user-%d", acctest.KeyPrefix, rand.Uint32())
 	address := "sonarqube_cloud_project_permissions.test"
 	scope := client.PermissionScope{Organization: organization, ProjectKey: projectKey}
 	user := client.PermissionPrincipal{Name: login}
