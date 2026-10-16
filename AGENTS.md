@@ -84,8 +84,9 @@ env -u TF_ACC go test -race ./...
 Unsetting `TF_ACC` keeps this validation independent of live acceptance
 tests, even when the variable is set in the calling shell.
 
-The acceptance tests need `TF_ACC=1`, `SONARQUBE_URL` and `SONARQUBE_TOKEN`,
-and four more variables:
+Run the acceptance tests with `make testacc`. It sets `TF_ACC=1`, runs the
+tests, and fails when a test skips, except the one that the `Makefile` names.
+It needs `SONARQUBE_URL` and `SONARQUBE_TOKEN`, and four more variables:
 
 - `SONARQUBE_TEST_ALLOWED_HOSTS`: the hosts where a test may make and delete
   an organization, separated by commas. An entry allows its sub-domains as
@@ -123,7 +124,7 @@ templates and quality gates of `SONARQUBE_TEST_ORGANIZATION`. They never
 delete `SONARQUBE_TEST_ORGANIZATION` itself. Run them with the same variables:
 
 ```bash
-go test ./internal/provider/cloud -v -sweep=all -sweep-allow-failures
+make sweep
 ```
 
 `-sweep-allow-failures` lets each sweeper run when another one fails. A

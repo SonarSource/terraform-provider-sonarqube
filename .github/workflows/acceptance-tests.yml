@@ -30,7 +30,6 @@ jobs:
       id-token: write
       contents: read
     env:
-      TF_ACC: "1"
       SONARQUBE_URL: https://sc-staging.io
       # The tests and the sweepers delete only on a host that this variable
       # names. Without it, they stop the run.
@@ -66,7 +65,7 @@ jobs:
         env:
           SONARQUBE_TOKEN: ${{ fromJSON(steps.secrets.outputs.vault).SONARQUBE_TOKEN }}
           SONARQUBE_TEST_ORGANIZATION: ${{ fromJSON(steps.secrets.outputs.vault).SONARQUBE_TEST_ORGANIZATION }}
-        run: go test ./internal/provider/cloud -count=1 -v -sweep=all -sweep-allow-failures
+        run: make sweep
 
       - name: Run the acceptance tests against SonarQube Cloud staging
         env:
@@ -74,20 +73,4 @@ jobs:
           SONARQUBE_TEST_ORGANIZATION: ${{ fromJSON(steps.secrets.outputs.vault).SONARQUBE_TEST_ORGANIZATION }}
           SONARQUBE_TEST_GITHUB_INSTALLATION_ID: ${{ fromJSON(steps.secrets.outputs.vault).SONARQUBE_TEST_GITHUB_INSTALLATION_ID }}
           SONARQUBE_TEST_GITHUB_REPOSITORY: ${{ fromJSON(steps.secrets.outputs.vault).SONARQUBE_TEST_GITHUB_REPOSITORY }}
-        # Without pipefail, tee hides the exit status of go test.
-        run: |
-          set -o pipefail
-          go test -v -count=1 -p 1 -timeout 40m -run '^TestAcc' ./internal/provider/... 2>&1 | tee acceptance-tests.log
-
-      # Go counts a skipped test as a pass. A missing secret would thus give a
-      # green run that tests nothing. TestAccOrganizationPermissionsUserResource
-      # skips until it has a second staging user (TFP-36).
-      - name: Fail when a test skipped
-        run: |
-          skipped=$(grep -oE -- '--- SKIP: [^ ]+' acceptance-tests.log | cut -d' ' -f3 |
-            grep -vxF TestAccOrganizationPermissionsUserResource || true)
-          if [[ -n "${skipped}" ]]; then
-            echo "These acceptance tests skipped:"
-            echo "${skipped}"
-            exit 1
-          fi
+        run: make testacc
