@@ -1,0 +1,9 @@
+name: Set up Go
+description: Set up Go with the version pin shared by all workflows.
+runs:
+  using: composite
+  steps:
+    - name: Set up Go
+      uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+      with:
+        go-version-file: go.mod

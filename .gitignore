@@ -3,6 +3,7 @@
 /dist/
 /vendor/
 coverage.out
+acceptance-tests.log
 
 # Terraform working files
 .terraform/
