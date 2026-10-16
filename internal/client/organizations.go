@@ -3,6 +3,7 @@ package client
 import (
 	"context"
 	"net/url"
+	"strconv"
 )
 
 // Organization is an organization of SonarQube Cloud.
@@ -115,4 +116,28 @@ func (c *Client) DeleteOrganization(ctx context.Context, key string) error {
 	params.Set("organization", key)
 
 	return c.postIgnoringNotFound(ctx, "/api/organizations/delete", params)
+}
+
+// ListMemberOrganizationKeys returns the keys of every organization that the
+// token user is a member of.
+func (c *Client) ListMemberOrganizationKeys(ctx context.Context) ([]string, error) {
+	return collectPages("organization", func(page int) ([]string, int, error) {
+		params := url.Values{"member": {"true"}, "p": {strconv.Itoa(page)}, "ps": {"500"}}
+		var answer struct {
+			Organizations []struct {
+				Key string `json:"key"`
+			} `json:"organizations"`
+			Paging struct {
+				Total int `json:"total"`
+			} `json:"paging"`
+		}
+		if err := c.get(ctx, "/api/organizations/search", params, &answer); err != nil {
+			return nil, 0, err
+		}
+		keys := make([]string, len(answer.Organizations))
+		for i, org := range answer.Organizations {
+			keys[i] = org.Key
+		}
+		return keys, answer.Paging.Total, nil
+	})
 }

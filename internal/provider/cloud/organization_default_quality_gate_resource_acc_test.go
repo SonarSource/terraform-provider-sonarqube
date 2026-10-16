@@ -86,7 +86,7 @@ func testAccPrepareDefaultQualityGate(t *testing.T, organization string) string 
 		t.Fatalf("cannot read the organization: %v", err)
 	}
 	original := org.DefaultQualityGateUUID
-	gate, err := c.CreateQualityGate(t.Context(), org.UUIDV4, fmt.Sprintf("Terraform default gate %d", rand.Uint32()))
+	gate, err := c.CreateQualityGate(t.Context(), org.UUIDV4, fmt.Sprintf("%sdefault-gate-%d", acctest.KeyPrefix, rand.Uint32()))
 	if err != nil {
 		t.Fatalf("cannot make the quality gate: %v", err)
 	}

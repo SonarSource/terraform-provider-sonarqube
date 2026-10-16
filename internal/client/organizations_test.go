@@ -281,3 +281,41 @@ func TestDeleteOrganizationReportsOtherFailures(t *testing.T) {
 		t.Errorf("error = %v, want one that mentions the privileges", err)
 	}
 }
+
+func TestListMemberOrganizationKeysReadsEveryPage(t *testing.T) {
+	t.Parallel()
+	var pages []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		query := r.URL.Query()
+		if r.URL.Path != "/api/organizations/search" || query.Get("member") != "true" || query.Get("ps") != "500" {
+			t.Errorf("unexpected organization search: %s?%s", r.URL.Path, r.URL.RawQuery)
+		}
+		pages = append(pages, query.Get("p"))
+		if query.Get("p") == "1" {
+			w.Write([]byte(`{"organizations":[{"key":"first"}],"paging":{"total":2}}`))
+			return
+		}
+		w.Write([]byte(`{"organizations":[{"key":"second"}],"paging":{"total":2}}`))
+	}))
+	t.Cleanup(srv.Close)
+
+	keys, err := newTestClient(srv).ListMemberOrganizationKeys(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Join(keys, ",") != "first,second" || strings.Join(pages, ",") != "1,2" {
+		t.Errorf("keys=%v, pages=%v", keys, pages)
+	}
+}
+
+func TestListMemberOrganizationKeysStopsOnAnEmptyPage(t *testing.T) {
+	t.Parallel()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(`{"organizations":[],"paging":{"total":3}}`))
+	}))
+	t.Cleanup(srv.Close)
+
+	if _, err := newTestClient(srv).ListMemberOrganizationKeys(t.Context()); err == nil {
+		t.Fatal("expected an error for an empty page before the total")
+	}
+}

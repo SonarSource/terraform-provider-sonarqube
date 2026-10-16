@@ -207,3 +207,21 @@ func TestDeleteGroupAcceptsMissingGroup(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestSearchGroupsSendsTheText(t *testing.T) {
+	t.Parallel()
+	srv := groupServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if q := r.URL.Query().Get("q"); q != "tf-acc-test-" {
+			t.Errorf("q=%q", q)
+		}
+		fmt.Fprint(w, `{"groups":[{"id":"group-id","name":"tf-acc-test-1"}],"page":{"total":1}}`)
+	})
+
+	groups, err := newTestClient(srv).SearchGroups(t.Context(), "my-org", "tf-acc-test-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(groups) != 1 || groups[0].ID != "group-id" {
+		t.Errorf("groups=%+v", groups)
+	}
+}

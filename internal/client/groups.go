@@ -80,6 +80,11 @@ func (c *Client) FindGroupByName(ctx context.Context, organization, name string)
 	return findByKey(groups, name, func(group Group) string { return group.Name })
 }
 
+// SearchGroups returns the groups of an organization whose name holds text.
+func (c *Client) SearchGroups(ctx context.Context, organization, text string) ([]Group, error) {
+	return c.listGroups(ctx, organization, url.Values{"q": {text}})
+}
+
 // listGroups reads every page of the groups of an organization that match
 // filter.
 func (c *Client) listGroups(ctx context.Context, organization string, filter url.Values) ([]Group, error) {

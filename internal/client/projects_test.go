@@ -164,3 +164,30 @@ func TestDeleteProjectAlreadyGone(t *testing.T) {
 		t.Errorf("DeleteProject() returned %v, want success", err)
 	}
 }
+
+func TestSearchProjectKeysReadsEveryPage(t *testing.T) {
+	t.Parallel()
+	var pages []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		query := r.URL.Query()
+		if r.URL.Path != "/api/projects/search" || query.Get("organization") != "my-org" ||
+			query.Get("q") != "tf-acc-test-" || query.Get("ps") != "500" {
+			t.Errorf("unexpected project search: %s?%s", r.URL.Path, r.URL.RawQuery)
+		}
+		pages = append(pages, query.Get("p"))
+		if query.Get("p") == "1" {
+			w.Write([]byte(`{"components":[{"key":"tf-acc-test-1"}],"paging":{"total":2}}`))
+			return
+		}
+		w.Write([]byte(`{"components":[{"key":"my-org_tf-acc-test-2"}],"paging":{"total":2}}`))
+	}))
+	t.Cleanup(srv.Close)
+
+	keys, err := newTestClient(srv).SearchProjectKeys(t.Context(), "my-org", "tf-acc-test-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Join(keys, ",") != "tf-acc-test-1,my-org_tf-acc-test-2" || strings.Join(pages, ",") != "1,2" {
+		t.Errorf("keys=%v, pages=%v", keys, pages)
+	}
+}

@@ -25,7 +25,7 @@ const (
 // changes only the conditions that the configuration changes.
 func TestAccQualityGateResource(t *testing.T) {
 	organization := fmt.Sprintf("%s%d", acctest.KeyPrefix, rand.Uint32())
-	gateName := "Terraform test gate"
+	gateName := acctest.KeyPrefix + "gate"
 	// The first step records these. The later steps compare with them.
 	var gateID string
 	var firstIDs map[string]string

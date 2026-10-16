@@ -26,7 +26,7 @@ func TestAccGroupMemberResource(t *testing.T) {
 	}
 	login := preCheckDirectAdmin(t, organization)
 	// The slash checks that the import ID keeps a group name with "/".
-	first := fmt.Sprintf("terraform-member-%d/first", rand.Uint32())
+	first := fmt.Sprintf("%smember-%d/first", acctest.KeyPrefix, rand.Uint32())
 	second := first + "-second"
 	m := groupMembers{t: t, organization: organization, login: login}
 	resource.Test(t, resource.TestCase{

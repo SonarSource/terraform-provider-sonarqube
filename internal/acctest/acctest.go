@@ -18,9 +18,10 @@ import (
 	"github.com/SonarSource/terraform-provider-sonarqube/internal/provider"
 )
 
-// KeyPrefix marks every organization that a test makes. SC-58198
-// registers a sweeper that deletes what an interrupted run leaves behind, and
-// the sweeper finds the organizations by this prefix.
+// KeyPrefix marks every item that a test makes: the organizations, and the
+// projects, groups, permission templates and quality gates in the shared
+// organization. The sweepers in sweep.go find what an interrupted run leaves
+// behind by this prefix.
 const KeyPrefix = "tf-acc-test-"
 
 // EnvTestOrganization names an organization that the token can read.
@@ -83,9 +84,23 @@ func PreCheckDestructive(t *testing.T) {
 	// stop instead of skipping. A skip counts as a pass in Go. An empty
 	// SONARQUBE_TEST_ALLOWED_HOSTS therefore stops the run as well, for every
 	// instance but a local one.
-	if err := RequireSafeTarget(instanceURL); err != nil {
+	if err := requireSafeClient(Client()); err != nil {
 		t.Fatal(err.Error())
 	}
+}
+
+// requireSafeClient checks both addresses that the client sends to. Web API
+// v2 answers at its own address, which SONARQUBE_API_URL can set to any
+// host, and v2 makes deletes too.
+func requireSafeClient(c *client.Client) error {
+	if err := RequireSafeTarget(c.URL()); err != nil {
+		return err
+	}
+	if err := RequireSafeTarget(c.APIURL()); err != nil {
+		return fmt.Errorf("the Web API v2 address %s, which %s sets or %s gives: %w",
+			c.APIURL(), provider.EnvAPIURL, provider.EnvURL, err)
+	}
+	return nil
 }
 
 // productionHosts are the instances that hold the organizations of customers.
@@ -131,8 +146,10 @@ func RequireSafeTarget(instanceURL string) error {
 			"instance.", provider.EnvURL, host)
 	}
 
-	// Nothing on the machine that runs the test can be production.
-	if host == "localhost" {
+	// Nothing on the machine that runs the test can be production. RFC 6761
+	// keeps the sub-domains of localhost for loopback too, and the Web API v2
+	// address of a local instance is api.localhost.
+	if host == "localhost" || strings.HasSuffix(host, ".localhost") {
 		return nil
 	}
 	if address := net.ParseIP(host); address != nil && address.IsLoopback() {

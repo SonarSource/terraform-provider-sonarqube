@@ -36,7 +36,7 @@ func TestAccPermissionTemplateResource(t *testing.T) {
 	}
 	suffix := rand.Uint32()
 	p := permissionTemplates{t: t, organization: organization, login: login,
-		group: fmt.Sprintf("terraform-template-%d", suffix), name: fmt.Sprintf("terraform-template-%d/first", suffix)}
+		group: fmt.Sprintf("%stemplate-%d", acctest.KeyPrefix, suffix), name: fmt.Sprintf("%stemplate-%d/first", acctest.KeyPrefix, suffix)}
 	renamed := p.name + "-renamed"
 
 	resource.Test(t, resource.TestCase{

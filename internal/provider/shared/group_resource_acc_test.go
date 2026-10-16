@@ -16,7 +16,7 @@ import (
 
 func TestAccGroupResource(t *testing.T) {
 	organization := os.Getenv(acctest.EnvTestOrganization)
-	name := fmt.Sprintf("terraform-group-%d", rand.Uint32())
+	name := fmt.Sprintf("%sgroup-%d", acctest.KeyPrefix, rand.Uint32())
 	renamed := name + "-renamed"
 	outsideName := renamed + "-outside"
 	config := func(groupName, description string) string {
