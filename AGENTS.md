@@ -93,8 +93,16 @@ and four more variables:
   not name stops the run. A production instance is refused whatever this
   variable says. Set it to the instance you test against, never to
   production.
-- `SONARQUBE_TEST_ORGANIZATION`: an organization that the token can read, for
-  the tests that only read.
+- `SONARQUBE_TEST_ORGANIZATION`: an organization that the tests share. The
+  tests that only read use it, and so do the tests that need a paid plan, such
+  as the tests of the default gate, the default template and the permission
+  templates. An organization that a test makes is on the Free plan, and no API
+  can change its plan. The tests that change the shared organization call
+  `acctest.PreCheckSharedOrganization`, which stops the run when the
+  organization is not on the Team or the Enterprise plan, when the token user
+  has no direct `admin` grant on it, or when its key starts with
+  `acctest.KeyPrefix`. Admin through a group is not sufficient. Each test
+  deletes what it makes there, and the sweepers delete what a test leaves.
 - `SONARQUBE_TEST_GITHUB_INSTALLATION_ID`: an installation of the GitHub
   application of the instance that no organization is bound to, for the tests
   that bind. Nothing can make one: install the application from

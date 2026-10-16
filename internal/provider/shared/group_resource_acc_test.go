@@ -54,10 +54,7 @@ func TestAccGroupResource(t *testing.T) {
 	}
 	resource.Test(t, resource.TestCase{
 		PreCheck: func() {
-			acctest.PreCheckDestructive(t)
-			if organization == "" {
-				t.Skipf("%s is not set", acctest.EnvTestOrganization)
-			}
+			acctest.PreCheckSharedOrganization(t)
 		},
 		ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories,
 		CheckDestroy: func(*terraform.State) error {

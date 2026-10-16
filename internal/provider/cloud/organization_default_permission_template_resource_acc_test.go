@@ -33,9 +33,7 @@ func TestAccOrganizationDefaultPermissionTemplateResource(t *testing.T) {
 	if os.Getenv(resource.EnvTfAcc) == "" {
 		t.Skipf("%s is not set", resource.EnvTfAcc)
 	}
-	acctest.PreCheck(t)
-	acctest.PreCheckDestructive(t)
-	organization := os.Getenv(acctest.EnvTestOrganization)
+	organization := acctest.PreCheckSharedOrganization(t)
 	suffix := rand.Uint32()
 	d := defaultTemplates{t: t, organization: organization,
 		group:    fmt.Sprintf("%sdefault-template-%d", acctest.KeyPrefix, suffix),

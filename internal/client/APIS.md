@@ -153,6 +153,7 @@ root role, so the client does not use them.
 | `UpdateOrganization` | `POST {url}/api/organizations/update` | Web API v1 | Internal |
 | `UpdateOrganizationKey` | `POST {url}/api/organizations/update_key` | Web API v1 | Internal |
 | `DeleteOrganization` | `POST {url}/api/organizations/delete` | Web API v1 | Internal |
+| `GetCurrentPlan` | `GET {api_url}/billing/current-plan?organizationId=` | Web API v2 | Internal |
 | `ListMemberOrganizationKeys` | `GET {url}/api/organizations/search?member=true&p=&ps=` | Web API v1 | [Public](https://sonarcloud.io/web_api/api/organizations/search) |
 
 Web API v2 has no create, update, rename or delete for an organization today,
@@ -162,6 +163,14 @@ so every write goes through the internal v1 surface.
 an opaque string of 20 characters. The bindings API below names an organization
 by that identifier and by nothing else, so a read of the organization is how
 an organization key reaches it.
+
+`DeleteOrganization` tries again after a 5xx, a 409, a 429, a timeout or a
+connection that the server closed, with waits that add up to 30 seconds. The
+server can refuse a delete for a short time after a change. A 404 is success.
+
+`GetCurrentPlan` takes the UUID of the organization and answers
+`{"planKey":"Enterprise"}`. The key can be in any case, so the client gives it
+in lower case. The webapp reads the plan in the same way.
 
 ## DevOps platform bindings (`organization_bindings.go`)
 

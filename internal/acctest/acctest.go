@@ -3,10 +3,13 @@ package acctest
 
 import (
 	"cmp"
+	"context"
+	"errors"
 	"fmt"
 	"net"
 	"net/url"
 	"os"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -41,6 +44,68 @@ func PreCheck(t *testing.T) {
 	if os.Getenv(EnvTestOrganization) == "" {
 		t.Skipf("%s is not set, so the acceptance test has no organization to read", EnvTestOrganization)
 	}
+}
+
+// paidPlans can change the defaults of an organization and make permission
+// templates. The free plans cannot.
+var paidPlans = []string{"team", "enterprise", "old_paid"}
+
+// PreCheckSharedOrganization stops a test that changes the organization of
+// EnvTestOrganization when the target is not safe, as PreCheckDestructive
+// does, or when that organization cannot hold the test. It skips when the
+// variable is not set. It stops the run when the organization is not on a
+// paid plan, when the token user has no direct admin grant on it, or when its
+// key starts with KeyPrefix, which marks what a test makes. These are faults
+// in the setup, and a skip would count as a pass. It returns the key of the
+// organization.
+func PreCheckSharedOrganization(t *testing.T) string {
+	t.Helper()
+
+	PreCheckDestructive(t)
+	organization := os.Getenv(EnvTestOrganization)
+	if organization == "" {
+		t.Skipf("%s is not set, so the acceptance test has no organization to change", EnvTestOrganization)
+	}
+	if err := checkSharedOrganization(t.Context(), Client(), organization); err != nil {
+		t.Fatal(err.Error())
+	}
+	return organization
+}
+
+func checkSharedOrganization(ctx context.Context, c *client.Client, organization string) error {
+	if strings.HasPrefix(organization, KeyPrefix) {
+		return fmt.Errorf("the key %s of %s starts with %s, which marks the organizations that a test "+
+			"makes. Use an organization with a different key", organization, EnvTestOrganization, KeyPrefix)
+	}
+	org, err := c.GetOrganization(ctx, organization)
+	if err != nil {
+		return fmt.Errorf("cannot read the organization %s of %s: %w", organization, EnvTestOrganization, err)
+	}
+	plan, err := c.GetCurrentPlan(ctx, org.UUIDV4)
+	if err != nil {
+		return fmt.Errorf("cannot read the plan of the organization %s: %w", organization, err)
+	}
+	if !slices.Contains(paidPlans, plan) {
+		return fmt.Errorf("the organization %s of %s is on the plan %q. The tests need the Team or the "+
+			"Enterprise plan, which can change the defaults and make permission templates",
+			organization, EnvTestOrganization, plan)
+	}
+	login, err := c.CurrentUserLogin(ctx)
+	if err != nil {
+		return fmt.Errorf("cannot read the token user: %w", err)
+	}
+	permissions, err := c.GetPermissions(ctx, client.PermissionScope{Organization: organization},
+		client.PermissionPrincipal{Name: login})
+	if err != nil && !errors.Is(err, client.ErrNotFound) {
+		return fmt.Errorf("cannot read the permissions of %s on %s: %w", login, organization, err)
+	}
+	if !slices.Contains(permissions, "admin") {
+		return fmt.Errorf("the token user %s has no direct admin grant on the organization %s of %s. "+
+			"Give it one. Admin through a group is not sufficient: when no other user is an "+
+			"administrator, SonarQube Cloud refuses to remove the user from a group, and the tests "+
+			"cannot clean up", login, organization, EnvTestOrganization)
+	}
+	return nil
 }
 
 // Client returns a client for the instance that the environment names, as the
