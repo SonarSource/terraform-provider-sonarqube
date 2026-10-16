@@ -27,9 +27,7 @@ func TestAccPermissionTemplateResource(t *testing.T) {
 	if os.Getenv(resource.EnvTfAcc) == "" {
 		t.Skipf("%s is not set", resource.EnvTfAcc)
 	}
-	acctest.PreCheck(t)
-	acctest.PreCheckDestructive(t)
-	organization := os.Getenv(acctest.EnvTestOrganization)
+	organization := acctest.PreCheckSharedOrganization(t)
 	login, err := acctest.Client().CurrentUserLogin(t.Context())
 	if err != nil {
 		t.Fatal(err)

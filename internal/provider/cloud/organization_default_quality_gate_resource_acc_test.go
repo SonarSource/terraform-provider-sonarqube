@@ -33,9 +33,7 @@ func TestAccOrganizationDefaultQualityGateResource(t *testing.T) {
 	if os.Getenv(resource.EnvTfAcc) == "" {
 		t.Skipf("%s is not set", resource.EnvTfAcc)
 	}
-	acctest.PreCheck(t)
-	acctest.PreCheckDestructive(t)
-	organization := os.Getenv(acctest.EnvTestOrganization)
+	organization := acctest.PreCheckSharedOrganization(t)
 	gateID := testAccPrepareDefaultQualityGate(t, organization)
 
 	resource.Test(t, resource.TestCase{
