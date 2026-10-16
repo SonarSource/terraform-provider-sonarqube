@@ -56,10 +56,7 @@ func TestAccProjectPermissionsGroupResource(t *testing.T) {
 	}
 	resource.Test(t, resource.TestCase{
 		PreCheck: func() {
-			acctest.PreCheckDestructive(t)
-			if organization == "" {
-				t.Skipf("%s is not set", acctest.EnvTestOrganization)
-			}
+			acctest.PreCheckSharedOrganization(t)
 		},
 		ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories,
 		CheckDestroy:             testAccCheckProjectDeleted(t, organization, projectKey),
@@ -90,11 +87,7 @@ func TestAccProjectPermissionsUserResource(t *testing.T) {
 	if os.Getenv("TF_ACC") != "1" {
 		t.Skip("TF_ACC is not set")
 	}
-	acctest.PreCheckDestructive(t)
-	organization := os.Getenv(acctest.EnvTestOrganization)
-	if organization == "" {
-		t.Skipf("%s is not set", acctest.EnvTestOrganization)
-	}
+	organization := acctest.PreCheckSharedOrganization(t)
 	api := acctest.Client()
 	login, err := api.CurrentUserLogin(t.Context())
 	if err != nil {

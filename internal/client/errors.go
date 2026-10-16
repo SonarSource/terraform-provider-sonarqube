@@ -4,8 +4,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"net"
+	"net/http"
 	"slices"
 	"strings"
+	"syscall"
 )
 
 // ErrNotFound reports that an entity does not exist. Web API v2 answers a
@@ -113,4 +117,26 @@ func hasMessagePrefix(messages []string, prefix string) bool {
 // hasMessageContaining reports a message of an API error that holds part.
 func hasMessageContaining(messages []string, part string) bool {
 	return slices.ContainsFunc(messages, func(message string) bool { return strings.Contains(message, part) })
+}
+
+// isTransient reports a failure that a later try can avoid: a 5xx, a 409, a
+// 429, a timeout, or a connection that the server closed. A 403 or an unknown
+// host is not transient.
+func isTransient(err error) bool {
+	var netErr net.Error
+	if errors.As(err, &netErr) && netErr.Timeout() {
+		return true
+	}
+	if errors.Is(err, syscall.ECONNRESET) || errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) {
+		return true
+	}
+	var apiErr *APIError
+	if !errors.As(err, &apiErr) {
+		return false
+	}
+	switch apiErr.StatusCode {
+	case http.StatusConflict, http.StatusTooManyRequests:
+		return true
+	}
+	return apiErr.StatusCode >= 500
 }
