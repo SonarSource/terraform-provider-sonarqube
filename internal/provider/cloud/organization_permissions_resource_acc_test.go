@@ -40,10 +40,7 @@ resource "sonarqube_cloud_organization_permissions" "test" {
 	var ownerPermissions []string
 	resource.Test(t, resource.TestCase{
 		PreCheck: func() {
-			acctest.PreCheckDestructive(t)
-			if organization == "" {
-				t.Skipf("%s is not set", acctest.EnvTestOrganization)
-			}
+			acctest.PreCheckSharedOrganization(t)
 			permissions, err := api.GetPermissions(t.Context(), scope, owners)
 			if err != nil {
 				t.Fatal(err)

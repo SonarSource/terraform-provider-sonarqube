@@ -32,7 +32,7 @@ func TestAccProjectQualityGateResource(t *testing.T) {
 	projectKey := fmt.Sprintf("%s%d", acctest.KeyPrefix, suffix)
 
 	resource.Test(t, resource.TestCase{
-		PreCheck:                 func() { acctest.PreCheck(t) },
+		PreCheck:                 func() { acctest.PreCheckSharedOrganization(t) },
 		ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories,
 		CheckDestroy:             testAccCheckProjectDeleted(t, organization, projectKey),
 		Steps: []resource.TestStep{

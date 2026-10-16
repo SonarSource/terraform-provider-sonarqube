@@ -2,8 +2,11 @@ package client
 
 import (
 	"context"
+	"fmt"
 	"net/url"
 	"strconv"
+	"strings"
+	"time"
 )
 
 // Organization is an organization of SonarQube Cloud.
@@ -109,13 +112,22 @@ func (c *Client) UpdateOrganizationKey(ctx context.Context, key, newKey string) 
 	return c.post(ctx, "/api/organizations/update_key", params)
 }
 
+// organizationDeleteWaits are the pauses between the tries of
+// DeleteOrganization. They add up to 30 seconds.
+var organizationDeleteWaits = []time.Duration{time.Second, 2 * time.Second, 4 * time.Second, 8 * time.Second, 15 * time.Second}
+
 // DeleteOrganization deletes an organization. An organization that is already
 // gone is not an error, so that a repeated delete succeeds.
+//
+// Soon after a change, the server can refuse the delete for a short time, so
+// a transient failure is tried again after each of organizationDeleteWaits.
 func (c *Client) DeleteOrganization(ctx context.Context, key string) error {
 	params := url.Values{}
 	params.Set("organization", key)
 
-	return c.postIgnoringNotFound(ctx, "/api/organizations/delete", params)
+	return retry(ctx, organizationDeleteWaits, func() error {
+		return c.postIgnoringNotFound(ctx, "/api/organizations/delete", params)
+	})
 }
 
 // ListMemberOrganizationKeys returns the keys of every organization that the
@@ -140,4 +152,19 @@ func (c *Client) ListMemberOrganizationKeys(ctx context.Context) ([]string, erro
 		}
 		return keys, answer.Paging.Total, nil
 	})
+}
+
+// GetCurrentPlan returns the key of the plan of an organization in lower case,
+// such as "free_v2", "team" or "enterprise".
+func (c *Client) GetCurrentPlan(ctx context.Context, organizationUUID string) (string, error) {
+	var answer struct {
+		PlanKey string `json:"planKey"`
+	}
+	if err := c.apiGet(ctx, "/billing/current-plan", url.Values{"organizationId": {organizationUUID}}, &answer); err != nil {
+		return "", err
+	}
+	if answer.PlanKey == "" {
+		return "", fmt.Errorf("the plan answer for organization %s has no planKey", organizationUUID)
+	}
+	return strings.ToLower(answer.PlanKey), nil
 }

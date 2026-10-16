@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"math/rand/v2"
 	"os"
-	"slices"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
@@ -19,12 +18,11 @@ func TestAccGroupMemberResource(t *testing.T) {
 	if os.Getenv("TF_ACC") != "1" {
 		t.Skip("TF_ACC is not set")
 	}
-	acctest.PreCheckDestructive(t)
-	organization := os.Getenv(acctest.EnvTestOrganization)
-	if organization == "" {
-		t.Skipf("%s is not set", acctest.EnvTestOrganization)
+	organization := acctest.PreCheckSharedOrganization(t)
+	login, err := acctest.Client().CurrentUserLogin(t.Context())
+	if err != nil {
+		t.Fatal(err)
 	}
-	login := preCheckDirectAdmin(t, organization)
 	// The slash checks that the import ID keeps a group name with "/".
 	first := fmt.Sprintf("%smember-%d/first", acctest.KeyPrefix, rand.Uint32())
 	second := first + "-second"
@@ -120,27 +118,4 @@ func (m groupMembers) goneFrom(group string) error {
 		}
 		return err == nil && !member, err
 	})
-}
-
-// preCheckDirectAdmin returns the login of the token user. It skips the test
-// when that user has no direct admin grant on the organization: SonarQube
-// Cloud then can refuse to remove the user from any group, and the destroy
-// fails.
-func preCheckDirectAdmin(t *testing.T, organization string) string {
-	t.Helper()
-	c := acctest.Client()
-	login, err := c.CurrentUserLogin(t.Context())
-	if err != nil {
-		t.Fatal(err)
-	}
-	permissions, err := c.GetPermissions(t.Context(), client.PermissionScope{Organization: organization},
-		client.PermissionPrincipal{Name: login})
-	if err != nil && !errors.Is(err, client.ErrNotFound) {
-		t.Fatal(err)
-	}
-	if !slices.Contains(permissions, "admin") {
-		t.Skipf("the token user has no direct admin grant on %s. When no other user is an administrator, "+
-			"SonarQube Cloud refuses to remove the user from a group, and the test cannot clean up.", organization)
-	}
-	return login
 }

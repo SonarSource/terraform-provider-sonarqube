@@ -6,7 +6,9 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"strings"
+	"sync/atomic"
 	"testing"
+	"time"
 )
 
 const organizationAnswer = `[
@@ -317,5 +319,82 @@ func TestListMemberOrganizationKeysStopsOnAnEmptyPage(t *testing.T) {
 
 	if _, err := newTestClient(srv).ListMemberOrganizationKeys(t.Context()); err == nil {
 		t.Fatal("expected an error for an empty page before the total")
+	}
+}
+
+// A delete that fails for a short time succeeds on a later try.
+func TestDeleteOrganizationTriesAgain(t *testing.T) {
+	t.Parallel()
+	var calls atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		if calls.Add(1) == 1 {
+			w.WriteHeader(http.StatusConflict)
+		}
+	}))
+	defer srv.Close()
+
+	if err := newTestClient(srv).DeleteOrganization(t.Context(), "my-org"); err != nil {
+		t.Fatalf("DeleteOrganization() returned %v", err)
+	}
+	if calls.Load() != 2 {
+		t.Errorf("calls = %d, want 2", calls.Load())
+	}
+}
+
+func TestOrganizationDeleteWaitsAddUpTo30Seconds(t *testing.T) {
+	t.Parallel()
+	var total time.Duration
+	for _, wait := range organizationDeleteWaits {
+		total += wait
+	}
+	if total != 30*time.Second {
+		t.Errorf("total = %s, want 30s", total)
+	}
+}
+
+func TestGetCurrentPlan(t *testing.T) {
+	t.Parallel()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/billing/current-plan" || r.URL.Query().Get("organizationId") != "org-uuid" ||
+			r.Header.Get("Authorization") != "Bearer test-token" {
+			t.Errorf("unexpected plan read: %s?%s", r.URL.Path, r.URL.RawQuery)
+		}
+		w.Write([]byte(`{"planKey":"TEAM"}`))
+	}))
+	defer srv.Close()
+
+	plan, err := newTestClient(srv).GetCurrentPlan(t.Context(), "org-uuid")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if plan != "team" {
+		t.Errorf("plan = %q, want team", plan)
+	}
+}
+
+func TestGetCurrentPlanRefusesAnEmptyAnswer(t *testing.T) {
+	t.Parallel()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Write([]byte(`{}`))
+	}))
+	defer srv.Close()
+
+	if _, err := newTestClient(srv).GetCurrentPlan(t.Context(), "org-uuid"); err == nil {
+		t.Fatal("GetCurrentPlan() succeeded, want an error")
+	}
+}
+
+func TestGetCurrentPlanReportsAnAPIError(t *testing.T) {
+	t.Parallel()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusForbidden)
+	}))
+	defer srv.Close()
+
+	_, err := newTestClient(srv).GetCurrentPlan(t.Context(), "org-uuid")
+
+	var apiErr *APIError
+	if !errors.As(err, &apiErr) || apiErr.StatusCode != http.StatusForbidden {
+		t.Errorf("err = %v, want the 403", err)
 	}
 }
