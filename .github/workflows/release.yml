@@ -2,21 +2,116 @@
 name: Release
 # yamllint disable-line rule:truthy
 on:
-  workflow_dispatch:
-    inputs:
-      version:
-        description: 'Release version'
-        required: true
-        type: string
+  push:
+    tags:
+      - v*
+
+# Without "shell: bash", a step runs without pipefail.
+defaults:
+  run:
+    shell: bash
+
+env:
+  SIGNING_KEY_VAULT_PATH: development/kv/data/sign
 
 jobs:
   release:
+    runs-on: sonar-xs
+    name: Release
+    environment: release
     permissions:
-      id-token: write
+      actions: read
       contents: write
-    uses: SonarSource/gh-action_release/.github/workflows/main.yaml@v7
-    with:
-      version: ${{ inputs.version }}
+      id-token: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      # A tag cannot move, thus check everything before the build.
+      - name: Check the tag
+        id: tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          if ! git merge-base --is-ancestor "${GITHUB_SHA}" origin/master; then
+            echo "${GITHUB_REF_NAME} is not on master."
+            exit 1
+          fi
+          scripts/release/notes.sh "${version}" >"${RUNNER_TEMP}/notes.md"
+          for workflow in build.yml acceptance-tests.yml; do
+            passed="$(gh run list --workflow "${workflow}" --commit "${GITHUB_SHA}" \
+              --status success --json databaseId --jq length)"
+            if [[ "${passed}" == "0" ]]; then
+              echo "${workflow} has no successful run on ${GITHUB_SHA}."
+              exit 1
+            fi
+          done
+          echo "version=${version}" >> "${GITHUB_OUTPUT}"
+
+      - name: Set up Go
+        uses: ./.github/actions/setup-go
+
+      - name: Set up the release tools
+        uses: ./.github/actions/setup-release-tools
+
+      - name: Build the release files
+        env:
+          VERSION: ${{ steps.tag.outputs.version }}
+          # Without it, GoReleaser takes the highest tag on the commit.
+          GORELEASER_CURRENT_TAG: ${{ github.ref_name }}
+        run: |
+          built="$(scripts/release/build.sh)"
+          if [[ "${built}" != "${VERSION}" ]]; then
+            echo "GoReleaser built ${built}, but the tag gives ${VERSION}."
+            exit 1
+          fi
+
+      - name: Fetch the signing key
+        id: secrets
+        uses: SonarSource/vault-action-wrapper@v3
+        with:
+          secrets: |
+            ${{ env.SIGNING_KEY_VAULT_PATH }} key | GPG_KEY;
+            ${{ env.SIGNING_KEY_VAULT_PATH }} passphrase | GPG_PASSPHRASE;
+            ${{ env.SIGNING_KEY_VAULT_PATH }} key_id | GPG_KEY_ID;
+
+      - name: Sign the checksum file
+        env:
+          GPG_KEY: ${{ fromJSON(steps.secrets.outputs.vault).GPG_KEY }}
+          GPG_PASSPHRASE: ${{ fromJSON(steps.secrets.outputs.vault).GPG_PASSPHRASE }}
+          GPG_KEY_ID: ${{ fromJSON(steps.secrets.outputs.vault).GPG_KEY_ID }}
+          VERSION: ${{ steps.tag.outputs.version }}
+        run: scripts/release/sign.sh dist "${VERSION}"
+
+      - name: Verify the release files
+        env:
+          VERSION: ${{ steps.tag.outputs.version }}
+        run: |
+          curl -fsSL -g 'https://registry.terraform.io/v2/gpg-keys?filter[namespace]=sonarsource' \
+            >"${RUNNER_TEMP}/registry-keys.json"
+          jq -er '.data[].attributes["ascii-armor"]' "${RUNNER_TEMP}/registry-keys.json" \
+            >"${RUNNER_TEMP}/registry-keys.asc"
+          scripts/release/verify.sh dist "${VERSION}" "${RUNNER_TEMP}/registry-keys.asc"
+          scripts/release/check-mirror.sh dist "${VERSION}"
+
+      - name: Publish the GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.tag.outputs.version }}
+        run: |
+          flags=()
+          # A "-" in the build metadata, after "+", does not make a pre-release.
+          if [[ "${VERSION%%+*}" == *-* ]]; then
+            flags+=(--prerelease)
+          fi
+          prefix="dist/terraform-provider-sonarqube_${VERSION}"
+          gh release create "${GITHUB_REF_NAME}" --verify-tag \
+            --title "${GITHUB_REF_NAME}" --notes-file "${RUNNER_TEMP}/notes.md" "${flags[@]}" \
+            "${prefix}"_*.zip "${prefix}_manifest.json" \
+            "${prefix}_SHA256SUMS" "${prefix}_SHA256SUMS.sig"
 
   notify_failure:
     name: Notify Failure
