@@ -28,6 +28,26 @@
       "matchUpdateTypes": ["minor", "patch"],
       "groupName": "Non-major Go dependencies",
       "prHeader": "Update non-major Go dependencies"
+    },
+    {
+      "description": "Keep SonarSource actions on their maintained @vN branch and do not pin them to a commit SHA. config:best-practices in the squad preset pins all actions and overrides the same rule in the SonarSource default preset",
+      "matchManagers": ["github-actions"],
+      "matchDepNames": ["SonarSource/**", "!SonarSource/sonarqube-scan-action"],
+      "matchCurrentValue": "/^v\\d+$/",
+      "overrideDatasource": "github-digest",
+      "versioning": "docker",
+      "allowedVersions": "/^v\\d+$/",
+      "pinDigests": false,
+      "rangeStrategy": "replace"
+    },
+    {
+      "description": "Keep SonarSource/sonarqube-scan-action on its @vN major tag and do not pin it to a commit SHA",
+      "matchManagers": ["github-actions"],
+      "matchDepNames": ["SonarSource/sonarqube-scan-action"],
+      "matchCurrentValue": "/^v\\d+$/",
+      "allowedVersions": "/^v\\d+$/",
+      "pinDigests": false,
+      "rangeStrategy": "replace"
     }
   ]
 }
