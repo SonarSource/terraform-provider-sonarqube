@@ -80,9 +80,30 @@ jobs:
           # fromJSON('') stops the job with a template error.
           SONAR_TOKEN: ${{ fromJSON(steps.secrets.outputs.vault || '{}').SONAR_TOKEN }}
 
+  release-check:
+    runs-on: sonar-xs
+    name: Release check
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # GoReleaser gets the version from the latest tag.
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: ./.github/actions/setup-go
+
+      - name: Set up the release tools
+        uses: ./.github/actions/setup-release-tools
+
+      - name: Check the release files
+        run: make release-check
+
   notify_failure:
     name: Notify Failure
-    needs: build
+    needs: [build, release-check]
     if: >-
       !cancelled() && failure() &&
       (github.ref_name == github.event.repository.default_branch ||

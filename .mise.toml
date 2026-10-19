@@ -1,3 +1,5 @@
 [tools]
 go = "1.27.2"
+# .github/actions/setup-release-tools reads this version.
+goreleaser = "2.18.2"
 pre-commit = "4.7.0"
