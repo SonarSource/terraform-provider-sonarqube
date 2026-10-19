@@ -14,7 +14,7 @@ An endpoint is "Public" only when SonarSource's own docs link one as public.
 ## Permissions (`permissions.go`)
 
 | Function | Endpoint | Surface | Public or internal |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | `CurrentUserLogin` | `GET {url}/api/users/current` | Web API v1 | Internal |
 | `GetPermissions` | `GET {url}/api/permissions/groups?organization=&projectKey=&q=&p=&ps=` | Web API v1 | Internal |
 | `GetPermissions` | `GET {url}/api/permissions/users?organization=&projectKey=&q=&p=&ps=` | Web API v1 | Internal |
@@ -41,7 +41,7 @@ project visibility with `GetProject` before it sends these grants.
 ## Permission templates (`permission_templates.go`)
 
 | Function | Endpoint | Surface | Public or internal |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | `CreatePermissionTemplate` | `POST {url}/api/permissions/create_template` | Web API v1 | [Public](https://sonarcloud.io/web_api/api/permissions/create_template) |
 | `UpdatePermissionTemplate` | `POST {url}/api/permissions/update_template` | Web API v1 | [Public](https://sonarcloud.io/web_api/api/permissions/update_template) |
 | `DeletePermissionTemplate` | `POST {url}/api/permissions/delete_template` | Web API v1 | [Public](https://sonarcloud.io/web_api/api/permissions/delete_template) |
@@ -85,7 +85,7 @@ organization.
 ## Groups (`groups.go`)
 
 | Function | Endpoint | Surface | Public or internal |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | `CreateGroup` | `POST {api_url}/users/groups` | Web API v2 | [Public](https://api-docs.sonarsource.com/sonarqube-cloud/default/public-externalusers-0-0#/groups/createGroup) |
 | `GetGroup` | `GET {api_url}/users/groups?organizationIds=&ids=` | Web API v2 | [Public](https://api-docs.sonarsource.com/sonarqube-cloud/default/public-externalusers-0-0#/groups/searchGroups) |
 | `FindGroupByName`, `SearchGroups` | `GET {api_url}/users/groups?organizationIds=&q=&pageIndex=&pageSize=` | Web API v2 | [Public](https://api-docs.sonarsource.com/sonarqube-cloud/default/public-externalusers-0-0#/groups/searchGroups) |
@@ -117,7 +117,7 @@ again for about six seconds before it takes the answer.
 ## Group members (`group_members.go`)
 
 | Function | Endpoint | Surface | Public or internal |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | `AddGroupMember` | `POST {url}/api/user_groups/add_user` | Web API v1 | [Public](https://sonarcloud.io/web_api/api/user_groups/add_user) |
 | `RemoveGroupMember` | `POST {url}/api/user_groups/remove_user` | Web API v1 | [Public](https://sonarcloud.io/web_api/api/user_groups/remove_user) |
 | `IsGroupMember` | `GET {url}/api/user_groups/users?organization=&name=&selected=selected&q=&p=&ps=` | Web API v1 | [Public](https://sonarcloud.io/web_api/api/user_groups/users) |
@@ -147,7 +147,7 @@ root role, so the client does not use them.
 ## Organizations (`organizations.go`)
 
 | Function | Endpoint | Surface | Public or internal |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | `GetOrganization` | `GET {api_url}/organizations/organizations?organizationKey=` | Web API v2 | [Public](https://api-docs.sonarsource.com/sonarqube-cloud/default/public-sonarcloud-organizations-organizations-external-1-0-2#/organizations/list-organizations) |
 | `CreateOrganization` | `POST {url}/api/organizations/create` | Web API v1 | Internal |
 | `UpdateOrganization` | `POST {url}/api/organizations/update` | Web API v1 | Internal |
@@ -175,7 +175,7 @@ in lower case. The webapp reads the plan in the same way.
 ## DevOps platform bindings (`organization_bindings.go`)
 
 | Function | Endpoint | Surface | Public or internal |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | `CreateOrganizationBinding` | `POST {api_url}/dop-translation/organization-bindings` | Web API v2 | Internal |
 | `GetOrganizationBinding` | `GET {api_url}/dop-translation/organization-bindings/{id}` | Web API v2 | Internal |
 | `FindOrganizationBinding` | `GET {api_url}/dop-translation/organization-bindings?organizationId=` | Web API v2 | Internal |
@@ -194,7 +194,7 @@ application installation that is bound to no organization.
 ## DevOps platform applications (`dop_applications.go`)
 
 | Function | Endpoint | Surface | Public or internal |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | `ListDopApplications` | `GET {api_url}/dop-translation/dop-applications?devOpsPlatform=` | Web API v2 | Internal |
 
 A binding to github.com accepts an installation of one of these applications
@@ -204,7 +204,7 @@ of asking GitHub.
 ## Organization quality gate settings (`quality_gate_settings.go`)
 
 | Function | Endpoint | Surface | Public or internal |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | `GetOrganizationQualityGateSettings` | `GET {api_url}/quality-gates/settings?resourceId=&resourceType=ORGANIZATION` | Web API v2 | [Public](https://api-docs.sonarsource.com/sonarqube-cloud/default/public-qualitygates-1-0-0#/Quality%20Gate%20Settings) |
 | `UpdateOrganizationQualityGateSettings` | `PATCH {api_url}/quality-gates/settings/{id}` | Web API v2 | [Public](https://api-docs.sonarsource.com/sonarqube-cloud/default/public-qualitygates-1-0-0#/Quality%20Gate%20Settings) |
 
@@ -217,7 +217,7 @@ removes the setting from state.
 ## Projects (`projects.go`)
 
 | Function | Endpoint | Surface | Public or internal |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | `GetProject` | `GET {api_url}/projects/projects?keys=&organizationIds=` | Web API v2 | [Public](https://api-docs.sonarsource.com/sonarqube-cloud/default/public-projectsexternal-0-0-1#/Projects/getProjects) |
 | `CreateProject` | `POST {url}/api/projects/create` | Web API v1 | [Public](https://sonarcloud.io/web_api/api/projects/create) |
 | `DeleteProject` | `POST {url}/api/projects/delete` | Web API v1 | [Public](https://sonarcloud.io/web_api/api/projects/delete) |
@@ -235,7 +235,7 @@ UUID, which the bindings API refuses.
 ## Project bindings (`project_bindings.go`)
 
 | Function | Endpoint | Surface | Public or internal |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | `CreateProjectBinding` | `POST {api_url}/dop-translation/project-bindings` | Web API v2 | Internal |
 | `FindProjectBinding` | `GET {api_url}/dop-translation/project-bindings?projectId=` | Web API v2 | Internal |
 | `UpdateProjectBinding` | `PATCH {api_url}/dop-translation/project-bindings/{id}` | Web API v2 | Internal |
@@ -258,7 +258,7 @@ repository was not tested.
 ## Quality gates (`quality_gates.go`)
 
 | Function | Endpoint | Surface | Public or internal |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | `ListQualityGates` | `GET {api_url}/quality-gates/quality-gates?organizationId=&pageIndex=&pageSize=` | Web API v2 | [Public](https://api-docs.sonarsource.com/sonarqube-cloud/default/public-qualitygates-1-0-0) |
 | `GetQualityGate` | `GET {api_url}/quality-gates/quality-gates/{id}` | Web API v2 | [Public](https://api-docs.sonarsource.com/sonarqube-cloud/default/public-qualitygates-1-0-0) |
 | `CreateQualityGate` | `POST {api_url}/quality-gates/quality-gates` | Web API v2 | [Public](https://api-docs.sonarsource.com/sonarqube-cloud/default/public-qualitygates-1-0-0) |
