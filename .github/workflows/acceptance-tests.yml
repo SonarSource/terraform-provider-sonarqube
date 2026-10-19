@@ -1,0 +1,104 @@
+name: Acceptance tests
+
+# This repository is public. A run from a pull_request trigger would give the
+# staging credentials to code that nobody examined, so this workflow has no
+# pull_request trigger, and never uses pull_request_target. The tests run
+# after a merge to master, or by hand. They do not stop a merge, because the
+# repository has no merge queue. Add a merge_group trigger when it has one.
+on:
+  push:
+    branches:
+      - master
+  workflow_dispatch:
+
+# Run only one test run against staging at a time. The runs share the test
+# organization, and the sweeper of one run could delete what another run
+# makes. GitHub keeps a maximum of one pending run in each group. A new run
+# cancels the older pending run.
+concurrency:
+  group: acceptance-tests
+  cancel-in-progress: false
+
+jobs:
+  acceptance-tests:
+    # For guidance on runner selection, visit:
+    # https://xtranet-sonarsource.atlassian.net/wiki/spaces/Platform/pages/3694231566/GitHub+Actions+Runner+-+GitHub
+    runs-on: sonar-s
+    name: Acceptance tests
+    timeout-minutes: 45
+    permissions:
+      id-token: write
+      contents: read
+    # The host of the staging instance is a repository variable, because this
+    # public repository holds no real host names. The tests and the sweepers
+    # delete only on a host that SONARQUBE_TEST_ALLOWED_HOSTS names.
+    env:
+      SONARQUBE_URL: https://${{ vars.SONARQUBE_STAGING_HOST }}
+      SONARQUBE_TEST_ALLOWED_HOSTS: ${{ vars.SONARQUBE_STAGING_HOST }}
+    steps:
+      - name: Check the repository variable
+        env:
+          STAGING_HOST: ${{ vars.SONARQUBE_STAGING_HOST }}
+        run: |
+          if [[ -z "${STAGING_HOST}" ]]; then
+            echo "The repository variable SONARQUBE_STAGING_HOST is not set. Set it to the host of the staging instance."
+            exit 1
+          fi
+
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Go
+        uses: ./.github/actions/setup-go
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        with:
+          terraform_wrapper: false
+
+      # The entry is unprotected, so a manual run on a branch can read it too.
+      - name: Fetch the Vault secrets
+        id: secrets
+        uses: SonarSource/vault-action-wrapper@a7fa5fd4a4e4e0f2593f6137c0812cac196cf4ce # 3.7.0
+        with:
+          secrets: |
+            development/team/sonarcloud/kv/data/terraform-provider-acc-dopex token | SONARQUBE_TOKEN;
+            development/team/sonarcloud/kv/data/terraform-provider-acc-dopex organization_key | SONARQUBE_TEST_ORGANIZATION;
+            development/team/sonarcloud/kv/data/terraform-provider-acc-dopex installation_id_eu | SONARQUBE_TEST_GITHUB_INSTALLATION_ID;
+            development/team/sonarcloud/kv/data/terraform-provider-acc-dopex repo_slug | SONARQUBE_TEST_GITHUB_REPOSITORY;
+
+      # A run that stops before its cleanup leaves organizations, projects,
+      # groups, templates and gates. The sweepers delete them, so that this
+      # run can make them again.
+      - name: Sweep what an earlier run left
+        env:
+          SONARQUBE_TOKEN: ${{ fromJSON(steps.secrets.outputs.vault).SONARQUBE_TOKEN }}
+          SONARQUBE_TEST_ORGANIZATION: ${{ fromJSON(steps.secrets.outputs.vault).SONARQUBE_TEST_ORGANIZATION }}
+        run: make sweep
+
+      - name: Run the acceptance tests against SonarQube Cloud staging
+        env:
+          SONARQUBE_TOKEN: ${{ fromJSON(steps.secrets.outputs.vault).SONARQUBE_TOKEN }}
+          SONARQUBE_TEST_ORGANIZATION: ${{ fromJSON(steps.secrets.outputs.vault).SONARQUBE_TEST_ORGANIZATION }}
+          SONARQUBE_TEST_GITHUB_INSTALLATION_ID: ${{ fromJSON(steps.secrets.outputs.vault).SONARQUBE_TEST_GITHUB_INSTALLATION_ID }}
+          SONARQUBE_TEST_GITHUB_REPOSITORY: ${{ fromJSON(steps.secrets.outputs.vault).SONARQUBE_TEST_GITHUB_REPOSITORY }}
+        run: make testacc
+
+  notify_failure:
+    name: Notify Failure
+    needs: acceptance-tests
+    # A manual run on a branch reports to whoever started it. Only a run on the
+    # default branch alerts the squad.
+    if: >-
+      !cancelled() && failure() &&
+      github.ref_name == github.event.repository.default_branch
+    permissions:
+      id-token: write
+      actions: read
+    runs-on: sonar-xs
+    steps:
+      - uses: SonarSource/release-github-actions/notify-failure@e9a93a9d84a482a3a90d750cd3079d645b7d423a # 1.9.16
+        with:
+          project-name: terraform-provider-sonarqube
+          slack-channel: squad-dopex-on-call
+          needs: ${{ toJSON(needs) }}
