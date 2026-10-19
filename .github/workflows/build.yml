@@ -65,14 +65,14 @@ jobs:
       - name: Fetch the Vault secrets
         if: env.SONAR_ANALYSIS_ENABLED == 'true'
         id: secrets
-        uses: SonarSource/vault-action-wrapper@a7fa5fd4a4e4e0f2593f6137c0812cac196cf4ce # 3.7.0
+        uses: SonarSource/vault-action-wrapper@v3
         with:
           secrets: |
             development/kv/data/sonarcloud token | SONAR_TOKEN;
 
       - name: SonarQube Cloud analysis
         if: env.SONAR_ANALYSIS_ENABLED == 'true'
-        uses: SonarSource/sonarqube-scan-action@d209202bc7d53ff1cc128f7f907dac145c9d6ae9 # v8.3.0
+        uses: SonarSource/sonarqube-scan-action@v8
         env:
           # The `|| '{}'` is necessary. GitHub evaluates the env block of a
           # step even when the condition of that step is false. On a pull
@@ -93,7 +93,7 @@ jobs:
       actions: read
     runs-on: sonar-xs
     steps:
-      - uses: SonarSource/release-github-actions/notify-failure@e9a93a9d84a482a3a90d750cd3079d645b7d423a # 1.9.16
+      - uses: SonarSource/release-github-actions/notify-failure@v1
         with:
           project-name: terraform-provider-sonarqube
           slack-channel: squad-dopex-on-call
