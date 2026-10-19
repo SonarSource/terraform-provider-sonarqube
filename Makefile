@@ -10,7 +10,7 @@ ACCEPTANCE_LOG ?= acceptance-tests.log
 # skips until it has a second staging user (TFP-36).
 ALLOWED_SKIP := TestAccOrganizationPermissionsUserResource
 
-.PHONY: testacc sweep
+.PHONY: testacc sweep release-check
 
 # Run the acceptance tests. The environment variables that AGENTS.md lists must
 # be set. The timeout applies to each package, not to the whole run.
@@ -27,3 +27,8 @@ testacc:
 # because the sweepers are the same in each package that imports acctest.
 sweep:
 	TF_ACC=1 go test ./internal/provider/cloud -count=1 -v -sweep=all -sweep-allow-failures
+
+# Build a snapshot release, sign it with a temporary key, and install it from a
+# local mirror. It needs goreleaser, gpg, jq, shasum and terraform.
+release-check:
+	scripts/release/check.sh
