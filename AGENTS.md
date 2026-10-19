@@ -135,6 +135,20 @@ only where `TestMain` calls `resource.TestMain`. A package without that
 `TestMain` ignores the flag, and `go test` refuses it in a package that does
 not import `helper/resource`.
 
+`.github/workflows/acceptance-tests.yml` runs the acceptance tests against
+SonarQube Cloud staging after each merge to `master` and each night at 03:17
+UTC. A failed run on `master` sends a Slack message to the squad. GitHub
+disables the schedule of a public repository after 60 days without activity
+in the repository. Then the nightly runs stop without a message. To see the
+state of the workflow and to enable it again, run:
+
+```bash
+gh workflow list --all
+gh workflow enable acceptance-tests.yml
+```
+
+A disabled workflow shows the state `disabled_inactivity`.
+
 When imports or dependencies change, run `go mod tidy` and review both
 `go.mod` and `go.sum`.
 

@@ -278,15 +278,31 @@ const EnvTestRepository = "SONARQUBE_TEST_GITHUB_REPOSITORY"
 // seconds pass. Some lists of SonarQube Cloud show a change only after some
 // seconds.
 func WaitFor(check func() (bool, error)) error {
-	return waitFor(check, 60*time.Second, time.Second)
+	return waitFor(check, 1, 60*time.Second, time.Second)
 }
 
-func waitFor(check func() (bool, error), timeout, interval time.Duration) error {
+// WaitForSteady is WaitFor, but check must report true on times calls in
+// sequence. Some lists of SonarQube Cloud show the new state and then the old
+// state again for some seconds, so one true result is not sufficient before a
+// step that reads the list again.
+func WaitForSteady(check func() (bool, error), times int) error {
+	return waitFor(check, times, 60*time.Second, time.Second)
+}
+
+func waitFor(check func() (bool, error), times int, timeout, interval time.Duration) error {
 	deadline := time.Now().Add(timeout)
-	for {
+	for seen := 0; ; {
 		ok, err := check()
-		if err != nil || ok {
+		if err != nil {
 			return err
+		}
+		if ok {
+			seen++
+		} else {
+			seen = 0
+		}
+		if seen >= times {
+			return nil
 		}
 		if time.Now().After(deadline) {
 			return fmt.Errorf("the API did not show the expected state in %s", timeout)

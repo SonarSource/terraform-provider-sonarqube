@@ -3,21 +3,30 @@ name: Acceptance tests
 # This repository is public. A run from a pull_request trigger would give the
 # staging credentials to code that nobody examined, so this workflow has no
 # pull_request trigger, and never uses pull_request_target. The tests run
-# after a merge to master, or by hand. They do not stop a merge, because the
-# repository has no merge queue. Add a merge_group trigger when it has one.
+# after a merge to master, each night, or by hand. They do not stop a merge,
+# because the repository has no merge queue. Add a merge_group trigger when it
+# has one.
 on:
   push:
     branches:
       - master
   workflow_dispatch:
+  # The nightly run finds changes of staging and of the APIs between two
+  # merges. GitHub disables the schedule after 60 days without activity in the
+  # repository. AGENTS.md tells how to enable it again.
+  schedule:
+    # GitHub can delay or drop a scheduled run at the start of an hour.
+    - cron: "17 3 * * *"
 
 # Run only one test run against staging at a time. The runs share the test
 # organization, and the sweeper of one run could delete what another run
-# makes. GitHub keeps a maximum of one pending run in each group. A new run
-# cancels the older pending run.
+# makes. With "queue: max", the group keeps up to 100 pending runs and starts
+# them one at a time. Thus a nightly run does not cancel the pending run of a
+# merge.
 concurrency:
   group: acceptance-tests
   cancel-in-progress: false
+  queue: max
 
 jobs:
   acceptance-tests:
@@ -88,7 +97,8 @@ jobs:
     name: Notify Failure
     needs: acceptance-tests
     # A manual run on a branch reports to whoever started it. Only a run on the
-    # default branch alerts the squad.
+    # default branch alerts the squad. A nightly run is on the default branch,
+    # so its failure alerts the squad too.
     if: >-
       !cancelled() && failure() &&
       github.ref_name == github.event.repository.default_branch

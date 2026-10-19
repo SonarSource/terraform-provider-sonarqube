@@ -110,8 +110,46 @@ func TestWaitForReturnsTheErrorOfCheck(t *testing.T) {
 	}
 }
 
+func TestWaitForNeedsTrueResultsInSequence(t *testing.T) {
+	results := []bool{true, false, true, true, true}
+	calls := 0
+	check := func() (bool, error) {
+		calls++
+		if calls > len(results) {
+			t.Fatalf("calls = %d, want %d", calls, len(results))
+		}
+		return results[calls-1], nil
+	}
+	err := waitFor(check, 3, time.Second, time.Millisecond)
+	if err != nil || calls != len(results) {
+		t.Fatalf("calls = %d, err = %v", calls, err)
+	}
+}
+
+// The results flap between the old and the new state, so they never show the
+// new state three times in sequence.
+func TestWaitForStopsAfterTimeoutWhenResultsFlap(t *testing.T) {
+	results := []bool{true, true, false}
+	calls := 0
+	check := func() (bool, error) {
+		calls++
+		return results[(calls-1)%len(results)], nil
+	}
+	err := waitFor(check, 3, 20*time.Millisecond, time.Millisecond)
+	if err == nil || !strings.Contains(err.Error(), "did not show the expected state") {
+		t.Fatalf("calls = %d, err = %v", calls, err)
+	}
+}
+
+func TestWaitForSteadyReturnsTheErrorOfCheck(t *testing.T) {
+	failure := errors.New("refused")
+	if err := WaitForSteady(func() (bool, error) { return false, failure }, 2); !errors.Is(err, failure) {
+		t.Fatalf("err = %v", err)
+	}
+}
+
 func TestWaitForStopsAfterTimeout(t *testing.T) {
-	err := waitFor(func() (bool, error) { return false, nil }, time.Millisecond, time.Millisecond)
+	err := waitFor(func() (bool, error) { return false, nil }, 1, time.Millisecond, time.Millisecond)
 	if err == nil || !strings.Contains(err.Error(), "did not show the expected state") {
 		t.Fatalf("err = %v", err)
 	}
