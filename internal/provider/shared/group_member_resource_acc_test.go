@@ -45,7 +45,11 @@ func TestAccGroupMemberResource(t *testing.T) {
 				if err := acctest.Client().RemoveGroupMember(t.Context(), organization, first, login); err != nil {
 					t.Fatal(err)
 				}
-				if err := m.isMember(first, false)(nil); err != nil {
+				// The list can show the removed membership again after it
+				// showed the removal, and then the plan finds no change. Read
+				// reads again during the 6 seconds of readRetries while it sees
+				// no membership, so the wait must be longer than that.
+				if err := acctest.WaitForSteady(m.shows(first, false), 10); err != nil {
 					t.Fatal(err)
 				}
 			}, PlanOnly: true, ExpectNonEmptyPlan: true},
@@ -101,10 +105,15 @@ func (m groupMembers) member(group string) string {
 // can show the old members for some seconds after a change.
 func (m groupMembers) isMember(group string, want bool) resource.TestCheckFunc {
 	return func(*terraform.State) error {
-		return acctest.WaitFor(func() (bool, error) {
-			member, err := acctest.Client().IsGroupMember(m.t.Context(), m.organization, group, m.login)
-			return err == nil && member == want, err
-		})
+		return acctest.WaitFor(m.shows(group, want))
+	}
+}
+
+// shows reports if the member list shows the membership as want.
+func (m groupMembers) shows(group string, want bool) func() (bool, error) {
+	return func() (bool, error) {
+		member, err := acctest.Client().IsGroupMember(m.t.Context(), m.organization, group, m.login)
+		return err == nil && member == want, err
 	}
 }
 
