@@ -1,6 +1,7 @@
 package shared_test
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"math/rand/v2"
@@ -37,9 +38,9 @@ func TestAccGroupResource(t *testing.T) {
 	shows := func(groupName, description string) resource.TestCheckFunc {
 		return func(state *terraform.State) error {
 			id = state.RootModule().Resources[address].Primary.ID
-			if err := waitForGroup(t, organization, id, func(group *client.Group) bool {
+			if err := acctest.WaitFor(groupIs(t.Context(), organization, id, func(group *client.Group) bool {
 				return group != nil && group.Name == groupName && group.Description == description
-			}); err != nil {
+			})); err != nil {
 				return err
 			}
 			// Import finds the group by name, and the name filter has its own lag.
@@ -58,7 +59,7 @@ func TestAccGroupResource(t *testing.T) {
 		},
 		ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories,
 		CheckDestroy: func(*terraform.State) error {
-			return waitForGroup(t, organization, id, func(group *client.Group) bool { return group == nil })
+			return acctest.WaitFor(groupIs(t.Context(), organization, id, func(group *client.Group) bool { return group == nil }))
 		},
 		Steps: []resource.TestStep{
 			{Config: config(name, "Initial"), Check: resource.ComposeAggregateTestCheckFunc(
@@ -77,9 +78,13 @@ func TestAccGroupResource(t *testing.T) {
 				if err := acctest.Client().UpdateGroup(t.Context(), id, outsideName, ""); err != nil {
 					t.Fatal(err)
 				}
-				if err := waitForGroup(t, organization, id, func(group *client.Group) bool {
+				// The list can show the old name again after it showed the new
+				// name, and then the plan finds no change. Read reads again
+				// during the 6 seconds of readRetries while it sees another
+				// name, so the wait must be longer than that.
+				if err := acctest.WaitForSteady(groupIs(t.Context(), organization, id, func(group *client.Group) bool {
 					return group != nil && group.Name == outsideName
-				}); err != nil {
+				}), 10); err != nil {
 					t.Fatal(err)
 				}
 			}, PlanOnly: true, ExpectNonEmptyPlan: true},
@@ -88,7 +93,11 @@ func TestAccGroupResource(t *testing.T) {
 				if err := acctest.Client().DeleteGroup(t.Context(), id); err != nil {
 					t.Fatal(err)
 				}
-				if err := waitForGroup(t, organization, id, func(group *client.Group) bool { return group == nil }); err != nil {
+				// The same wait as for the rename, because the list can show
+				// the deleted group again.
+				if err := acctest.WaitForSteady(groupIs(t.Context(), organization, id, func(group *client.Group) bool {
+					return group == nil
+				}), 10); err != nil {
 					t.Fatal(err)
 				}
 			}, PlanOnly: true, ExpectNonEmptyPlan: true},
@@ -97,15 +106,14 @@ func TestAccGroupResource(t *testing.T) {
 	})
 }
 
-// waitForGroup reads the group by id until done accepts it, or nil when the
-// organization does not hold it.
-func waitForGroup(t *testing.T, organization, id string, done func(*client.Group) bool) error {
-	t.Helper()
-	return acctest.WaitFor(func() (bool, error) {
-		group, err := acctest.Client().GetGroup(t.Context(), organization, id)
+// groupIs is a check for acctest.WaitFor that reads the group by id and gives
+// it to done, or nil when the organization does not hold it.
+func groupIs(ctx context.Context, organization, id string, done func(*client.Group) bool) func() (bool, error) {
+	return func() (bool, error) {
+		group, err := acctest.Client().GetGroup(ctx, organization, id)
 		if errors.Is(err, client.ErrNotFound) {
 			group, err = nil, nil
 		}
 		return err == nil && done(group), err
-	})
+	}
 }
