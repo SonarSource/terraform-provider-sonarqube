@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"math/rand/v2"
+	"regexp"
 	"slices"
 	"strings"
 	"testing"
@@ -50,6 +51,10 @@ func TestAccPermissionTemplateResource(t *testing.T) {
 			},
 			{Config: p.config(p.name, true), PlanOnly: true},
 			{ResourceName: permissionTemplateAddress, ImportState: true, ImportStateId: organization + "/" + p.name, ImportStateVerify: true},
+			acctest.ImportError(permissionTemplateAddress, organization,
+				regexp.MustCompile(`Invalid permission template import ID`)),
+			acctest.ImportError(permissionTemplateAddress, organization+"/"+acctest.MissingKey,
+				regexp.MustCompile(`Permission template `+acctest.MissingKey+` not found`)),
 			{
 				// A grant change in the UI shows in the next plan, and the
 				// apply sets the grants of the configuration again.
@@ -74,6 +79,19 @@ func TestAccPermissionTemplateResource(t *testing.T) {
 				),
 			},
 			{Config: p.config(renamed, false), PlanOnly: true},
+			acctest.DeletedOutside(t, permissionTemplateAddress, p.config(renamed, false),
+				p.hasGrants([]client.TemplateGrant{{Kind: client.GranteeGroup, Name: p.group, Permission: "user"}}),
+				func() error {
+					c := acctest.Client()
+					id, err := c.FindPermissionTemplateID(t.Context(), organization, renamed)
+					if err != nil {
+						return err
+					}
+					return c.DeletePermissionTemplate(t.Context(), organization, id)
+				},
+				func() (string, error) {
+					return acctest.Client().FindPermissionTemplateID(t.Context(), organization, renamed)
+				}),
 		},
 	})
 }

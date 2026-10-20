@@ -8,6 +8,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 
 	"github.com/SonarSource/terraform-provider-sonarqube/internal/acctest"
+	"github.com/SonarSource/terraform-provider-sonarqube/internal/client"
 )
 
 // The test makes and deletes a real organization, so it needs a live instance
@@ -52,6 +53,12 @@ func TestAccOrganizationResource(t *testing.T) {
 				ImportStateId:     renamedKey,
 				ImportStateVerify: true,
 			},
+			acctest.ImportError("sonarqube_cloud_organization.test", acctest.MissingKey, acctest.MissingImport),
+			acctest.DeletedOutside(t, "sonarqube_cloud_organization.test",
+				testAccOrganizationConfig(renamedKey, "Second name", "Second description"),
+				resource.TestCheckResourceAttr("sonarqube_cloud_organization.test", "key", renamedKey),
+				func() error { return acctest.Client().DeleteOrganization(t.Context(), renamedKey) },
+				func() (*client.Organization, error) { return acctest.Client().GetOrganization(t.Context(), renamedKey) }),
 		},
 	})
 }

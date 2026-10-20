@@ -4,6 +4,8 @@ import (
 	"errors"
 	"fmt"
 	"math/rand/v2"
+	"os"
+	"regexp"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
@@ -57,8 +59,8 @@ func TestAccQualityGateResource(t *testing.T) {
 					}),
 					resource.TestCheckResourceAttrPair(qualityGateDataAddress, "id", qualityGateAddress, "id"),
 					resource.TestCheckResourceAttr(qualityGateDataAddress, "condition.#", "2"),
-					func(s *terraform.State) error {
-						gateID = s.RootModule().Resources[qualityGateAddress].Primary.ID
+					testAccRecordID(qualityGateAddress, &gateID),
+					func(*terraform.State) error {
 						var err error
 						firstIDs, err = testAccQualityGateConditionIDs(t, gateID)
 						return err
@@ -120,8 +122,29 @@ func TestAccQualityGateResource(t *testing.T) {
 				ImportStateId:     organization + "/" + gateName,
 				ImportStateVerify: true,
 			},
+			acctest.ImportError(qualityGateAddress, gateName,
+				regexp.MustCompile(`Invalid quality gate import ID`)),
+			acctest.ImportError(qualityGateAddress, organization+"/"+acctest.MissingKey,
+				regexp.MustCompile(`Cannot find the quality gate`)),
+			// CheckDestroy then looks for the gate that the apply makes.
+			acctest.DeletedOutside(t, qualityGateAddress, testAccQualityGateConfig(organization, gateName, "85", false),
+				resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr(qualityGateAddress, "condition.#", "2"),
+					testAccRecordID(qualityGateAddress, &gateID),
+				),
+				func() error { return acctest.Client().DeleteQualityGate(t.Context(), gateID) },
+				func() (*client.QualityGate, error) { return acctest.Client().GetQualityGate(t.Context(), gateID) }),
 		},
 	})
+}
+
+// testAccRecordID is a check that writes the identifier of the object of
+// address to id, for the steps and the checks that come after it.
+func testAccRecordID(address string, id *string) resource.TestCheckFunc {
+	return func(s *terraform.State) error {
+		*id = s.RootModule().Resources[address].Primary.ID
+		return nil
+	}
 }
 
 // testAccQualityGateConditionIDs reads the condition identifiers of a gate
@@ -204,4 +227,68 @@ data "sonarqube_cloud_quality_gate" "test" {
   name         = sonarqube_cloud_quality_gate.test.name
 }
 `, organization, gateName, coverage, more)
+}
+
+// The test uses the shared organization, so that it makes no organization.
+// Only the last step makes a gate: the check of the metric key comes after
+// the create. The failed apply taints the gate, and the destroy deletes it.
+func TestAccQualityGateResourceInvalidConditions(t *testing.T) {
+	gateName := fmt.Sprintf("%sinvalid-gate-%d", acctest.KeyPrefix, rand.Uint32())
+	organization := os.Getenv(acctest.EnvTestOrganization)
+	config := func(conditions string) string {
+		return fmt.Sprintf(`
+resource "sonarqube_cloud_quality_gate" "test" {
+  organization = %q
+  name         = %q
+  %s
+}
+`, organization, gateName, conditions)
+	}
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { acctest.PreCheckSharedOrganization(t) },
+		ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories,
+		CheckDestroy: acctest.CheckGone("quality gate "+gateName, func() (*client.QualityGate, error) {
+			c := acctest.Client()
+			org, err := c.GetOrganization(t.Context(), organization)
+			if err != nil {
+				return nil, err
+			}
+			return c.FindQualityGate(t.Context(), org.UUIDV4, gateName)
+		}),
+		Steps: []resource.TestStep{
+			{
+				Config: config(`condition {
+    metric    = "new_coverage"
+    operator  = "EQ"
+    threshold = "80"
+  }`),
+				PlanOnly:    true,
+				ExpectError: regexp.MustCompile(`value must be one of`),
+			},
+			{
+				Config: config(`condition {
+    metric    = "new_coverage"
+    operator  = "LT"
+    threshold = "80"
+  }
+
+  condition {
+    metric    = "new_coverage"
+    operator  = "LT"
+    threshold = "90"
+  }`),
+				PlanOnly:    true,
+				ExpectError: regexp.MustCompile(`Duplicate quality gate metric`),
+			},
+			{
+				Config: config(`condition {
+    metric    = "tf_acc_test_no_such_metric"
+    operator  = "LT"
+    threshold = "80"
+  }`),
+				ExpectError: regexp.MustCompile(`Cannot resolve metric tf_acc_test_no_such_metric`),
+			},
+		},
+	})
 }

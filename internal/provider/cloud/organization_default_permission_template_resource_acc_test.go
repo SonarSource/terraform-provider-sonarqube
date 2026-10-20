@@ -58,6 +58,7 @@ func TestAccOrganizationDefaultPermissionTemplateResource(t *testing.T) {
 			},
 			{Config: d.config(true, false), PlanOnly: true},
 			{ResourceName: defaultTemplateAddress, ImportState: true, ImportStateId: organization, ImportStateVerify: true},
+			acctest.ImportError(defaultTemplateAddress, acctest.MissingKey, acctest.MissingImport),
 			{
 				// A change of the default in the UI shows in the plan, and
 				// the apply sets the template of the configuration again.

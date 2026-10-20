@@ -65,6 +65,8 @@ func TestAccOrganizationBindingResource(t *testing.T) {
 				ImportStateId:     key,
 				ImportStateVerify: true,
 			},
+			acctest.ImportError(bindingResource, acctest.MissingKey,
+				regexp.MustCompile(`Organization `+acctest.MissingKey+` not found`)),
 			{
 				// The installation cannot change. The plan must say so,
 				// because an apply cannot: the delete of a binding removes

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math/rand/v2"
 	"os"
+	"regexp"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
@@ -73,6 +74,8 @@ func TestAccGroupResource(t *testing.T) {
 				shows(renamed, "Changed"),
 			)},
 			{ResourceName: address, ImportState: true, ImportStateId: organization + "/" + renamed, ImportStateVerify: true},
+			acctest.ImportError(address, renamed, regexp.MustCompile(`Invalid group import ID`)),
+			acctest.ImportError(address, organization+"/"+acctest.MissingKey, regexp.MustCompile(`Cannot import the group`)),
 			{Config: withoutDescription, Check: shows(renamed, "")},
 			{Config: withoutDescription, PreConfig: func() {
 				if err := acctest.Client().UpdateGroup(t.Context(), id, outsideName, ""); err != nil {

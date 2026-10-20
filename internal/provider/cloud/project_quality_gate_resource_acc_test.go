@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math/rand/v2"
 	"os"
+	"regexp"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
@@ -70,6 +71,9 @@ func TestAccProjectQualityGateResource(t *testing.T) {
 				ImportStateId:     organization + "/" + projectKey,
 				ImportStateVerify: true,
 			},
+			acctest.ImportError(projectQualityGateAddress, projectKey,
+				regexp.MustCompile(`Cannot import the project quality gate`)),
+			acctest.ImportError(projectQualityGateAddress, organization+"/"+acctest.MissingKey, acctest.MissingImport),
 			{
 				// The configuration drops the assignment and keeps the project.
 				// The destroy of the assignment must put the project back on
