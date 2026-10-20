@@ -59,7 +59,7 @@ func TestAccProjectPermissionsGroupResource(t *testing.T) {
 			acctest.PreCheckSharedOrganization(t)
 		},
 		ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories,
-		CheckDestroy:             testAccCheckProjectDeleted(t, organization, projectKey),
+		CheckDestroy:             acctest.CheckProjectDeleted(t, organization, projectKey),
 		Steps: []resource.TestStep{
 			{Config: config(`["issueadmin", "user"]`), Check: resource.ComposeAggregateTestCheckFunc(
 				resource.TestCheckResourceAttr(address, "id", organization+"/"+projectKey+"/group/"+name),
@@ -84,9 +84,7 @@ func TestAccProjectPermissionsGroupResource(t *testing.T) {
 }
 
 func TestAccProjectPermissionsUserResource(t *testing.T) {
-	if os.Getenv("TF_ACC") != "1" {
-		t.Skip("TF_ACC is not set")
-	}
+	acctest.PreCheckAcceptance(t)
 	organization := acctest.PreCheckSharedOrganization(t)
 	api := acctest.Client()
 	login, err := api.CurrentUserLogin(t.Context())
@@ -112,7 +110,7 @@ func TestAccProjectPermissionsUserResource(t *testing.T) {
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { acctest.PreCheckDestructive(t) },
 		ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories,
-		CheckDestroy:             testAccCheckProjectDeleted(t, organization, projectKey),
+		CheckDestroy:             acctest.CheckProjectDeleted(t, organization, projectKey),
 		Steps: []resource.TestStep{
 			{Config: config, Check: func(*terraform.State) error {
 				return checkPermissions(t, api, scope, user, []string{"issueadmin", "securityhotspotadmin"})

@@ -27,6 +27,9 @@ func TestAccOrganizationBindingResource(t *testing.T) {
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { acctest.PreCheckBinding(t) },
 		ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories,
+		// The destroy of the binding only removes it from the state. The
+		// binding is gone when its organization is gone.
+		CheckDestroy: acctest.CheckOrganizationsDeleted(t, key),
 		Steps: []resource.TestStep{
 			{
 				// resource.Test plans again after this apply and fails when

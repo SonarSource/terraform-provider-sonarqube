@@ -73,9 +73,7 @@ resource "sonarqube_cloud_organization_permissions" "test" {
 }
 
 func TestAccOrganizationPermissionsUserResource(t *testing.T) {
-	if os.Getenv("TF_ACC") != "1" {
-		t.Skip("TF_ACC is not set")
-	}
+	acctest.PreCheckAcceptance(t)
 	acctest.PreCheckDestructive(t)
 	organization := os.Getenv(acctest.EnvTestOrganization)
 	if organization == "" {

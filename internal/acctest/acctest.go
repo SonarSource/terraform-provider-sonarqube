@@ -16,6 +16,7 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-framework/providerserver"
 	"github.com/hashicorp/terraform-plugin-go/tfprotov6"
+	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 
 	"github.com/SonarSource/terraform-provider-sonarqube/internal/client"
 	"github.com/SonarSource/terraform-provider-sonarqube/internal/provider"
@@ -43,6 +44,17 @@ func PreCheck(t *testing.T) {
 	PreCheckToken(t)
 	if os.Getenv(EnvTestOrganization) == "" {
 		t.Skipf("%s is not set, so the acceptance test has no organization to read", EnvTestOrganization)
+	}
+}
+
+// PreCheckAcceptance skips a test that must do work before resource.Test, such
+// as making an object outside of Terraform, when TF_ACC is not set.
+// resource.Test does the same check, but only when it starts.
+func PreCheckAcceptance(t *testing.T) {
+	t.Helper()
+
+	if os.Getenv(resource.EnvTfAcc) == "" {
+		t.Skipf("%s is not set", resource.EnvTfAcc)
 	}
 }
 

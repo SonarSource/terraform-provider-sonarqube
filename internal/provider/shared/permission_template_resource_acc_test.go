@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"math/rand/v2"
-	"os"
 	"slices"
 	"strings"
 	"testing"
@@ -24,9 +23,7 @@ const permissionTemplateAddress = "sonarqube_permission_template.test"
 // Enterprise plan. On the Free plan, SonarQube Cloud refuses to create a
 // template.
 func TestAccPermissionTemplateResource(t *testing.T) {
-	if os.Getenv(resource.EnvTfAcc) == "" {
-		t.Skipf("%s is not set", resource.EnvTfAcc)
-	}
+	acctest.PreCheckAcceptance(t)
 	organization := acctest.PreCheckSharedOrganization(t)
 	login, err := acctest.Client().CurrentUserLogin(t.Context())
 	if err != nil {

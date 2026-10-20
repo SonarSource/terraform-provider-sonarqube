@@ -27,6 +27,7 @@ resource "sonarqube_project" "test" {
 			acctest.PreCheckSharedOrganization(t)
 		},
 		ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories,
+		CheckDestroy:             acctest.CheckProjectDeleted(t, organization, key),
 		Steps: []resource.TestStep{{
 			Config: config,
 			Check: resource.ComposeAggregateTestCheckFunc(

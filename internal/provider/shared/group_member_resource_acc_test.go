@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"math/rand/v2"
-	"os"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
@@ -15,9 +14,7 @@ import (
 )
 
 func TestAccGroupMemberResource(t *testing.T) {
-	if os.Getenv("TF_ACC") != "1" {
-		t.Skip("TF_ACC is not set")
-	}
+	acctest.PreCheckAcceptance(t)
 	organization := acctest.PreCheckSharedOrganization(t)
 	login, err := acctest.Client().CurrentUserLogin(t.Context())
 	if err != nil {

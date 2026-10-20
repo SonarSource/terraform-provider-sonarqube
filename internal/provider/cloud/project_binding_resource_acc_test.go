@@ -34,6 +34,9 @@ func TestAccProjectBindingResource(t *testing.T) {
 			}
 		},
 		ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories,
+		// The destroy of a binding only removes it from the state. The
+		// bindings are gone when the organization is gone.
+		CheckDestroy: acctest.CheckOrganizationsDeleted(t, organization),
 		Steps: []resource.TestStep{
 			{
 				// resource.Test plans again after this apply and fails when

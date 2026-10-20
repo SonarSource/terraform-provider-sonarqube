@@ -19,6 +19,7 @@ func TestAccOrganizationResource(t *testing.T) {
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { acctest.PreCheckDestructive(t) },
 		ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories,
+		CheckDestroy:             acctest.CheckOrganizationsDeleted(t, key, renamedKey),
 		Steps: []resource.TestStep{
 			{
 				Config: testAccOrganizationConfig(key, "First name", "First description"),

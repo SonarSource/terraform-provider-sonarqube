@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"math/rand/v2"
-	"os"
 	"slices"
 	"testing"
 
@@ -29,10 +28,12 @@ const (
 // delete the default template. So the last step sets the original default
 // again before the destroy of the template. After a failed step, the cleanup
 // does the same, then deletes the template.
+//
+// The test changes the default of the shared organization, and other tests
+// read that default. So it must not run in parallel with another test: do not
+// call t.Parallel, and keep -p 1 in the Makefile.
 func TestAccOrganizationDefaultPermissionTemplateResource(t *testing.T) {
-	if os.Getenv(resource.EnvTfAcc) == "" {
-		t.Skipf("%s is not set", resource.EnvTfAcc)
-	}
+	acctest.PreCheckAcceptance(t)
 	organization := acctest.PreCheckSharedOrganization(t)
 	suffix := rand.Uint32()
 	d := defaultTemplates{t: t, organization: organization,
