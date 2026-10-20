@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
+	"github.com/hashicorp/terraform-plugin-testing/terraform"
 
 	"github.com/SonarSource/terraform-provider-sonarqube/internal/acctest"
 )
@@ -25,7 +26,15 @@ data "sonarqube_cloud_organization" "test" {
 `, organization),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr("data.sonarqube_cloud_organization.test", "key", organization),
-					resource.TestCheckResourceAttrSet("data.sonarqube_cloud_organization.test", "name"),
+					// The name of the shared organization is not in this
+					// repository, so the check reads it from the API.
+					func(s *terraform.State) error {
+						org, err := acctest.Client().GetOrganization(t.Context(), organization)
+						if err != nil {
+							return err
+						}
+						return resource.TestCheckResourceAttr("data.sonarqube_cloud_organization.test", "name", org.Name)(s)
+					},
 				),
 			},
 		},

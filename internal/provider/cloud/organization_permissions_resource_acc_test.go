@@ -59,7 +59,6 @@ resource "sonarqube_cloud_organization_permissions" "test" {
 			{Config: config(`["scan"]`), Check: resource.ComposeAggregateTestCheckFunc(
 				resource.TestCheckResourceAttr(address, "permissions.#", "1"), check([]string{"scan"}),
 			)},
-			{Config: config(`["scan"]`)},
 			{Config: config(`["scan", "gateadmin"]`), Check: check([]string{"scan", "gateadmin"})},
 			{Config: config(`["scan"]`), Check: check([]string{"scan"})},
 			{Config: config(`["scan"]`), PreConfig: func() {
@@ -112,7 +111,6 @@ func TestAccOrganizationPermissionsUserResource(t *testing.T) {
 			{Config: config, Check: func(*terraform.State) error {
 				return checkPermissions(t, api, scope, user, []string{"scan"})
 			}},
-			{Config: config},
 			{ResourceName: "sonarqube_cloud_organization_permissions.test", ImportState: true,
 				ImportStateId: organization + "/user/" + login, ImportStateVerify: true},
 		},

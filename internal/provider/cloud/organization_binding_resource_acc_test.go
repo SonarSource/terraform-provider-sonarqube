@@ -8,6 +8,9 @@ import (
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
+	"github.com/hashicorp/terraform-plugin-testing/knownvalue"
+	"github.com/hashicorp/terraform-plugin-testing/plancheck"
+	"github.com/hashicorp/terraform-plugin-testing/tfjsonpath"
 
 	"github.com/SonarSource/terraform-provider-sonarqube/internal/acctest"
 	"github.com/SonarSource/terraform-provider-sonarqube/internal/client"
@@ -35,7 +38,7 @@ func TestAccOrganizationBindingResource(t *testing.T) {
 				// resource.Test plans again after this apply and fails when
 				// that plan is not empty, which is what UseStateForUnknown on
 				// the computed attributes has to deliver.
-				Config: testAccBindingConfig(key, installationID),
+				Config: testAccBindingConfig(key, installationID, false),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr(bindingResource, "organization_key", key),
 					resource.TestCheckResourceAttr(bindingResource, "installation_id", installationID),
@@ -80,9 +83,26 @@ func TestAccOrganizationBindingResource(t *testing.T) {
 				// expectation would therefore also pass when the modifier
 				// stops firing, which is the failure that this step exists to
 				// catch.
-				Config:      testAccBindingConfig(key, installationID+"0"),
+				Config:      testAccBindingConfig(key, installationID+"0", false),
 				PlanOnly:    true,
 				ExpectError: regexp.MustCompile(`The installation of a binding cannot change`),
+			},
+			{
+				// An update keeps the identifier, which UseStateForUnknown has
+				// to deliver. Without it, the plan shows the identifier as
+				// unknown, and a reference to it changes too.
+				//
+				// The automatic import must be available for the organization
+				// of the test. Otherwise the server writes false, and Update
+				// fails the apply with "The server refused the automatic
+				// import of repositories".
+				Config: testAccBindingConfig(key, installationID, true),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectResourceAction(bindingResource, plancheck.ResourceActionUpdate),
+						plancheck.ExpectKnownValue(bindingResource, tfjsonpath.New("id"), knownvalue.NotNull()),
+					},
+				},
 			},
 		},
 	})
@@ -96,8 +116,12 @@ const (
 
 // testAccBindingConfig makes the organization and binds it. The two go
 // together, because a destroy of the organization is what removes the
-// binding.
-func testAccBindingConfig(key, installationID string) string {
+// binding. autoImport turns on the automatic import of repositories.
+func testAccBindingConfig(key, installationID string, autoImport bool) string {
+	attributes := ""
+	if autoImport {
+		attributes = "\n  repo_auto_import_enabled = true"
+	}
 	return fmt.Sprintf(`
 resource "sonarqube_cloud_organization" "test" {
   key  = %[1]q
@@ -106,7 +130,7 @@ resource "sonarqube_cloud_organization" "test" {
 
 resource "sonarqube_cloud_organization_binding" "test" {
   organization_key = sonarqube_cloud_organization.test.key
-  installation_id  = %[2]q
+  installation_id  = %[2]q%[3]s
 }
 
 # Reads the binding that the resource above made. The reference gives the
@@ -114,5 +138,5 @@ resource "sonarqube_cloud_organization_binding" "test" {
 data "sonarqube_cloud_organization_binding" "test" {
   organization_key = sonarqube_cloud_organization_binding.test.organization_key
 }
-`, key, installationID)
+`, key, installationID, attributes)
 }

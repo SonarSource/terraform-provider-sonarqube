@@ -56,7 +56,6 @@ func TestAccOrganizationDefaultPermissionTemplateResource(t *testing.T) {
 					d.checkDefaultIsTest(),
 				),
 			},
-			{Config: d.config(true, false), PlanOnly: true},
 			{ResourceName: defaultTemplateAddress, ImportState: true, ImportStateId: organization, ImportStateVerify: true},
 			acctest.ImportError(defaultTemplateAddress, acctest.MissingKey, acctest.MissingImport),
 			{

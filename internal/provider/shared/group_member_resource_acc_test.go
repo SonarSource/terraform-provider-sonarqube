@@ -36,7 +36,6 @@ func TestAccGroupMemberResource(t *testing.T) {
 				m.isMember(first, true),
 				m.isMember(second, true),
 			)},
-			{Config: m.config(first, second, true), PlanOnly: true},
 			{ResourceName: "sonarqube_group_member.first", ImportState: true,
 				ImportStateId: organization + "/" + first + "/" + login, ImportStateVerify: true},
 			acctest.ImportError("sonarqube_group_member.first", organization+"/"+login,

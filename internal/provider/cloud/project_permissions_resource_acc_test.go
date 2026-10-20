@@ -119,7 +119,6 @@ func TestAccProjectPermissionsUserResource(t *testing.T) {
 			{Config: config, Check: func(*terraform.State) error {
 				return checkPermissions(t, api, scope, user, []string{"issueadmin", "securityhotspotadmin"})
 			}},
-			{Config: config},
 			{ResourceName: address, ImportState: true, ImportStateId: organization + "/" + projectKey + "/user/" + login, ImportStateVerify: true},
 			{Config: project, Check: func(*terraform.State) error {
 				return checkPermissions(t, api, scope, user, nil)
