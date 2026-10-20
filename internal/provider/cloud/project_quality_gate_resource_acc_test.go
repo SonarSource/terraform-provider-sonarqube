@@ -34,7 +34,7 @@ func TestAccProjectQualityGateResource(t *testing.T) {
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { acctest.PreCheckSharedOrganization(t) },
 		ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories,
-		CheckDestroy:             testAccCheckProjectDeleted(t, organization, projectKey),
+		CheckDestroy:             acctest.CheckProjectDeleted(t, organization, projectKey),
 		Steps: []resource.TestStep{
 			{
 				Config: testAccProjectQualityGateConfig(organization, projectKey, suffix, "first", true),
@@ -125,21 +125,6 @@ func testAccCheckProjectUsesDefaultGate(t *testing.T, organization, projectKey s
 			return err
 		}
 		return fmt.Errorf("project %s still has its own quality gate", projectKey)
-	}
-}
-
-// testAccCheckProjectDeleted runs after the destroy. It accepts only a project
-// that is not found, and not any other error.
-func testAccCheckProjectDeleted(t *testing.T, organization, projectKey string) resource.TestCheckFunc {
-	return func(*terraform.State) error {
-		_, err := acctest.Client().GetProject(t.Context(), organization, projectKey)
-		if errors.Is(err, client.ErrNotFound) {
-			return nil
-		}
-		if err != nil {
-			return err
-		}
-		return fmt.Errorf("project %s still exists", projectKey)
 	}
 }
 

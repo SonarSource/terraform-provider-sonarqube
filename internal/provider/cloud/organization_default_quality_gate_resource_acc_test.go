@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"math/rand/v2"
-	"os"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
@@ -12,6 +11,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-testing/terraform"
 
 	"github.com/SonarSource/terraform-provider-sonarqube/internal/acctest"
+	"github.com/SonarSource/terraform-provider-sonarqube/internal/client"
 )
 
 const (
@@ -27,17 +27,22 @@ const (
 // default, and SonarQube Cloud refuses to delete the default gate, so a gate of
 // the configuration could stay behind after a failed step. The cleanup first
 // sets the original default again, then deletes the gate.
+//
+// The test changes the default of the shared organization, and other tests
+// read that default. So it must not run in parallel with another test: do not
+// call t.Parallel, and keep -p 1 in the Makefile.
 func TestAccOrganizationDefaultQualityGateResource(t *testing.T) {
 	// The configuration of each step needs the gate, so the gate is made
 	// before resource.Test, which would skip the test without TF_ACC.
-	if os.Getenv(resource.EnvTfAcc) == "" {
-		t.Skipf("%s is not set", resource.EnvTfAcc)
-	}
+	acctest.PreCheckAcceptance(t)
 	organization := acctest.PreCheckSharedOrganization(t)
 	gateID := testAccPrepareDefaultQualityGate(t, organization)
 
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories,
+		// The destroy only removes the default from the state, so the last
+		// default of the configuration, Sonar way, must stay.
+		CheckDestroy: testAccCheckSonarWayIsDefault(t, organization),
 		Steps: []resource.TestStep{
 			{
 				Config: testAccDefaultQualityGateConfig(organization, fmt.Sprintf("%q", gateID)),
@@ -118,19 +123,40 @@ func testAccCheckDefaultQualityGate(t *testing.T, organization, want string) res
 	}
 }
 
+// testAccCheckSonarWayIsDefault compares the default of the organization in
+// the API with the built-in gate Sonar way.
+func testAccCheckSonarWayIsDefault(t *testing.T, organization string) resource.TestCheckFunc {
+	return func(state *terraform.State) error {
+		_, sonarWay, err := testAccFindSonarWay(t, organization)
+		if err != nil {
+			return err
+		}
+		return testAccCheckDefaultQualityGate(t, organization, sonarWay.ID)(state)
+	}
+}
+
 func testAccSetSonarWayAsDefault(t *testing.T, organization string) {
+	org, sonarWay, err := testAccFindSonarWay(t, organization)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := acctest.Client().SetDefaultQualityGate(t.Context(), org.UUIDV4, sonarWay.ID); err != nil {
+		t.Fatalf("cannot change the default outside of Terraform: %v", err)
+	}
+}
+
+// testAccFindSonarWay reads the organization and its built-in gate Sonar way.
+func testAccFindSonarWay(t *testing.T, organization string) (*client.Organization, *client.QualityGate, error) {
 	c := acctest.Client()
 	org, err := c.GetOrganization(t.Context(), organization)
 	if err != nil {
-		t.Fatalf("cannot read the organization: %v", err)
+		return nil, nil, fmt.Errorf("cannot read the organization: %w", err)
 	}
 	sonarWay, err := c.FindQualityGate(t.Context(), org.UUIDV4, "Sonar way")
 	if err != nil {
-		t.Fatalf("cannot find Sonar way: %v", err)
+		return nil, nil, fmt.Errorf("cannot find Sonar way: %w", err)
 	}
-	if err := c.SetDefaultQualityGate(t.Context(), org.UUIDV4, sonarWay.ID); err != nil {
-		t.Fatalf("cannot change the default outside of Terraform: %v", err)
-	}
+	return org, sonarWay, nil
 }
 
 func testAccDefaultQualityGateConfig(organization, gateReference string) string {

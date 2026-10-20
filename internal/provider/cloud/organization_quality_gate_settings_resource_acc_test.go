@@ -3,14 +3,11 @@ package cloud_test
 import (
 	"fmt"
 	"math/rand/v2"
-	"os"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 
 	"github.com/SonarSource/terraform-provider-sonarqube/internal/acctest"
-	"github.com/SonarSource/terraform-provider-sonarqube/internal/client"
-	"github.com/SonarSource/terraform-provider-sonarqube/internal/provider"
 )
 
 func TestAccOrganizationQualityGateSettingsResource(t *testing.T) {
@@ -32,6 +29,9 @@ resource "sonarqube_cloud_organization_quality_gate_settings" "test" {
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { acctest.PreCheckDestructive(t) },
 		ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories,
+		// The destroy of the settings only removes them from the state. The
+		// settings are gone when their organization is gone.
+		CheckDestroy: acctest.CheckOrganizationsDeleted(t, key),
 		Steps: []resource.TestStep{
 			{
 				Config: config(true),
@@ -43,10 +43,7 @@ resource "sonarqube_cloud_organization_quality_gate_settings" "test" {
 			{Config: config(true)},
 			{
 				PreConfig: func() {
-					c := client.New(client.Config{
-						URL: os.Getenv(provider.EnvURL), APIURL: os.Getenv(provider.EnvAPIURL),
-						Token: os.Getenv(provider.EnvToken), Product: client.ProductCloud,
-					})
+					c := acctest.Client()
 					org, err := c.GetOrganization(t.Context(), key)
 					if err != nil {
 						t.Fatal(err)
