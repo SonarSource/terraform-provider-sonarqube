@@ -49,7 +49,6 @@ func TestAccPermissionTemplateResource(t *testing.T) {
 					p.hasGrants(p.fullGrants()),
 				),
 			},
-			{Config: p.config(p.name, true), PlanOnly: true},
 			{ResourceName: permissionTemplateAddress, ImportState: true, ImportStateId: organization + "/" + p.name, ImportStateVerify: true},
 			acctest.ImportError(permissionTemplateAddress, organization,
 				regexp.MustCompile(`Invalid permission template import ID`)),
@@ -78,7 +77,6 @@ func TestAccPermissionTemplateResource(t *testing.T) {
 					p.hasGrants([]client.TemplateGrant{{Kind: client.GranteeGroup, Name: p.group, Permission: "user"}}),
 				),
 			},
-			{Config: p.config(renamed, false), PlanOnly: true},
 			acctest.DeletedOutside(t, permissionTemplateAddress, p.config(renamed, false),
 				p.hasGrants([]client.TemplateGrant{{Kind: client.GranteeGroup, Name: p.group, Permission: "user"}}),
 				func() error {

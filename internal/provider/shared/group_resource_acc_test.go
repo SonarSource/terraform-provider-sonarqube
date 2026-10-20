@@ -45,13 +45,7 @@ func TestAccGroupResource(t *testing.T) {
 				return err
 			}
 			// Import finds the group by name, and the name filter has its own lag.
-			return acctest.WaitFor(func() (bool, error) {
-				group, err := acctest.Client().FindGroupByName(t.Context(), organization, groupName)
-				if errors.Is(err, client.ErrNotFound) {
-					return false, nil
-				}
-				return err == nil && group.ID == id, err
-			})
+			return acctest.WaitFor(groupNamed(t.Context(), organization, groupName, id))
 		}
 	}
 	resource.Test(t, resource.TestCase{
@@ -118,5 +112,18 @@ func groupIs(ctx context.Context, organization, id string, done func(*client.Gro
 			group, err = nil, nil
 		}
 		return err == nil && done(group), err
+	}
+}
+
+// groupNamed is a check for acctest.WaitFor that finds the group by name, as
+// the import and the data source do. It accepts the group that has the
+// identifier id.
+func groupNamed(ctx context.Context, organization, name, id string) func() (bool, error) {
+	return func() (bool, error) {
+		group, err := acctest.Client().FindGroupByName(ctx, organization, name)
+		if errors.Is(err, client.ErrNotFound) {
+			return false, nil
+		}
+		return err == nil && group.ID == id, err
 	}
 }
