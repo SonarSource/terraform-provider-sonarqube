@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"math/rand/v2"
+	"regexp"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
@@ -38,6 +39,9 @@ func TestAccGroupMemberResource(t *testing.T) {
 			{Config: m.config(first, second, true), PlanOnly: true},
 			{ResourceName: "sonarqube_group_member.first", ImportState: true,
 				ImportStateId: organization + "/" + first + "/" + login, ImportStateVerify: true},
+			acctest.ImportError("sonarqube_group_member.first", organization+"/"+login,
+				regexp.MustCompile(`Invalid group member import ID`)),
+			acctest.ImportError("sonarqube_group_member.first", organization+"/"+acctest.MissingKey+"/"+login, acctest.MissingImport),
 			{Config: m.config(first, second, true), PreConfig: func() {
 				if err := acctest.Client().RemoveGroupMember(t.Context(), organization, first, login); err != nil {
 					t.Fatal(err)

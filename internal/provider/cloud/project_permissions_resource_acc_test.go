@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math/rand/v2"
 	"os"
+	"regexp"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
@@ -75,6 +76,9 @@ func TestAccProjectPermissionsGroupResource(t *testing.T) {
 			}, PlanOnly: true, ExpectNonEmptyPlan: true},
 			{Config: config(`["issueadmin"]`), Check: check([]string{"issueadmin"})},
 			{ResourceName: address, ImportState: true, ImportStateId: organization + "/" + projectKey + "/group/" + name, ImportStateVerify: true},
+			acctest.ImportError(address, organization+"/group/"+name,
+				regexp.MustCompile(`Invalid project permission import ID`)),
+			acctest.ImportError(address, organization+"/"+acctest.MissingKey+"/group/"+name, acctest.MissingImport),
 			{Config: base, Check: resource.ComposeAggregateTestCheckFunc(
 				check(nil),
 				func(*terraform.State) error { return checkPermissions(t, api, scope, owners, ownerPermissions) },

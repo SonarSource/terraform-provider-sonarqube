@@ -3,6 +3,7 @@ package shared_test
 import (
 	"fmt"
 	"os"
+	"regexp"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
@@ -25,5 +26,21 @@ func TestAccGroupDataSourceReadsBuiltInGroup(t *testing.T) {
 			resource.TestCheckResourceAttr("data.sonarqube_group.members", "built_in", "true"),
 			resource.TestCheckResourceAttr("data.sonarqube_group.members", "managed", "false"),
 		)}},
+	})
+}
+
+func TestAccGroupDataSourceMissingGroup(t *testing.T) {
+	organization := os.Getenv(acctest.EnvTestOrganization)
+	config := fmt.Sprintf(`data "sonarqube_group" "missing" {
+  organization = %q
+  name         = %q
+}`, organization, acctest.MissingKey)
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { acctest.PreCheck(t) },
+		ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories,
+		Steps: []resource.TestStep{{
+			Config:      config,
+			ExpectError: regexp.MustCompile(`Cannot find the group ` + acctest.MissingKey),
+		}},
 	})
 }

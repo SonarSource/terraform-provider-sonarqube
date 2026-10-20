@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math/rand/v2"
 	"os"
+	"regexp"
 	"slices"
 	"testing"
 
@@ -68,6 +69,9 @@ resource "sonarqube_cloud_organization_permissions" "test" {
 			}, PlanOnly: true, ExpectNonEmptyPlan: true},
 			{Config: config(`["scan"]`), Check: check([]string{"scan"})},
 			{ResourceName: address, ImportState: true, ImportStateId: organization + "/group/" + name, ImportStateVerify: true},
+			acctest.ImportError(address, organization+"/group",
+				regexp.MustCompile(`Invalid organization permission import ID`)),
+			acctest.ImportError(address, acctest.MissingKey+"/group/"+name, acctest.MissingImport),
 		},
 	})
 }

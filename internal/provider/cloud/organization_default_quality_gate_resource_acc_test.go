@@ -68,6 +68,7 @@ func TestAccOrganizationDefaultQualityGateResource(t *testing.T) {
 				ImportStateId:     organization,
 				ImportStateVerify: true,
 			},
+			acctest.ImportError(defaultQualityGateAddress, acctest.MissingKey, acctest.MissingImport),
 			{
 				// A built-in gate can be the default too.
 				Config: testAccDefaultQualityGateConfig(organization, sonarWayDataAddress+".id"),

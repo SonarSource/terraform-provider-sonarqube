@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math/rand/v2"
 	"os"
+	"regexp"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
@@ -61,6 +62,9 @@ func TestAccProjectBindingResource(t *testing.T) {
 				ImportStateId:     organization + "/" + organization + "_my-project",
 				ImportStateVerify: true,
 			},
+			acctest.ImportError(projectBindingAddress, organization,
+				regexp.MustCompile(`Cannot import the project binding`)),
+			acctest.ImportError(projectBindingAddress, organization+"/"+acctest.MissingKey, acctest.MissingImport),
 			{
 				// A new key replaces the project, which removes its binding,
 				// and replaces the binding, which binds the new project. The

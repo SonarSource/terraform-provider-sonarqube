@@ -68,6 +68,7 @@ resource "sonarqube_cloud_organization_quality_gate_settings" "test" {
 				ImportStateId:     key,
 				ImportStateVerify: true,
 			},
+			acctest.ImportError("sonarqube_cloud_organization_quality_gate_settings.test", acctest.MissingKey, acctest.MissingImport),
 		},
 	})
 }
