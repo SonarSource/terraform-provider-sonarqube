@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.1.0-alpha.1 (Unreleased)
+## 0.1.0-alpha.1 (October 21, 2026)
 
 FEATURES:
 
