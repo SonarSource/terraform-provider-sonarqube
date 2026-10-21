@@ -27,6 +27,15 @@ func sweepServer(t *testing.T) (*httptest.Server, func() []string) {
 		defer mu.Unlock()
 		r.ParseForm()
 		switch {
+		case r.URL.Path == "/authentication/token-definitions":
+			if slices.Contains(deleted, "token token-1") {
+				fmt.Fprintf(w, `{"tokenDefinitions":[{"id":"token-2","organizationId":%q,"name":"customer-token"}],"page":{"total":1}}`, sweepOrganizationUUID)
+			} else {
+				fmt.Fprintf(w, `{"tokenDefinitions":[{"id":"token-1","organizationId":%q,"name":"tf-acc-test-1"},{"id":"token-2","organizationId":%q,"name":"customer-token"}],"page":{"total":2}}`, sweepOrganizationUUID, sweepOrganizationUUID)
+			}
+		case r.URL.Path == "/authentication/token-definitions/token-1" && r.Method == http.MethodDelete:
+			deleted = append(deleted, "token token-1")
+			w.WriteHeader(http.StatusNoContent)
 		case r.URL.Path == "/api/organizations/search":
 			fmt.Fprint(w, `{"organizations":[{"key":"tf-acc-test-1"},{"key":"customer-org"}],"paging":{"total":2}}`)
 		case r.URL.Path == "/api/organizations/delete":
@@ -101,7 +110,7 @@ func TestSweepersDeleteOnlyWhatHasThePrefix(t *testing.T) {
 
 	got := deleted()
 	slices.Sort(got)
-	want := []string{"gate q1", "group g1", "organization tf-acc-test-1", "profile p1", "project tf-acc-test-1", "template t1"}
+	want := []string{"gate q1", "group g1", "organization tf-acc-test-1", "profile p1", "project tf-acc-test-1", "template t1", "token token-1"}
 	if !slices.Equal(got, want) {
 		t.Errorf("deleted %v, want %v", got, want)
 	}

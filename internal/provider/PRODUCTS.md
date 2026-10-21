@@ -27,6 +27,7 @@ will also work on SonarQube Server when the provider supports it.
 | `sonarqube_cloud_organization_default_quality_gate` | SonarQube Cloud | The default belongs to an organization, which SonarQube Server does not have. On SonarQube Server, the default belongs to the instance, and the import ID is different. |
 | `sonarqube_cloud_organization_default_permission_template` | SonarQube Cloud | The default belongs to an organization, which SonarQube Server does not have. On SonarQube Server, the default belongs to the instance, has a default for each of projects, applications and portfolios, and has a different import ID. |
 | `sonarqube_cloud_project_quality_gate` | SonarQube Cloud | The assignment uses organization scope and gate UUIDs, and the import ID is `<organization>/<project_key>`. SonarQube Server has no organizations and names a gate by its name. |
+| `sonarqube_cloud_scoped_organization_token` | SonarQube Cloud | The token belongs to an organization. SonarQube Server tokens belong to users and have a different lifecycle. |
 
 ## Data sources
 
