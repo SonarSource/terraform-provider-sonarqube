@@ -37,6 +37,30 @@ type sweeper struct {
 }
 
 var sweepers = []sweeper{
+	{name: "sonarqube_cloud_scoped_organization_token", shared: true,
+		list: func(ctx context.Context, c *client.Client, organization string) ([]item, error) {
+			org, err := c.GetOrganization(ctx, organization)
+			if err != nil {
+				return nil, err
+			}
+			tokens, err := c.ListOrganizationTokens(ctx, org.UUIDV4)
+			if err != nil {
+				return nil, err
+			}
+			items := make([]item, 0, len(tokens))
+			for _, token := range tokens {
+				items = append(items, item{id: token.ID, name: token.Name})
+			}
+			return items, nil
+		},
+		delete: func(ctx context.Context, c *client.Client, organization string, it item) error {
+			org, err := c.GetOrganization(ctx, organization)
+			if err != nil {
+				return err
+			}
+			return c.DeleteOrganizationToken(ctx, org.UUIDV4, it.id)
+		},
+	},
 	{
 		name: "sonarqube_cloud_organization",
 		// The shared organization stays, also when a wrong setup gives it

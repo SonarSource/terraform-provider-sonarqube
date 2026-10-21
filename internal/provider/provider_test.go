@@ -259,6 +259,7 @@ func TestProviderRegistersItsDataSources(t *testing.T) {
 		"sonarqube_cloud_organization_default_quality_gate",
 		"sonarqube_cloud_organization_default_permission_template",
 		"sonarqube_cloud_project_quality_gate",
+		"sonarqube_cloud_scoped_organization_token",
 		"sonarqube_cloud_project_permissions",
 	})
 }

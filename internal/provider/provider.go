@@ -182,6 +182,7 @@ func (p *sonarqubeProvider) Resources(_ context.Context) []func() resource.Resou
 		cloud.NewOrganizationDefaultQualityGateResource,
 		cloud.NewOrganizationDefaultPermissionTemplateResource,
 		cloud.NewProjectQualityGateResource,
+		cloud.NewScopedOrganizationTokenResource,
 	}
 }
 

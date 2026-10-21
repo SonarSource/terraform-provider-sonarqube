@@ -309,3 +309,23 @@ does not exist. `search` has no pages, shows a change at once, and gives
 profiles of all the languages. Its `qualityProfile` filter matches the exact
 name, with the same case. A missing organization is a 404 with the message
 `No organization with key '<key>'`.
+
+## Organization tokens (`organization_tokens.go`)
+
+| Function | Endpoint | Surface | Public or internal |
+| --- | --- | --- | --- |
+| `CreateOrganizationToken` | `POST {api_url}/authentication/token-definitions` | Web API v2 | [Public](https://api-docs.sonarsource.com/sonarqube-cloud/default/public-externalauthentication-0-0) |
+| `ListOrganizationTokens`, `FindOrganizationToken` | `GET {api_url}/authentication/token-definitions?organizationId=&pageIndex=&pageSize=` | Web API v2 | [Public](https://api-docs.sonarsource.com/sonarqube-cloud/default/public-externalauthentication-0-0) |
+| `DeleteOrganizationToken` | `DELETE {api_url}/authentication/token-definitions/{id}` | Web API v2 | [Public](https://api-docs.sonarsource.com/sonarqube-cloud/default/public-externalauthentication-0-0) |
+
+Read uses the public list endpoint, with the organization UUID and pagination.
+The endpoint that reads one token definition by ID is internal and is not used.
+The secret is available only in the create response.
+
+Delete can return 204 without deleting a token when the caller lacks access.
+The client therefore checks membership in the organization list before and
+after deletion. A list error never means that a token is absent.
+
+Expired tokens can remain in the list and reserve their names. The resource
+keeps them in state and plans replacement. These API behavior assumptions have
+unit test coverage; the acceptance test checks the live lifecycle.
