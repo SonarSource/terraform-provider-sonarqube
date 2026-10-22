@@ -38,9 +38,9 @@ func TestScopedOrganizationTokenTerraformLifecycle(t *testing.T) {
 			}
 			sequence++
 			id := fmt.Sprintf("00000000-0000-4000-8000-%012d", sequence)
-			token := client.OrganizationToken{ID: id, Name: request.Name, OrganizationID: request.OrganizationID, Description: request.Description, ExpiresAt: request.ExpiresAt, CreatedAt: "2026-01-01T00:00:00.123456Z", RoleAssignments: request.RoleAssignments, AutoGrantProjectPermissions: request.AutoGrantProjectPermissions}
+			token := client.OrganizationToken{ID: id, Name: request.Name, OrganizationID: request.OrganizationID, Description: request.Description, ExpiresAt: request.ExpiresAt, CreatedAt: "2026-01-01T00:00:00.123457Z", RoleAssignments: request.RoleAssignments, AutoGrantProjectPermissions: request.AutoGrantProjectPermissions}
 			tokens[id] = token
-			// Create returns nanoseconds; persisted metadata has microsecond precision.
+			// Create returns nanoseconds; the list rounds them to microseconds.
 			token.CreatedAt = "2026-01-01T00:00:00.123456789Z"
 			w.WriteHeader(http.StatusCreated)
 			json.NewEncoder(w).Encode(client.CreatedOrganizationToken{OrganizationToken: token, Token: fmt.Sprintf("sqco_test-secret-%d", sequence)})
