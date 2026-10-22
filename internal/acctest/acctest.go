@@ -199,8 +199,9 @@ func isProduction(host string) bool {
 
 // EnvAllowedHosts holds the hosts where a test may make and delete an
 // organization, separated by commas. Whoever runs the destructive
-// acceptance tests sets it; AGENTS.md says so too. Empty allows nothing, and
-// the name of no instance then has to live in this public repository.
+// acceptance tests sets it; CONTRIBUTING.md says so too. Empty allows
+// nothing, and the name of no instance then has to live in this public
+// repository.
 const EnvAllowedHosts = "SONARQUBE_TEST_ALLOWED_HOSTS"
 
 // RequireSafeTarget reports an address that no destructive test may use.

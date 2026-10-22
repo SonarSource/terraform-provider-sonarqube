@@ -12,8 +12,8 @@ ALLOWED_SKIP := TestAccOrganizationPermissionsUserResource
 
 .PHONY: testacc sweep release-check docs
 
-# Run the acceptance tests. The environment variables that AGENTS.md lists must
-# be set. The timeout applies to each package, not to the whole run.
+# Run the acceptance tests. The environment variables that CONTRIBUTING.md
+# lists must be set. The timeout applies to each package, not to the whole run.
 testacc:
 	set -o pipefail; TF_ACC=1 go test -v -count=1 -p 1 -timeout 40m -run '^TestAcc' ./internal/provider/... 2>&1 | tee $(ACCEPTANCE_LOG)
 	@skipped=$$(grep -oE -- '--- SKIP: [^ ]+' $(ACCEPTANCE_LOG) | cut -d' ' -f3 | grep -vxF $(ALLOWED_SKIP) || true); \

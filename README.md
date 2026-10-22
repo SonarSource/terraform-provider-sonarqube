@@ -8,6 +8,11 @@ Terraform 1.6.1 or later. Terraform 1.6.0 and earlier refuse a provider
 version after its signing key expires, and the signing key of this provider
 expires each year.
 
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) to build the provider, use a local
+build, run the tests and generate the documentation.
+
 ## Releases
 
 See [RELEASING.md](RELEASING.md) for the version scheme and the release
