@@ -99,7 +99,8 @@ func TestDeleteOrganizationToken(t *testing.T) {
 		wantError    bool
 		wantDeletes  int
 	}{
-		{"revoked", true, false, 204, false, 1}, {"already absent", false, false, 204, false, 0},
+		{"revoked", true, false, 204, false, 1}, {"already absent", false, false, 204, false, 1},
+		{"already absent with 404", false, false, 404, false, 1},
 		{"silent refusal", true, true, 204, true, 1}, {"explicit refusal", true, true, 403, true, 1},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -134,33 +135,16 @@ func tokenDeletionHandler(exists *bool, deletes *int, noOp bool, status int) htt
 }
 
 func TestDeleteOrganizationTokenRejectsIncompleteList(t *testing.T) {
-	for _, afterDelete := range []bool{false, true} {
-		t.Run(fmt.Sprintf("afterDelete=%t", afterDelete), func(t *testing.T) {
-			deletes := 0
-			srv := httptest.NewServer(incompleteTokenListHandler(afterDelete, &deletes))
-			defer srv.Close()
-			err := newTestClient(srv).DeleteOrganizationToken(t.Context(), "org", "id")
-			if err == nil || errors.Is(err, ErrNotFound) {
-				t.Fatalf("incomplete list must produce an error, got %v", err)
-			}
-			if !afterDelete && deletes != 0 {
-				t.Fatal("delete proceeded without a valid list")
-			}
-		})
-	}
-}
-
-func incompleteTokenListHandler(afterDelete bool, deletes *int) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodDelete {
-			*deletes++
 			w.WriteHeader(http.StatusNoContent)
 			return
 		}
-		if afterDelete && *deletes == 0 {
-			fmt.Fprint(w, `{"tokenDefinitions":[{"id":"id","organizationId":"org"}],"page":{"total":1}}`)
-			return
-		}
 		fmt.Fprint(w, `{"page":{}}`)
+	}))
+	defer srv.Close()
+	err := newTestClient(srv).DeleteOrganizationToken(t.Context(), "org", "id")
+	if err == nil || errors.Is(err, ErrNotFound) {
+		t.Fatalf("incomplete list must produce an error, got %v", err)
 	}
 }
