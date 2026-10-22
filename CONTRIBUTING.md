@@ -100,7 +100,8 @@ Each test gives the prefix `acctest.KeyPrefix` (`tf-acc-test-`) to what it
 makes. When a run stops before its cleanup, the sweepers in
 `internal/acctest/sweep.go` delete what starts with the prefix: the
 organizations of the token user, and the projects, groups, permission
-templates and quality gates of `SONARQUBE_TEST_ORGANIZATION`. They never
+templates, quality gates and scoped organization tokens of
+`SONARQUBE_TEST_ORGANIZATION`. They never
 delete `SONARQUBE_TEST_ORGANIZATION` itself. Run them with the same variables:
 
 ```bash
@@ -142,7 +143,8 @@ TF_ACC=1 go test ./internal/provider/cloud -run '^TestAccQualityGateResource$' -
 
 * its schema: the `MarkdownDescription` (or `Description`) of the schema gives
   the text at the top of the page, and the descriptions of the attributes give
-  the schema section;
+  the schema section. A long description can be in a `<file>_resource.md` file
+  next to the Go file, which `//go:embed` loads;
 * `examples/resources/<name>/resource.tf` or
   `examples/data-sources/<name>/data-source.tf`: the example;
 * `examples/resources/<name>/import.sh`: the import section.
