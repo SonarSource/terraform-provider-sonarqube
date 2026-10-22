@@ -101,9 +101,38 @@ jobs:
       - name: Check the release files
         run: make release-check
 
+  docs:
+    runs-on: sonar-xs
+    name: Docs
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Go
+        uses: ./.github/actions/setup-go
+
+      - name: Set up Terraform
+        uses: ./.github/actions/setup-terraform
+
+      - name: Generate the documentation
+        run: make docs
+
+      - name: Check that docs/ agrees with the generated documentation
+        run: |
+          changes=$(git status --porcelain docs/)
+          if [[ -n "${changes}" ]]; then
+            echo "docs/ is different from the output of make docs:"
+            echo "${changes}"
+            git diff docs/
+            echo "Run make docs and commit the result."
+            exit 1
+          fi
+
   notify_failure:
     name: Notify Failure
-    needs: [build, release-check]
+    needs: [build, release-check, docs]
     if: >-
       !cancelled() && failure() &&
       (github.ref_name == github.event.repository.default_branch ||

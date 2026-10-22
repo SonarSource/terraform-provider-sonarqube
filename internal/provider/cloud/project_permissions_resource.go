@@ -89,12 +89,27 @@ func (r *projectPermissionsResource) Schema(_ context.Context, _ resource.Schema
 				setvalidator.ValueStringsAre(stringvalidator.OneOf(projectPermissionValues...))}},
 	})
 	resp.Schema = schema.Schema{
-		Description: "Manages all permissions of one group or user on one SonarQube Cloud project. " +
-			"Create takes control of the principal's full permission set, also the grants from the permission template. " +
-			"It removes grants that are not in `permissions`. " +
-			"Destroy removes all of that principal's grants on the project and does not change other principals. " +
-			"A public project gives `user` and `codeviewer` to all users, so the apply refuses them there. " +
-			"Import with `<organization>/<project_key>/group/<name>` or `<organization>/<project_key>/user/<login>`.",
+		MarkdownDescription: "This resource manages the complete set of permissions for one group or user on one project. " +
+			"Destroy removes the selected principal's grants on the project. It does not change other " +
+			"principals.\n\n" +
+			"The allowed permissions are `admin`, `codeviewer`, `issueadmin`, `securityhotspotadmin`, " +
+			"`architectureadmin`, `scan`, and `user`. The `Anyone` group is not supported.\n\n" +
+			"## Grants from the permission template\n\n" +
+			"When SonarQube Cloud creates a project, it applies the default permission template, so the " +
+			"project already has grants. If the principal already has grants on the project, create takes " +
+			"control of them. It removes the grants that are not in `permissions`.\n\n" +
+			"## Public projects\n\n" +
+			"All users can browse a public project and see its source code. SonarQube Cloud does not store a " +
+			"grant of `user` (Browse) or `codeviewer` (See Source Code) on a public project. If " +
+			"`permissions` has one of these values and the project is public, the apply fails and sends no " +
+			"change. Remove these values, or make the project private.\n\n" +
+			"A change of the project visibility also changes the grants. When a project becomes public, " +
+			"SonarQube Cloud removes `user` and `codeviewer`. When a project becomes private, SonarQube " +
+			"Cloud gives `user` and `codeviewer` to each group that has a different permission on the " +
+			"project. The next plan then shows a change.\n\n" +
+			"## Administrators\n\n" +
+			"SonarQube Cloud does not protect the last project administrator. An apply can remove `admin` " +
+			"from all principals of the project.",
 		Attributes: attributes,
 	}
 }

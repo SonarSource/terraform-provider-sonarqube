@@ -16,3 +16,6 @@ repos:
     rev: 5b5dddc4fb0f83c3ea1fc5616fa63e115dce83e0  # frozen: v0.49.1
     hooks:
       - id: markdownlint
+        # tfplugindocs writes docs/. Its output does not follow these rules, and
+        # the docs job of the build workflow checks it.
+        exclude: ^docs/

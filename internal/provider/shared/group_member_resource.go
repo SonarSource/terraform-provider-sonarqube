@@ -59,17 +59,26 @@ func (r *groupMemberResource) Metadata(_ context.Context, req resource.MetadataR
 func (r *groupMemberResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	replace := []planmodifier.String{stringplanmodifier.RequiresReplace()}
 	resp.Schema = schema.Schema{
-		Description: "Adds one user to one group. A change to any attribute replaces the membership. " +
-			"Other members of the group do not change.\n\n" +
-			"The user must already be a member of the organization. This resource does not add it.\n\n" +
-			"Do not use this resource for a group that an identity provider synchronizes through SCIM. " +
-			"The provider refuses to add a member to such a group.\n\n" +
-			"SonarQube Cloud refuses the default group Members. It also refuses to remove a user " +
-			"from any group when no other user is an administrator of the organization.\n\n" +
-			"The member list of SonarQube Cloud can show the old members for some seconds after a " +
-			"change. When a refresh does not find the user, it reads the list again for about six " +
-			"seconds.\n\n" +
-			"Import a membership with `<organization>/<group_name>/<login>`.",
+		MarkdownDescription: "This resource adds one user to one group. Destroy removes the user from the group. It does not " +
+			"change the other members of the group. A change to any attribute replaces the membership.\n\n" +
+			"## Organization members only\n\n" +
+			"The user must already be a member of the organization. This resource does not add the user to " +
+			"the organization. If the user is not a member, the apply fails.\n\n" +
+			"## Groups that SCIM synchronizes\n\n" +
+			"Do not use this resource for a group that an identity provider synchronizes through SCIM. The " +
+			"next synchronization can remove the user again, so the plan never converges. The provider " +
+			"refuses to add a member to such a group. Add the user to the group in the identity provider.\n\n" +
+			"## Groups that SonarQube Cloud refuses\n\n" +
+			"SonarQube Cloud refuses the default group `Members`. Each member of the organization is in this " +
+			"group.\n\n" +
+			"SonarQube Cloud also refuses to remove a user from any group when no other user is an " +
+			"administrator of the organization. This rule applies also to a group that has no permissions. " +
+			"Then the destroy fails. To prevent this, give the `admin` permission directly to a user, or add " +
+			"another user to a group that has it.\n\n" +
+			"## Delays\n\n" +
+			"The member list of SonarQube Cloud can show the old members for some seconds after a change. " +
+			"When a refresh does not find the user, it reads the list again for about six seconds. A removal " +
+			"outside Terraform thus shows some seconds later than other changes.",
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{Computed: true, Description: "`<organization>/<group_name>/<login>`.",
 				PlanModifiers: []planmodifier.String{stringplanmodifier.UseStateForUnknown()}},

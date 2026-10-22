@@ -77,11 +77,19 @@ func (r *organizationPermissionsResource) Schema(_ context.Context, _ resource.S
 				setvalidator.ValueStringsAre(stringvalidator.OneOf(organizationPermissionValues...))}},
 	})
 	resp.Schema = schema.Schema{
-		Description: "Manages all organization permissions of one group or user in SonarQube Cloud. " +
-			"Create takes control of the principal's full permission set. It removes grants that are not in `permissions`. " +
-			"Destroy removes all of that principal's organization grants and does not change other principals. " +
-			"A FREE organization accepts group permission changes. SonarQube Cloud refuses to remove the last " +
-			"organization administrator. Import with `<organization>/group/<name>` or `<organization>/user/<login>`.",
+		MarkdownDescription: "This resource manages the complete set of organization permissions for one group or user. " +
+			"Create removes existing grants that are not in `permissions`. Destroy removes the selected " +
+			"principal's organization grants. It does not change other principals.\n\n" +
+			"The allowed permissions are `admin`, `gateadmin`, `profileadmin`, `architectureadmin`, " +
+			"`provisioning`, and `scan`. The `Anyone` group is not supported. A FREE organization accepts " +
+			"group permission changes.\n\n" +
+			"The resource finds the group by its exact name. If somebody renames the group outside " +
+			"Terraform, the next plan creates the resource again, and the apply fails because no group has " +
+			"the configured name. A rename in a `sonarqube_group` resource replaces this resource and keeps " +
+			"the permissions.\n\n" +
+			"SonarQube Cloud refuses to remove the last organization administrator. If a plan removes the " +
+			"last `admin` grant, the apply fails and reports the server error. Keep another administrator " +
+			"before you remove that grant.",
 		Attributes: attributes,
 	}
 }

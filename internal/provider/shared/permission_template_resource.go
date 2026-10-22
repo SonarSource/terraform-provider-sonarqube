@@ -74,22 +74,32 @@ func (r *permissionTemplateResource) Schema(_ context.Context, _ resource.Schema
 			Validators: []validator.Set{setvalidator.SizeAtLeast(1), setvalidator.ValueStringsAre(stringvalidator.LengthAtLeast(1))}}
 	}
 	resp.Schema = schema.Schema{
-		Description: "Manages a permission template and all its grants. When a project is created, the " +
-			"template whose project key pattern matches the key gives its permissions to the new project. " +
-			"When no pattern matches, the default template does. A change to a template does not change the " +
-			"projects that exist.\n\n" +
-			"The resource controls all the grants of the template. A grant that is not in the configuration, " +
-			"also one that was added in the UI or one for the Anyone group, shows as a change in the next plan, " +
-			"and the apply removes it.\n\n" +
+		MarkdownDescription: "This resource manages a permission template and all its grants. When a user creates a project, " +
+			"the template whose project key pattern matches the key gives its permissions to the new " +
+			"project. When no pattern matches, the default template of the organization does. A change to a " +
+			"template does not change the projects that exist.\n\n" +
+			"## All the grants\n\n" +
+			"The resource controls all the grants of the template: the grants of the groups, the users and " +
+			"the project creator. A grant that is not in the configuration, also one that a user added in " +
+			"the UI, shows as a change in the next plan, and the apply removes it.\n\n" +
+			"The resource refuses the `Anyone` group. If the template gives a permission to `Anyone`, for " +
+			"example after a change in the UI, the next apply removes it.\n\n" +
+			"## Plans\n\n" +
 			"SonarQube Cloud needs the Team or the Enterprise plan to create a template or to change its " +
-			"grants. The token must have the Administer permission on the organization.\n\n" +
-			"SonarQube Cloud refuses to delete the default template. Before you destroy a template that " +
-			"is the default, set a different template as the default.\n\n" +
-			"Import a template with `<organization>/<name>`.",
+			"grants. On the Free plan, the apply fails. The token must have the Administer permission on the " +
+			"organization.\n\n" +
+			"## Users\n\n" +
+			"A user must be a member of the organization. If the user is not a member, the apply fails.\n\n" +
+			"## The default template\n\n" +
+			"SonarQube Cloud refuses to delete the default template. Before you destroy a template that is " +
+			"the default, set a different template as the default.\n\n" +
+			"## Project permissions\n\n" +
+			"The project permissions are `admin`, `codeviewer`, `issueadmin`, `securityhotspotadmin`, `scan` " +
+			"and `user`. SonarQube Cloud also has `architectureadmin`.",
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{Computed: true, Description: "Identifier of the template.",
 				PlanModifiers: []planmodifier.String{stringplanmodifier.UseStateForUnknown()}},
-			"organization": schema.StringAttribute{Required: true, Description: "Key of the organization that owns the template.",
+			"organization": schema.StringAttribute{Required: true, Description: "Key of the organization that owns the template. A change replaces the template.",
 				Validators: validate.OrganizationKey(), PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()}},
 			"name": schema.StringAttribute{Required: true,
 				Description: "Name of the template. The names in an organization must be different, also when the case is ignored.",
