@@ -14,8 +14,10 @@ import (
 	"github.com/SonarSource/terraform-provider-sonarqube/internal/provider/providertest"
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
+	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
@@ -277,11 +279,12 @@ func assertTokenStateOnError(t *testing.T, hasError bool, before, after tfsdk.St
 
 func TestTokenCreationTime(t *testing.T) {
 	for _, tc := range []struct{ name, input, want string }{
-		{"nanoseconds", "2026-01-01T00:00:00.123456789Z", "2026-01-01T00:00:00.123456Z"},
+		{"nanoseconds rounded up", "2026-01-01T00:00:00.123456789Z", "2026-01-01T00:00:00.123457Z"},
+		{"nanoseconds rounded down", "2026-01-01T00:00:00.123456302Z", "2026-01-01T00:00:00.123456Z"},
 		{"microseconds", "2026-01-01T00:00:00.123456Z", "2026-01-01T00:00:00.123456Z"},
 		{"milliseconds", "2026-01-01T00:00:00.123Z", "2026-01-01T00:00:00.123Z"},
 		{"seconds", "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z"},
-		{"offset", "2026-01-01T01:00:00.123456789+01:00", "2026-01-01T00:00:00.123456Z"},
+		{"offset", "2026-01-01T01:00:00.123456789+01:00", "2026-01-01T00:00:00.123457Z"},
 		{"missing", "", ""},
 		{"invalid", "invalid-time", "invalid-time"},
 	} {
@@ -290,5 +293,52 @@ func TestTokenCreationTime(t *testing.T) {
 				t.Errorf("creation time = %q, want %q", got, tc.want)
 			}
 		})
+	}
+}
+
+// The API limits count characters, so a name of 100 non-ASCII characters is valid.
+func TestTokenTextLimitsCountCharacters(t *testing.T) {
+	s := tokenSchema(t)
+	for _, tc := range []struct {
+		attribute string
+		value     string
+		invalid   bool
+	}{
+		{"name", strings.Repeat("漢", 100), false}, {"name", strings.Repeat("漢", 101), true},
+		{"description", strings.Repeat("漢", 500), false}, {"description", strings.Repeat("漢", 501), true},
+	} {
+		t.Run(fmt.Sprintf("%s/%d", tc.attribute, len([]rune(tc.value))), func(t *testing.T) {
+			var diagnostics diag.Diagnostics
+			for _, v := range s.Attributes[tc.attribute].(schema.StringAttribute).Validators {
+				resp := validator.StringResponse{}
+				v.ValidateString(t.Context(), validator.StringRequest{Path: path.Root(tc.attribute), ConfigValue: types.StringValue(tc.value)}, &resp)
+				diagnostics.Append(resp.Diagnostics...)
+			}
+			if diagnostics.HasError() != tc.invalid {
+				t.Fatalf("diagnostics=%v", diagnostics)
+			}
+		})
+	}
+}
+
+func TestTokenReadRemovesTokenOfMissingOrganization(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/organizations/organizations" {
+			t.Errorf("unexpected request: %s", r.URL.Path)
+		}
+		fmt.Fprint(w, `[]`)
+	}))
+	t.Cleanup(srv.Close)
+	s := tokenSchema(t)
+	state := providertest.EmptyState(t, s)
+	model := scopedOrganizationTokenModel{ID: types.StringValue(theBindingID), Organization: types.StringValue("my-org"), Token: types.StringValue("test-secret"), OrganizationPermissions: tokenSet("scan"), ProjectPermissions: types.SetNull(types.StringType)}
+	if ds := state.Set(t.Context(), &model); ds.HasError() {
+		t.Fatal(ds)
+	}
+	resp := resource.ReadResponse{State: state}
+	r := &scopedOrganizationTokenResource{client: providertest.NewCloudClient(srv)}
+	r.Read(t.Context(), resource.ReadRequest{State: state}, &resp)
+	if resp.Diagnostics.HasError() || resp.Diagnostics.WarningsCount() != 1 || !resp.State.Raw.IsNull() {
+		t.Fatalf("diagnostics=%v, removed=%v", resp.Diagnostics, resp.State.Raw.IsNull())
 	}
 }

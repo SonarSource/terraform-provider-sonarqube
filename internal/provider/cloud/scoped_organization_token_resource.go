@@ -122,8 +122,8 @@ func (r *scopedOrganizationTokenResource) Schema(_ context.Context, _ resource.S
 		"both tokens to exist during rotation, give each replacement a unique name\n" +
 		"and check how consumers receive the new secret.", Attributes: map[string]schema.Attribute{
 		"organization":             schema.StringAttribute{Required: true, MarkdownDescription: "Organization key. A change replaces the token.", Validators: validate.OrganizationKey(), PlanModifiers: replace},
-		"name":                     schema.StringAttribute{Required: true, MarkdownDescription: "Nonblank name, 1–100 characters. A change replaces the token.", Validators: []validator.String{stringvalidator.LengthBetween(1, 100), stringvalidator.RegexMatches(regexp.MustCompile(`\S`), "The name must contain a non-space character.")}, PlanModifiers: replace},
-		"description":              schema.StringAttribute{Optional: true, MarkdownDescription: "At most 500 characters. A change replaces the token.", Validators: []validator.String{stringvalidator.LengthAtMost(500)}, PlanModifiers: replace},
+		"name":                     schema.StringAttribute{Required: true, MarkdownDescription: "Nonblank name, 1–100 characters. A change replaces the token.", Validators: []validator.String{stringvalidator.UTF8LengthBetween(1, 100), stringvalidator.RegexMatches(regexp.MustCompile(`\S`), "The name must contain a non-space character.")}, PlanModifiers: replace},
+		"description":              schema.StringAttribute{Optional: true, MarkdownDescription: "At most 500 characters. A change replaces the token.", Validators: []validator.String{stringvalidator.UTF8LengthAtMost(500)}, PlanModifiers: replace},
 		"expires_at":               schema.StringAttribute{Optional: true, MarkdownDescription: "RFC 3339 expiration time. Omit for no expiration. A change replaces the token.", PlanModifiers: replace},
 		"organization_permissions": permissions("Organization permissions: `admin`, `scan`, and `provisioning`. A change replaces the token.", "admin", "scan", "provisioning"),
 		"project_permissions":      permissions("Project permissions: `user`, `admin`, and `scan`. A change replaces the token.", "user", "admin", "scan"),
@@ -265,7 +265,7 @@ func (r *scopedOrganizationTokenResource) Read(ctx context.Context, req resource
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	org, ok := lookupOrganization(ctx, r.client, state.Organization.ValueString(), path.Root("organization"), &resp.Diagnostics)
+	org, ok := refreshOrganization(ctx, r.client, state.Organization.ValueString(), "the organization token", resp)
 	if !ok {
 		return
 	}
@@ -305,13 +305,13 @@ func (r *scopedOrganizationTokenResource) Read(ctx context.Context, req resource
 	}
 }
 
-// The create response has nanoseconds, but persisted metadata has microseconds.
+// The create response has nanoseconds, but the list rounds them to microseconds.
 func tokenCreationTime(value string) types.String {
 	timestamp, err := time.Parse(time.RFC3339Nano, value)
 	if err != nil {
 		return types.StringValue(value)
 	}
-	return types.StringValue(timestamp.UTC().Truncate(time.Microsecond).Format(time.RFC3339Nano))
+	return types.StringValue(timestamp.UTC().Round(time.Microsecond).Format(time.RFC3339Nano))
 }
 
 func equivalentTokenExpiration(prior types.String, value *string) types.String {
