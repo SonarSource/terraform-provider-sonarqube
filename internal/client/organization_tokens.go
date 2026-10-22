@@ -52,8 +52,7 @@ func (c *Client) CreateOrganizationToken(ctx context.Context, request Organizati
 
 func (c *Client) ListOrganizationTokens(ctx context.Context, organizationID string) ([]OrganizationToken, error) {
 	const pageSize = 100
-	var tokens []OrganizationToken
-	for page := 1; ; page++ {
+	return collectPages("token", func(page int) ([]OrganizationToken, int, error) {
 		params := url.Values{"organizationId": {organizationID}, "pageIndex": {strconv.Itoa(page)}, "pageSize": {strconv.Itoa(pageSize)}}
 		var result struct {
 			Tokens []OrganizationToken `json:"tokenDefinitions"`
@@ -63,36 +62,20 @@ func (c *Client) ListOrganizationTokens(ctx context.Context, organizationID stri
 		}
 		if err := c.apiGet(ctx, organizationTokensPath, params, &result); err != nil {
 			if errors.Is(err, ErrNotFound) {
-				return nil, &ScopeNotFoundError{Kind: ScopeOrganization, Key: organizationID, Cause: err}
+				return nil, 0, &ScopeNotFoundError{Kind: ScopeOrganization, Key: organizationID, Cause: err}
 			}
-			return nil, err
+			return nil, 0, err
 		}
-		if result.Page == nil {
-			return nil, fmt.Errorf("the token list has no valid page total")
+		if result.Tokens == nil || result.Page == nil || result.Page.Total == nil || *result.Page.Total < 0 {
+			return nil, 0, fmt.Errorf("the token list has no valid collection or page total")
 		}
-		if err := validateOrganizationTokenList(result.Tokens, result.Page.Total, organizationID); err != nil {
-			return nil, err
+		for _, token := range result.Tokens {
+			if token.ID == "" || token.OrganizationID != organizationID {
+				return nil, 0, fmt.Errorf("the token list contains a missing ID or a different organization")
+			}
 		}
-		tokens = append(tokens, result.Tokens...)
-		if len(tokens) >= *result.Page.Total {
-			return tokens, nil
-		}
-		if len(result.Tokens) == 0 {
-			return nil, fmt.Errorf("token page %d was empty before the reported total", page)
-		}
-	}
-}
-
-func validateOrganizationTokenList(tokens []OrganizationToken, total *int, organizationID string) error {
-	if tokens == nil || total == nil || *total < 0 {
-		return fmt.Errorf("the token list has no valid collection or page total")
-	}
-	for _, token := range tokens {
-		if token.ID == "" || token.OrganizationID != organizationID {
-			return fmt.Errorf("the token list contains a missing ID or a different organization")
-		}
-	}
-	return nil
+		return result.Tokens, *result.Page.Total, nil
+	})
 }
 
 func (c *Client) FindOrganizationToken(ctx context.Context, organizationID, id string) (*OrganizationToken, error) {
@@ -103,15 +86,10 @@ func (c *Client) FindOrganizationToken(ctx context.Context, organizationID, id s
 	return findByKey(tokens, id, func(token OrganizationToken) string { return token.ID })
 }
 
-// DeleteOrganizationToken verifies deletion because an unauthorized delete can return 204.
+// DeleteOrganizationToken verifies deletion because the delete returns 204
+// both for an unknown ID and for a caller that cannot delete the token.
 func (c *Client) DeleteOrganizationToken(ctx context.Context, organizationID, id string) error {
-	if _, err := c.FindOrganizationToken(ctx, organizationID, id); err != nil {
-		if errors.Is(err, ErrNotFound) {
-			return nil
-		}
-		return err
-	}
-	if err := c.apiSend(ctx, http.MethodDelete, organizationTokensPath+"/"+url.PathEscape(id), nil, nil, nil); err != nil {
+	if err := c.apiSend(ctx, http.MethodDelete, organizationTokensPath+"/"+url.PathEscape(id), nil, nil, nil); err != nil && !errors.Is(err, ErrNotFound) {
 		return err
 	}
 	_, err := c.FindOrganizationToken(ctx, organizationID, id)

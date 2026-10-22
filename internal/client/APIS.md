@@ -322,9 +322,10 @@ Read uses the public list endpoint, with the organization UUID and pagination.
 The endpoint that reads one token definition by ID is internal and is not used.
 The secret is available only in the create response.
 
-Delete can return 204 without deleting a token when the caller lacks access.
-The client therefore checks membership in the organization list before and
-after deletion. A list error never means that a token is absent.
+Delete returns 204 for an unknown ID, and can return 204 without deleting a
+token when the caller lacks access. The client therefore checks the
+organization list after deletion. A list error never means that a token is
+absent.
 
 Expired tokens can remain in the list and reserve their names. The resource
 keeps them in state and plans replacement. These API behavior assumptions have
