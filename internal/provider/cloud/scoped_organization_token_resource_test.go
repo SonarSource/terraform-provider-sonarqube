@@ -7,6 +7,7 @@ import (
 	"github.com/SonarSource/terraform-provider-sonarqube/internal/client"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -340,5 +341,30 @@ func TestTokenReadRemovesTokenOfMissingOrganization(t *testing.T) {
 	r.Read(t.Context(), resource.ReadRequest{State: state}, &resp)
 	if resp.Diagnostics.HasError() || resp.Diagnostics.WarningsCount() != 1 || !resp.State.Raw.IsNull() {
 		t.Fatalf("diagnostics=%v, removed=%v", resp.Diagnostics, resp.State.Raw.IsNull())
+	}
+}
+
+func TestTokenScopesRoundTrip(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		scopes    tokenScopes
+		autoGrant bool
+	}{
+		{"organization", tokenScopes{organization: []string{"scan"}}, false},
+		{"project", tokenScopes{project: []string{"scan"}}, false},
+		{"both", tokenScopes{organization: []string{"provisioning"}, project: []string{"scan"}}, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if tc.scopes.autoGrant() != tc.autoGrant {
+				t.Fatal("wrong automatic grants")
+			}
+			got, ok := tokenScopesOf(tc.scopes.assignments())
+			if !ok || !slices.Equal(got.organization, tc.scopes.organization) || !slices.Equal(got.project, tc.scopes.project) {
+				t.Fatalf("scopes=%+v", got)
+			}
+		})
+	}
+	if _, ok := tokenScopesOf([]client.TokenRoleAssignment{{ResourceType: "portfolio", Roles: []string{"admin"}}}); ok {
+		t.Fatal("unknown resource type was accepted")
 	}
 }
