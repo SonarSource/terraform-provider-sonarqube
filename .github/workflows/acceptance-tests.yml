@@ -13,7 +13,7 @@ on:
   workflow_dispatch:
   # The nightly run finds changes of staging and of the APIs between two
   # merges. GitHub disables the schedule after 60 days without activity in the
-  # repository. AGENTS.md tells how to enable it again.
+  # repository. CONTRIBUTING.md tells how to enable it again.
   schedule:
     # GitHub can delay or drop a scheduled run at the start of an hour.
     - cron: "17 3 * * *"

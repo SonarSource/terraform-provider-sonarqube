@@ -27,8 +27,8 @@ version from the registry, also when the GitHub release is deleted.
 1. In a pull request, change the header of the version in `CHANGELOG.md`
    from `(Unreleased)` to the release date, for example
    `## 0.1.0-alpha.1 (October 20, 2026)`. Change the version in
-   `docs/index.md` and `examples/provider/provider.tf` to the new version.
-   Merge the pull request.
+   `examples/provider/provider.tf` to the new version, and run `make docs`
+   to update `docs/index.md`. Merge the pull request.
 2. Find the commit to release: a commit of `master` that has this change, and
    on which the `Build` and the `Acceptance tests` workflows passed. The
    `Release` workflow refuses a commit without these two successful runs. If

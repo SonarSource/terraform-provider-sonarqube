@@ -54,6 +54,9 @@ it — do not decide unilaterally.
 - `internal/client/APIS.md`: inventory of consumed API endpoints.
 - `internal/provider/PRODUCTS.md`: the products that each resource and data
   source supports, and why.
+- `docs`: the Terraform Registry documentation. `make docs` generates it.
+- `templates`: the page templates for `make docs`.
+- `examples`: the examples in the pages in `docs`.
 - `.github/workflows`: GitHub Actions workflows.
 
 Use `terraform-plugin-framework` for provider implementations and
@@ -63,101 +66,29 @@ adding functionality.
 
 ## Build and validation
 
-Use the Go version declared in `go.mod`. Run commands from the repository
-root. `.github/workflows/build.yml` defines the CI checks.
+[CONTRIBUTING.md](CONTRIBUTING.md) gives the commands to build the provider,
+run the unit tests and the acceptance tests, delete what an acceptance run
+leaves, and generate the documentation. It also lists the variables that the
+acceptance tests need. Use the Go version declared in `go.mod`, and run
+commands from the repository root.
 
-During development, target the affected package or test:
+- During development, run only the affected package or test.
+- After Go changes, format the changed Go files with `gofmt -w`, and run the
+  checks in [CONTRIBUTING.md](CONTRIBUTING.md#checks-before-a-pull-request).
+  Run the unit tests with `env -u TF_ACC`, so that they do not start the
+  acceptance tests when the calling shell sets `TF_ACC`.
+- When imports or dependencies change, run `go mod tidy` and review both
+  `go.mod` and `go.sum`.
+- `docs/` is generated. Do not edit it. After a change to a schema
+  description, an example or a template, run `make docs` and commit the
+  changes in `docs/`. [CONTRIBUTING.md](CONTRIBUTING.md#documentation) tells
+  where the text of each page comes from.
+- For documentation or workflow changes, run the applicable checks from
+  `.pre-commit-config.yaml`:
 
-```bash
-go test ./internal/client -run '^TestGetOrganization' -count=1
-```
-
-After Go changes, format the changed Go files and run:
-
-```bash
-gofmt -w <changed-go-files>
-go vet ./...
-go build ./...
-env -u TF_ACC go test -race ./...
-```
-
-Unsetting `TF_ACC` keeps this validation independent of live acceptance
-tests, even when the variable is set in the calling shell.
-
-Run the acceptance tests with `make testacc`. It sets `TF_ACC=1`, runs the
-tests, and fails when a test skips, except the one that the `Makefile` names.
-It needs `SONARQUBE_URL` and `SONARQUBE_TOKEN`, and four more variables:
-
-- `SONARQUBE_TEST_ALLOWED_HOSTS`: the hosts where a test may make and delete
-  an organization, separated by commas. An entry allows its sub-domains as
-  well. Empty allows nothing but a local instance, and a target that it does
-  not name stops the run. A production instance is refused whatever this
-  variable says. Set it to the instance you test against, never to
-  production.
-- `SONARQUBE_TEST_ORGANIZATION`: an organization that the tests share. The
-  tests that only read use it, and so do the tests that need a paid plan, such
-  as the tests of the default gate, the default template and the permission
-  templates. An organization that a test makes is on the Free plan, and no API
-  can change its plan. The tests that change the shared organization call
-  `acctest.PreCheckSharedOrganization`, which stops the run when the
-  organization is not on the Team or the Enterprise plan, when the token user
-  has no direct `admin` grant on it, or when its key starts with
-  `acctest.KeyPrefix`. Admin through a group is not sufficient. Each test
-  deletes what it makes there, and the sweepers delete what a test leaves.
-- `SONARQUBE_TEST_GITHUB_INSTALLATION_ID`: an installation of the GitHub
-  application of the instance that no organization is bound to, for the tests
-  that bind. Nothing can make one: install the application from
-  `https://github.com/apps/<application_key>` on a GitHub organization that is
-  not bound yet, and read the identifier from the address that GitHub shows.
-  The `sonarqube_cloud_dop_applications` data source reports the application key.
-- `SONARQUBE_TEST_GITHUB_REPOSITORY`: a public repository, as `owner/name`,
-  that the installation above can see, for the tests that bind a project.
-  Write the slug with the case that GitHub shows. The test deletes its
-  organization at the end, which removes the binding, so one repository
-  serves every run.
-
-Each test gives the prefix `acctest.KeyPrefix` (`tf-acc-test-`) to what it
-makes. When a run stops before its cleanup, the sweepers in
-`internal/acctest/sweep.go` delete what starts with the prefix: the
-organizations of the token user, and the projects, groups, permission
-templates and quality gates of `SONARQUBE_TEST_ORGANIZATION`. They never
-delete `SONARQUBE_TEST_ORGANIZATION` itself. Run them with the same variables:
-
-```bash
-make sweep
-```
-
-`-sweep-allow-failures` lets each sweeper run when another one fails. A
-sweeper keeps a default template or a default gate, because the server cannot
-delete it, and logs a warning. Run them on one package only, because the
-sweepers are the same in each package that imports `acctest`. `-sweep` acts
-only where `TestMain` calls `resource.TestMain`. A package without that
-`TestMain` ignores the flag, and `go test` refuses it in a package that does
-not import `helper/resource`.
-
-`.github/workflows/acceptance-tests.yml` runs the acceptance tests against
-SonarQube Cloud staging after each merge to `master` and each night at 03:17
-UTC. A failed run on `master` sends a Slack message to the squad. GitHub
-disables the schedule of a public repository after 60 days without activity
-in the repository. Then the nightly runs stop without a message. To see the
-state of the workflow and to enable it again, run:
-
-```bash
-gh workflow list --all
-gh workflow enable acceptance-tests.yml
-```
-
-A disabled workflow shows the state `disabled_inactivity`.
-
-When imports or dependencies change, run `go mod tidy` and review both
-`go.mod` and `go.sum`.
-
-For documentation or workflow changes, run the applicable checks from
-`.pre-commit-config.yaml`:
-
-```bash
-pre-commit run --files <changed-files>
-```
+  ```bash
+  pre-commit run --files <changed-files>
+  ```
 
 Report which checks ran and distinguish failures, skipped checks, and
 checks that could not run.
