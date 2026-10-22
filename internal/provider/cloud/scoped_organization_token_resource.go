@@ -2,6 +2,7 @@ package cloud
 
 import (
 	"context"
+	_ "embed" // for the go:embed of the schema description
 	"errors"
 	"regexp"
 	"slices"
@@ -34,6 +35,11 @@ var (
 	tokenIDPattern                                     = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)
 )
 
+// The description is long and has backticks, so it is in its own file.
+//
+//go:embed scoped_organization_token_resource.md
+var scopedOrganizationTokenDescription string
+
 type scopedOrganizationTokenResource struct{ client *client.Client }
 
 type scopedOrganizationTokenModel struct {
@@ -63,64 +69,7 @@ func (r *scopedOrganizationTokenResource) Schema(_ context.Context, _ resource.S
 			Validators:    []validator.Set{setvalidator.ValueStringsAre(stringvalidator.OneOf(roles...))},
 			PlanModifiers: []planmodifier.Set{setplanmodifier.RequiresReplace()}}
 	}
-	resp.Schema = schema.Schema{MarkdownDescription: "This resource creates a scoped organization token on SonarQube Cloud. The\n" +
-		"organization must have a plan that supports these tokens. The provider must\n" +
-		"use a token whose user can administer the organization.\n" +
-		"\n" +
-		"Each change to a configurable attribute replaces the token. Destroy revokes\n" +
-		"it. The provider checks that the token is absent after revocation.\n" +
-		"\n" +
-		"The secret example also requires the GitHub provider and access to the\n" +
-		"organization. Terraform marks `token` as sensitive, but stores its value in\n" +
-		"state. Use a state backend with encryption and restricted access.\n" +
-		"\n" +
-		"## Permissions\n" +
-		"\n" +
-		"Set at least one organization or project permission. Organization permissions\n" +
-		"are `admin`, `scan`, and `provisioning`. Project permissions are `user`,\n" +
-		"`admin`, and `scan`.\n" +
-		"\n" +
-		"If both sets have values, `organization_permissions` must include\n" +
-		"`provisioning`. The provider then enables automatic project permission grants.\n" +
-		"A token with only project permissions needs separate project assignments\n" +
-		"before it can access those projects. This resource does not manage assignments.\n" +
-		"\n" +
-		"## Expiration and rotation\n" +
-		"\n" +
-		"`expires_at` is optional. If set, it must be an RFC 3339 timestamp in the\n" +
-		"future, at most one year from creation. The API checks this limit. If omitted,\n" +
-		"the token has no expiration date.\n" +
-		"\n" +
-		"If the server removes a token, including one removed after 60 days without\n" +
-		"use, the next plan creates a replacement.\n" +
-		"\n" +
-		"An expired token can still exist and reserve its name. The next Terraform\n" +
-		"plan replaces it. If the configuration has a fixed date in the past, change\n" +
-		"that date before apply. Refresh alone does not revoke an expired token.\n" +
-		"\n" +
-		"For scheduled rotation, use the Time provider and run Terraform regularly:\n" +
-		"\n" +
-		"```terraform\n" +
-		"resource \"time_rotating\" \"analysis\" {\n" +
-		"  rotation_days = 30\n" +
-		"}\n" +
-		"\n" +
-		"resource \"sonarqube_cloud_scoped_organization_token\" \"analysis\" {\n" +
-		"  organization             = \"my-org\"\n" +
-		"  name                     = \"ci-analysis\"\n" +
-		"  organization_permissions = [\"scan\"]\n" +
-		"\n" +
-		"  lifecycle {\n" +
-		"    replace_triggered_by = [time_rotating.analysis]\n" +
-		"  }\n" +
-		"}\n" +
-		"```\n" +
-		"\n" +
-		"The old token is revoked before its replacement is created. Consumers can\n" +
-		"fail until they receive the new secret. Do not use `create_before_destroy`\n" +
-		"with the same name: token names must be unique in the organization. To allow\n" +
-		"both tokens to exist during rotation, give each replacement a unique name\n" +
-		"and check how consumers receive the new secret.", Attributes: map[string]schema.Attribute{
+	resp.Schema = schema.Schema{MarkdownDescription: strings.TrimSpace(scopedOrganizationTokenDescription), Attributes: map[string]schema.Attribute{
 		"organization":             schema.StringAttribute{Required: true, MarkdownDescription: "Organization key. A change replaces the token.", Validators: validate.OrganizationKey(), PlanModifiers: replace},
 		"name":                     schema.StringAttribute{Required: true, MarkdownDescription: "Nonblank name, 1–100 characters. A change replaces the token.", Validators: []validator.String{stringvalidator.UTF8LengthBetween(1, 100), stringvalidator.RegexMatches(regexp.MustCompile(`\S`), "The name must contain a non-space character.")}, PlanModifiers: replace},
 		"description":              schema.StringAttribute{Optional: true, MarkdownDescription: "At most 500 characters. A change replaces the token.", Validators: []validator.String{stringvalidator.UTF8LengthAtMost(500)}, PlanModifiers: replace},

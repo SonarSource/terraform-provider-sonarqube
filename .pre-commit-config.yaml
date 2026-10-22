@@ -17,5 +17,6 @@ repos:
     hooks:
       - id: markdownlint
         # tfplugindocs writes docs/. Its output does not follow these rules, and
-        # the docs job of the build workflow checks it.
-        exclude: ^docs/
+        # the docs job of the build workflow checks it. A *_resource.md file is
+        # the start of a page in docs/, so it has no heading on its first line.
+        exclude: ^docs/|_resource\.md$
