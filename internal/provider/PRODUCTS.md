@@ -15,6 +15,7 @@ will also work on SonarQube Server when the provider supports it.
 | `sonarqube_group` | Shared | Name and description have the same meaning on both products. Only Cloud requires an organization. Both products rename a group in place and delete it. Cloud imports `<organization>/<name>`; Server imports `<name>`. Both Web API v2 group APIs use a UUID as the group id. |
 | `sonarqube_group_member` | Shared | A group name and a login identify the membership on both products, and destroy removes the user from the group on both. Only Cloud requires an organization. Cloud imports `<organization>/<group_name>/<login>`; Server will import `<group_name>/<login>`. Only the API differs: Cloud uses `api/user_groups/*`, and Server uses the Web API v2 group memberships, because it deprecates `api/user_groups/add_user` since 10.4. |
 | `sonarqube_permission_template` | Shared | The name, the description, the project key pattern and the grants of groups, users and the project creator have the same meaning on both products, and both rename a template in place and delete it. Only Cloud requires an organization. Cloud imports `<organization>/<name>`; Server will import `<name>`. Both use the same `api/permissions/*_template` web services. The server checks the permission keys. |
+| `sonarqube_quality_profile` | Shared | The name, the language and the parent have the same meaning on both products, and both rename a profile in place, change its parent in place and delete it with its descendants. Only Cloud requires an organization. Cloud imports `<organization>/<language>/<name>`; Server will import `<language>/<name>`. Both use the same `api/qualityprofiles/*` web services. The server checks the language keys. |
 | `sonarqube_project` | Shared | Only the scope is different. SonarQube Server has no organizations, so the provider will refuse `organization` and the import ID will be `key` there. The schema will then make `organization` optional, and the provider will require it on SonarQube Cloud. Both products create and delete a project with the same web service. |
 | `sonarqube_cloud_organization` | SonarQube Cloud | SonarQube Server has no organizations. |
 | `sonarqube_cloud_organization_permissions` | SonarQube Cloud | The grants belong to an organization. SonarQube Server has no organizations, so the required scope and import ID differ. |
@@ -32,6 +33,7 @@ will also work on SonarQube Server when the provider supports it.
 | Data source | Products | Reason |
 | --- | --- | --- |
 | `sonarqube_group` | Shared | The same name and description identify a group on both products. Only Cloud requires an organization. The client handles each product's group ID and API. |
+| `sonarqube_quality_profile` | Shared | The same name and language identify a profile on both products, also a built-in profile. Only Cloud requires an organization. |
 | `sonarqube_cloud_organization` | SonarQube Cloud | SonarQube Server has no organizations. |
 | `sonarqube_cloud_organization_binding` | SonarQube Cloud | Same reason as the resource. |
 | `sonarqube_cloud_project_binding` | SonarQube Cloud | Same reason as the resource. |

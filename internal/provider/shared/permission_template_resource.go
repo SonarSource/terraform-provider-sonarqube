@@ -154,7 +154,7 @@ func (r *permissionTemplateResource) Create(ctx context.Context, req resource.Cr
 	organization := plan.Organization.ValueString()
 	id, err := r.client.CreatePermissionTemplate(ctx, organization, plan.template())
 	if err != nil {
-		resp.Diagnostics.AddError("Cannot create the permission template "+plan.Name.ValueString(), templateErrorDetail(err, organization))
+		resp.Diagnostics.AddError("Cannot create the permission template "+plan.Name.ValueString(), organizationErrorDetail(err, organization))
 		return
 	}
 	plan.ID = types.StringValue(id)
@@ -184,7 +184,7 @@ func (r *permissionTemplateResource) Update(ctx context.Context, req resource.Up
 	template := plan.template()
 	template.ID = plan.ID.ValueString()
 	if err := r.client.UpdatePermissionTemplate(ctx, organization, template); err != nil {
-		resp.Diagnostics.AddError("Cannot update the permission template "+plan.Name.ValueString(), templateErrorDetail(err, organization))
+		resp.Diagnostics.AddError("Cannot update the permission template "+plan.Name.ValueString(), organizationErrorDetail(err, organization))
 		return
 	}
 	r.syncGrants(ctx, plan, desired, &resp.Diagnostics)
@@ -201,19 +201,19 @@ func (r *permissionTemplateResource) syncGrants(ctx context.Context, plan permis
 	summary := "Cannot change the grants of the permission template " + plan.Name.ValueString()
 	current, err := r.client.GetPermissionTemplate(ctx, organization, id)
 	if err != nil {
-		diagnostics.AddError(summary, templateErrorDetail(err, organization))
+		diagnostics.AddError(summary, organizationErrorDetail(err, organization))
 		return
 	}
 	adds, removes := grantDiff(current.Grants, desired)
 	for _, grant := range adds {
 		if err := r.client.AddPermissionTemplateGrant(ctx, organization, id, grant); err != nil {
-			diagnostics.AddError(summary, "Give "+describeGrant(grant)+": "+templateErrorDetail(err, organization))
+			diagnostics.AddError(summary, "Give "+describeGrant(grant)+": "+organizationErrorDetail(err, organization))
 			return
 		}
 	}
 	for _, grant := range removes {
 		if err := r.client.RemovePermissionTemplateGrant(ctx, organization, id, grant); err != nil {
-			diagnostics.AddError(summary, "Remove "+describeGrant(grant)+": "+templateErrorDetail(err, organization))
+			diagnostics.AddError(summary, "Remove "+describeGrant(grant)+": "+organizationErrorDetail(err, organization))
 			return
 		}
 	}
@@ -251,7 +251,7 @@ func (r *permissionTemplateResource) Delete(ctx context.Context, req resource.De
 	}
 	organization := state.Organization.ValueString()
 	if err := r.client.DeletePermissionTemplate(ctx, organization, state.ID.ValueString()); err != nil {
-		resp.Diagnostics.AddError("Cannot delete the permission template "+state.Name.ValueString(), templateErrorDetail(err, organization))
+		resp.Diagnostics.AddError("Cannot delete the permission template "+state.Name.ValueString(), organizationErrorDetail(err, organization))
 	}
 }
 
@@ -270,7 +270,7 @@ func (r *permissionTemplateResource) ImportState(ctx context.Context, req resour
 		return
 	}
 	if err != nil {
-		resp.Diagnostics.AddError("Cannot find the permission template "+name, templateErrorDetail(err, organization))
+		resp.Diagnostics.AddError("Cannot find the permission template "+name, organizationErrorDetail(err, organization))
 		return
 	}
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("id"), id)...)
@@ -281,9 +281,9 @@ func organizationNotFound(organization string) string {
 	return "The organization " + organization + " was not found"
 }
 
-// templateErrorDetail explains a missing organization. The client already
+// organizationErrorDetail explains a missing organization. The client already
 // adds hints to the other errors.
-func templateErrorDetail(err error, organization string) string {
+func organizationErrorDetail(err error, organization string) string {
 	if errors.Is(err, client.ErrOrganizationNotFound) {
 		return organizationNotFound(organization) + ". Check the key, and check that the token can read the organization."
 	}

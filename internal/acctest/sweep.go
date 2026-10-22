@@ -88,6 +88,41 @@ var sweepers = []sweeper{
 		},
 	},
 	{
+		// A delete also deletes the descendants, so the delete of a child
+		// after its parent finds nothing, which is success. The server
+		// refuses to delete a default profile or one of its ancestors, and
+		// the delete of an ancestor of a profile without the prefix would
+		// delete that profile too.
+		name:   "sonarqube_quality_profile",
+		shared: true,
+		list: func(ctx context.Context, c *client.Client, organization string) ([]item, error) {
+			profiles, err := c.ListQualityProfiles(ctx, organization, "")
+			if err != nil {
+				return nil, err
+			}
+			ancestors := ancestorsOf(profiles, func(profile client.QualityProfile) bool {
+				return profile.IsDefault || !strings.HasPrefix(profile.Name, KeyPrefix)
+			})
+			var items []item
+			for _, profile := range profiles {
+				switch {
+				case profile.IsBuiltIn || !strings.HasPrefix(profile.Name, KeyPrefix):
+				case profile.IsDefault:
+					logKeptDefault("quality profile", profile.Name, organization)
+				case ancestors[profile.Key]:
+					log.Printf("[WARN] Keeping quality profile %s of %s, an ancestor of a default profile or of "+
+						"a profile without the prefix %s", profile.Name, organization, KeyPrefix)
+				default:
+					items = append(items, item{id: profile.Key, name: profile.Name})
+				}
+			}
+			return items, nil
+		},
+		delete: func(ctx context.Context, c *client.Client, organization string, it item) error {
+			return c.DeleteQualityProfile(ctx, it.id)
+		},
+	},
+	{
 		name:         "sonarqube_group",
 		dependencies: []string{"sonarqube_permission_template"},
 		shared:       true,
@@ -188,6 +223,25 @@ func sweepClient() (*client.Client, error) {
 		return nil, err
 	}
 	return c, nil
+}
+
+// ancestorsOf returns the keys of the parents, grandparents and so on of each
+// profile that keep accepts.
+func ancestorsOf(profiles []client.QualityProfile, keep func(client.QualityProfile) bool) map[string]bool {
+	parents := map[string]string{}
+	for _, profile := range profiles {
+		parents[profile.Key] = profile.ParentKey
+	}
+	ancestors := map[string]bool{}
+	for _, profile := range profiles {
+		if !keep(profile) {
+			continue
+		}
+		for key := profile.ParentKey; key != "" && !ancestors[key]; key = parents[key] {
+			ancestors[key] = true
+		}
+	}
+	return ancestors
 }
 
 // keyItems makes items of the things that a key names. The key is also the

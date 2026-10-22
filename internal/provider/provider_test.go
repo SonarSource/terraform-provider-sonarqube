@@ -225,6 +225,7 @@ func TestProviderRegistersItsDataSources(t *testing.T) {
 
 	assertNames(t, "data sources", dataSourceNames, []string{
 		"sonarqube_group",
+		"sonarqube_quality_profile",
 		"sonarqube_cloud_organization",
 		"sonarqube_cloud_organization_binding",
 		"sonarqube_cloud_dop_applications",
@@ -247,6 +248,7 @@ func TestProviderRegistersItsDataSources(t *testing.T) {
 		"sonarqube_group",
 		"sonarqube_group_member",
 		"sonarqube_permission_template",
+		"sonarqube_quality_profile",
 		"sonarqube_cloud_organization",
 		"sonarqube_cloud_organization_permissions",
 		"sonarqube_cloud_organization_binding",
