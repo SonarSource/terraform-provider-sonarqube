@@ -10,7 +10,7 @@ ACCEPTANCE_LOG ?= acceptance-tests.log
 # skips until it has a second staging user (TFP-36).
 ALLOWED_SKIP := TestAccOrganizationPermissionsUserResource
 
-.PHONY: testacc sweep release-check
+.PHONY: testacc sweep release-check docs
 
 # Run the acceptance tests. The environment variables that AGENTS.md lists must
 # be set. The timeout applies to each package, not to the whole run.
@@ -32,3 +32,9 @@ sweep:
 # local mirror. It needs goreleaser, gpg, jq, shasum and terraform.
 release-check:
 	scripts/release/check.sh
+
+# Generate docs/ from the schemas, examples/ and templates/, and check the pages
+# for the Terraform Registry. Do not edit docs/ by hand. It needs terraform.
+docs:
+	go tool tfplugindocs generate --provider-name sonarqube --rendered-provider-name SonarQube
+	go tool tfplugindocs validate --provider-name sonarqube

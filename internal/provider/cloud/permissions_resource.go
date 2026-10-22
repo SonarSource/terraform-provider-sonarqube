@@ -225,10 +225,10 @@ func permissionPrincipalAttributes() map[string]schema.Attribute {
 	return map[string]schema.Attribute{
 		"id": schema.StringAttribute{Computed: true, Description: "Resource identifier.",
 			PlanModifiers: []planmodifier.String{stringplanmodifier.UseStateForUnknown()}},
-		"group_name": schema.StringAttribute{Optional: true, Description: "Exact group name. Do not use the Anyone group.",
+		"group_name": schema.StringAttribute{Optional: true, Description: "Exact group name. Set this or `login`. Do not use the Anyone group.",
 			Validators:    []validator.String{stringvalidator.LengthBetween(1, 255), stringvalidator.NoneOfCaseInsensitive("Anyone")},
 			PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()}},
-		"login": schema.StringAttribute{Optional: true, Description: "Exact user login.",
+		"login": schema.StringAttribute{Optional: true, Description: "Exact user login. Set this or `group_name`.",
 			Validators:    []validator.String{stringvalidator.LengthAtLeast(1)},
 			PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()}},
 	}

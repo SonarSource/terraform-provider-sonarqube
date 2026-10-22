@@ -1,0 +1,25 @@
+---
+page_title: "SonarQube Provider"
+description: |-
+  Manage SonarQube Cloud resources with Terraform.
+---
+
+# SonarQube Provider
+
+The SonarQube provider manages the resources of SonarQube Cloud. The alpha
+release supports SonarQube Cloud only.
+
+## Requirements
+
+Terraform 1.6.1 or later. Terraform 1.6.0 and earlier refuse a provider
+version after its signing key expires, and the signing key of this provider
+expires each year.
+
+## Example Usage
+
+{{tffile "examples/provider/provider.tf"}}
+
+An alpha version is a pre-release. Terraform selects it only when the
+constraint gives the exact version.
+
+{{ .SchemaMarkdown | trimspace }}
