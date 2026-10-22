@@ -147,7 +147,42 @@ func (r *scopedOrganizationTokenResource) ValidateConfig(ctx context.Context, re
 	}
 }
 
-func validateTokenConfiguration(ctx context.Context, model scopedOrganizationTokenModel, diagnostics *diag.Diagnostics) {
+// tokenScopes holds the roles of a token for each resource type.
+type tokenScopes struct{ organization, project []string }
+
+// autoGrant tells if the token gets automatic project grants. The resource
+// gives them only to a token with roles on both resource types.
+func (s tokenScopes) autoGrant() bool { return len(s.organization) > 0 && len(s.project) > 0 }
+
+func (s tokenScopes) assignments() []client.TokenRoleAssignment {
+	assignments := []client.TokenRoleAssignment{}
+	if len(s.organization) > 0 {
+		assignments = append(assignments, client.TokenRoleAssignment{ResourceType: "organization", Roles: s.organization})
+	}
+	if len(s.project) > 0 {
+		assignments = append(assignments, client.TokenRoleAssignment{ResourceType: "project", Roles: s.project})
+	}
+	return assignments
+}
+
+// tokenScopesOf returns false for a resource type that the resource does not support.
+func tokenScopesOf(assignments []client.TokenRoleAssignment) (tokenScopes, bool) {
+	var scopes tokenScopes
+	for _, assignment := range assignments {
+		switch assignment.ResourceType {
+		case "organization":
+			scopes.organization = append(scopes.organization, assignment.Roles...)
+		case "project":
+			scopes.project = append(scopes.project, assignment.Roles...)
+		default:
+			return tokenScopes{}, false
+		}
+	}
+	return scopes, true
+}
+
+// validateTokenConfiguration returns the scopes, and false when a permission is unknown.
+func validateTokenConfiguration(ctx context.Context, model scopedOrganizationTokenModel, diagnostics *diag.Diagnostics) (tokenScopes, bool) {
 	if !model.ExpiresAt.IsNull() && !model.ExpiresAt.IsUnknown() {
 		if _, err := time.Parse(time.RFC3339, model.ExpiresAt.ValueString()); err != nil {
 			diagnostics.AddAttributeError(path.Root("expires_at"), "Invalid token expiration", "Use an RFC 3339 timestamp, such as 2030-01-01T00:00:00Z.")
@@ -156,14 +191,16 @@ func validateTokenConfiguration(ctx context.Context, model scopedOrganizationTok
 	org, orgKnown := tokenRoles(ctx, model.OrganizationPermissions, diagnostics)
 	project, projectKnown := tokenRoles(ctx, model.ProjectPermissions, diagnostics)
 	if !orgKnown || !projectKnown {
-		return
+		return tokenScopes{}, false
 	}
+	scopes := tokenScopes{organization: org, project: project}
 	if len(org) == 0 && len(project) == 0 {
 		diagnostics.AddError("Missing token permissions", "Set at least one organization or project permission.")
 	}
-	if len(org) > 0 && len(project) > 0 && !slices.Contains(org, "provisioning") {
+	if scopes.autoGrant() && !slices.Contains(org, "provisioning") {
 		diagnostics.AddAttributeError(path.Root("project_permissions"), "Invalid token permissions", "Project permissions on an organization-wide token require the provisioning organization permission.")
 	}
+	return scopes, true
 }
 
 func tokenRoles(ctx context.Context, value types.Set, diagnostics *diag.Diagnostics) ([]string, bool) {
@@ -217,13 +254,11 @@ func (r *scopedOrganizationTokenResource) Create(ctx context.Context, req resour
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	validateTokenConfiguration(ctx, plan, &resp.Diagnostics)
-	orgRoles, orgKnown := tokenRoles(ctx, plan.OrganizationPermissions, &resp.Diagnostics)
-	projectRoles, projectKnown := tokenRoles(ctx, plan.ProjectPermissions, &resp.Diagnostics)
+	scopes, known := validateTokenConfiguration(ctx, plan, &resp.Diagnostics)
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	if !orgKnown || !projectKnown {
+	if !known {
 		resp.Diagnostics.AddError("Unknown token permissions", "Token permissions must be known before creation.")
 		return
 	}
@@ -231,16 +266,9 @@ func (r *scopedOrganizationTokenResource) Create(ctx context.Context, req resour
 	if !ok {
 		return
 	}
-	assignments := []client.TokenRoleAssignment{}
-	if len(orgRoles) > 0 {
-		assignments = append(assignments, client.TokenRoleAssignment{ResourceType: "organization", Roles: orgRoles})
-	}
-	if len(projectRoles) > 0 {
-		assignments = append(assignments, client.TokenRoleAssignment{ResourceType: "project", Roles: projectRoles})
-	}
 	result, err := r.client.CreateOrganizationToken(ctx, client.OrganizationTokenRequest{
 		OrganizationID: org.UUIDV4, Name: plan.Name.ValueString(), Description: plan.Description.ValueStringPointer(), ExpiresAt: plan.ExpiresAt.ValueStringPointer(),
-		RoleAssignments: assignments, AutoGrantProjectPermissions: len(orgRoles) > 0 && len(projectRoles) > 0,
+		RoleAssignments: scopes.assignments(), AutoGrantProjectPermissions: scopes.autoGrant(),
 	})
 	if err != nil {
 		resp.Diagnostics.AddError("Cannot create the organization token", err.Error())
@@ -282,24 +310,17 @@ func (r *scopedOrganizationTokenResource) Read(ctx context.Context, req resource
 	state.Description = types.StringPointerValue(token.Description)
 	state.CreatedAt = tokenCreationTime(token.CreatedAt)
 	state.ExpiresAt = equivalentTokenExpiration(state.ExpiresAt, token.ExpiresAt)
-	var orgRoles, projectRoles []string
-	for _, assignment := range token.RoleAssignments {
-		switch assignment.ResourceType {
-		case "organization":
-			orgRoles = append(orgRoles, assignment.Roles...)
-		case "project":
-			projectRoles = append(projectRoles, assignment.Roles...)
-		default:
-			resp.Diagnostics.AddError("Unsupported token scope", "The API returned an unknown token resource type.")
-			return
-		}
+	scopes, ok := tokenScopesOf(token.RoleAssignments)
+	if !ok {
+		resp.Diagnostics.AddError("Unsupported token scope", "The API returned an unknown token resource type.")
+		return
 	}
-	if token.AutoGrantProjectPermissions != (len(orgRoles) > 0 && len(projectRoles) > 0) {
+	if token.AutoGrantProjectPermissions != scopes.autoGrant() {
 		resp.Diagnostics.AddError("Unsupported automatic project grants", "The token's automatic project grants do not match its permission sets. This resource requires automatic grants only when both organization and project permissions are set. Recreate the token with this resource to use that behavior.")
 		return
 	}
-	state.OrganizationPermissions = tokenRoleState(ctx, orgRoles, state.OrganizationPermissions, &resp.Diagnostics)
-	state.ProjectPermissions = tokenRoleState(ctx, projectRoles, state.ProjectPermissions, &resp.Diagnostics)
+	state.OrganizationPermissions = tokenRoleState(ctx, scopes.organization, state.OrganizationPermissions, &resp.Diagnostics)
+	state.ProjectPermissions = tokenRoleState(ctx, scopes.project, state.ProjectPermissions, &resp.Diagnostics)
 	if !resp.Diagnostics.HasError() {
 		resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 	}
