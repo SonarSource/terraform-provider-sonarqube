@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.0-alpha.2 (Unreleased)
+
+FEATURES:
+
+* **New Resource:** `sonarqube_quality_profile`
+* **New Data Source:** `sonarqube_quality_profile`
+
 ## 0.1.0-alpha.1 (October 21, 2026)
 
 FEATURES:

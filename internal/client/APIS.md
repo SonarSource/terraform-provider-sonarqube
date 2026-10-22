@@ -289,3 +289,23 @@ operation".
 The SonarQube Cloud web application still uses the older web service
 `api/qualitygates/set_as_default`, which takes the numeric `legacyId` of the
 gate. That web service is marked deprecated, so the provider does not use it.
+
+## Quality profiles (`quality_profiles.go`)
+
+| Function | Endpoint | Surface | Public or internal |
+| --- | --- | --- | --- |
+| `CreateQualityProfile` | `POST {url}/api/qualityprofiles/create` | Web API v1 | [Public](https://sonarcloud.io/web_api/api/qualityprofiles/create) |
+| `ChangeQualityProfileParent` | `POST {url}/api/qualityprofiles/change_parent` | Web API v1 | [Public](https://sonarcloud.io/web_api/api/qualityprofiles/change_parent) |
+| `RenameQualityProfile` | `POST {url}/api/qualityprofiles/rename` | Web API v1 | [Public](https://sonarcloud.io/web_api/api/qualityprofiles/rename) |
+| `DeleteQualityProfile` | `POST {url}/api/qualityprofiles/delete` | Web API v1 | [Public](https://sonarcloud.io/web_api/api/qualityprofiles/delete) |
+| `ListQualityProfiles`, `GetQualityProfile`, `FindQualityProfileByName` | `GET {url}/api/qualityprofiles/search?organization=&language=&qualityProfile=` | Web API v1 | [Public](https://sonarcloud.io/web_api/api/qualityprofiles/search) |
+
+The write actions take the profile key as `key`. `change_parent` and
+`delete` also take `qualityProfile`, but that is the profile name, not its
+key. `change_parent` without `parentKey` removes the parent. `delete` also
+deletes all the descendants of the profile, and answers 404 for a key that
+does not exist. `search` has no pages, shows a change at once, and gives
+`parentKey`, `isBuiltIn` and `isDefault`. Without `language`, it gives the
+profiles of all the languages. Its `qualityProfile` filter matches the exact
+name, with the same case. A missing organization is a 404 with the message
+`No organization with key '<key>'`.

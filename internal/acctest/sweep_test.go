@@ -2,6 +2,7 @@ package acctest
 
 import (
 	"fmt"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"slices"
@@ -9,6 +10,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/SonarSource/terraform-provider-sonarqube/internal/client"
 	"github.com/SonarSource/terraform-provider-sonarqube/internal/provider"
 )
 
@@ -45,6 +47,15 @@ func sweepServer(t *testing.T) (*httptest.Server, func() []string) {
 				`{"id":"t3","name":"tf-acc-test-default"}],"defaultTemplates":[{"templateId":"t3","qualifier":"TRK"}]}`)
 		case r.URL.Path == "/api/permissions/delete_template":
 			deleted = append(deleted, "template "+r.Form.Get("templateId"))
+		case r.URL.Path == "/api/qualityprofiles/search":
+			fmt.Fprint(w, `{"profiles":[{"key":"p1","name":"tf-acc-test-1"},{"key":"p2","name":"Sonar way core","isBuiltIn":true},`+
+				`{"key":"p3","name":"customer profile"},{"key":"p4","name":"tf-acc-test-default","isDefault":true,"parentKey":"p5"},`+
+				`{"key":"p5","name":"tf-acc-test-parent-of-default"},`+
+				`{"key":"p6","name":"tf-acc-test-parent"},{"key":"p7","name":"customer child","parentKey":"p6"},`+
+				`{"key":"p8","name":"tf-acc-test-grandparent"},{"key":"p9","name":"tf-acc-test-middle","parentKey":"p8"},`+
+				`{"key":"p10","name":"customer grandchild","parentKey":"p9"}]}`)
+		case r.URL.Path == "/api/qualityprofiles/delete":
+			deleted = append(deleted, "profile "+r.Form.Get("key"))
 		case r.URL.Path == "/quality-gates/quality-gates" && r.Method == http.MethodGet:
 			fmt.Fprint(w, `{"qualityGates":[{"id":"q1","name":"tf-acc-test-1"},{"id":"q2","name":"Sonar way","builtIn":true},`+
 				`{"id":"q3","name":"customer gate"},{"id":"default-gate","name":"tf-acc-test-default"}],"page":{"total":4}}`)
@@ -74,7 +85,10 @@ func setSweepEnvironment(t *testing.T, srv *httptest.Server) {
 }
 
 // The defaults have the prefix too, but the server cannot delete them. A key
-// that holds the prefix but does not start with it stays.
+// that holds the prefix but does not start with it stays. A quality profile
+// with the prefix stays when a default profile or a profile without the
+// prefix extends it, also through a profile between them, because its delete
+// deletes its descendants.
 func TestSweepersDeleteOnlyWhatHasThePrefix(t *testing.T) {
 	srv, deleted := sweepServer(t)
 	setSweepEnvironment(t, srv)
@@ -87,7 +101,7 @@ func TestSweepersDeleteOnlyWhatHasThePrefix(t *testing.T) {
 
 	got := deleted()
 	slices.Sort(got)
-	want := []string{"gate q1", "group g1", "organization tf-acc-test-1", "project tf-acc-test-1", "template t1"}
+	want := []string{"gate q1", "group g1", "organization tf-acc-test-1", "profile p1", "project tf-acc-test-1", "template t1"}
 	if !slices.Equal(got, want) {
 		t.Errorf("deleted %v, want %v", got, want)
 	}
@@ -151,4 +165,15 @@ func sweeperNamed(t *testing.T, name string) sweeper {
 		t.Fatalf("no sweeper %s", name)
 	}
 	return sweepers[i]
+}
+
+func TestAncestorsOfWalksUpTheParents(t *testing.T) {
+	t.Parallel()
+	got := ancestorsOf([]client.QualityProfile{
+		{Key: "root"}, {Key: "middle", ParentKey: "root"}, {Key: "kept", ParentKey: "middle", IsDefault: true},
+		{Key: "other", ParentKey: "root"}, {Key: "unrelated"},
+	}, func(profile client.QualityProfile) bool { return profile.IsDefault })
+	if want := map[string]bool{"middle": true, "root": true}; !maps.Equal(got, want) {
+		t.Errorf("ancestors = %v, want %v", got, want)
+	}
 }
