@@ -29,6 +29,7 @@ will also work on SonarQube Server when the provider supports it.
 | `sonarqube_cloud_project_quality_gate` | SonarQube Cloud | The assignment uses organization scope and gate UUIDs, and the import ID is `<organization>/<project_key>`. SonarQube Server has no organizations and names a gate by its name. |
 | `sonarqube_cloud_scoped_organization_token` | SonarQube Cloud | The token belongs to an organization. SonarQube Server tokens belong to users and have a different lifecycle. |
 | `sonarqube_cloud_enterprise` | SonarQube Cloud | A SonarQube Cloud enterprise groups organizations under one license. SonarQube Server has no organizations and no enterprise entity. |
+| `sonarqube_cloud_enterprise_organization` | SonarQube Cloud | It attaches an organization to an enterprise. SonarQube Server has no organizations and no enterprise entity. |
 
 ## Data sources
 

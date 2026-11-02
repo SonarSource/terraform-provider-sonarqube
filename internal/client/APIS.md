@@ -362,3 +362,30 @@ list `key`, so the client does not send it.
 `DeleteEnterprise` reads the enterprise after the delete and expects 404. It
 deletes the portfolios of the enterprise. The organizations stay, on a paid plan
 without enterprise features.
+
+## Enterprise organizations (`enterprise_organizations.go`)
+
+| Function | Endpoint | Surface | Public or internal |
+| --- | --- | --- | --- |
+| `ListEnterpriseOrganizationsOfEnterprise` | `GET {api_url}/enterprises/enterprise-organizations?enterpriseId=` | Web API v2 | [Public](https://api-docs.sonarsource.com/sonarqube-cloud/default/public-sonarcloud-organizations-enterprises-external-1-2-0) |
+| `ListEnterpriseOrganizationsOfOrganization` | `GET {api_url}/enterprises/enterprise-organizations?organizationId=` | Web API v2 | [Public](https://api-docs.sonarsource.com/sonarqube-cloud/default/public-sonarcloud-organizations-enterprises-external-1-2-0) |
+| `AttachEnterpriseOrganization` | `POST {api_url}/enterprises/enterprise-organizations` | Web API v2 | [Public](https://api-docs.sonarsource.com/sonarqube-cloud/default/public-sonarcloud-organizations-enterprises-external-1-2-0) |
+| `DetachEnterpriseOrganization` | `DELETE {api_url}/enterprises/enterprise-organizations/{id}` | Web API v2 | [Public](https://api-docs.sonarsource.com/sonarqube-cloud/default/public-sonarcloud-organizations-enterprises-external-1-2-0) |
+
+The lists have no pages. `organizationId` accepts the legacy ID or the UUID,
+in the filter and in the body of `POST`. An unknown organization, an
+enterprise that the token cannot read, and a scoped organization token all
+give 200 with an empty list. Thus, when the relation is missing, the resource
+reads the enterprise to find a missing access. A deleted enterprise gives 404.
+A user token without access possibly gives 404 too (not checked), so a read
+warns before it removes the attachment, and a delete reads the relation of
+the organization before it skips the detach.
+
+An organization on the free plan can be attached, and it moves to a paid plan.
+An organization that is already in an enterprise gives 400 `Organization is
+already part of an enterprise`.
+
+`DELETE` takes the ID of the relation, not of the organization. A relation
+that does not exist gives 404. A detached organization stays on a paid plan
+without enterprise features. A detach of the last organization also deletes
+the enterprise, so the resource refuses it.
