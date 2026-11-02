@@ -7,6 +7,8 @@ FEATURES:
 * **New Resource:** `sonarqube_quality_profile`
 * **New Data Source:** `sonarqube_quality_profile`
 * **New Resource:** `sonarqube_cloud_scoped_organization_token`
+* **New Resource:** `sonarqube_cloud_enterprise`
+* **New Data Source:** `sonarqube_cloud_enterprise`
 
 ## 0.1.0-alpha.1 (October 21, 2026)
 

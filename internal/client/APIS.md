@@ -330,3 +330,34 @@ absent.
 Expired tokens can remain in the list and reserve their names. The resource
 keeps them in state and plans replacement. These API behavior assumptions have
 unit test coverage; the acceptance test checks the live lifecycle.
+
+## Enterprises (`enterprises.go`)
+
+| Function | Endpoint | Surface | Public or internal |
+| --- | --- | --- | --- |
+| `CreateEnterprise` | `POST {api_url}/enterprises/enterprises` | Web API v2 | [Public](https://api-docs.sonarsource.com/sonarqube-cloud/default/public-sonarcloud-organizations-enterprises-external-1-2-0) |
+| `GetEnterprise` | `GET {api_url}/enterprises/enterprises/{id}` | Web API v2 | [Public](https://api-docs.sonarsource.com/sonarqube-cloud/default/public-sonarcloud-organizations-enterprises-external-1-2-0) |
+| `GetEnterpriseByKey` | `GET {api_url}/enterprises/enterprises?enterpriseKey=` | Web API v2 | [Public](https://api-docs.sonarsource.com/sonarqube-cloud/default/public-sonarcloud-organizations-enterprises-external-1-2-0) |
+| `ListEnterprises` | `GET {api_url}/enterprises/enterprises` | Web API v2 | [Public](https://api-docs.sonarsource.com/sonarqube-cloud/default/public-sonarcloud-organizations-enterprises-external-1-2-0) |
+| `UpdateEnterprise` | `PATCH {api_url}/enterprises/enterprises/{id}` | Web API v2 | [Public](https://api-docs.sonarsource.com/sonarqube-cloud/default/public-sonarcloud-organizations-enterprises-external-1-2-0) |
+| `DeleteEnterprise` | `DELETE {api_url}/enterprises/enterprises/{id}` | Web API v2 | [Public](https://api-docs.sonarsource.com/sonarqube-cloud/default/public-sonarcloud-organizations-enterprises-external-1-2-0) |
+
+The API needs a user token. With a scoped organization token, the list is
+empty, and the other calls give 403 or 404.
+
+The gateway refuses a create without `avatar`, `license` or `organizationId`,
+although the docs show them as optional. `avatar` must be a string: `""` is
+accepted, and `null` gives 400. `organizationId` accepts the legacy ID or the
+UUID. A license is single-use: a successful create uses it up, also when the
+enterprise is deleted later. A create that fails validation does not use it.
+A key that another enterprise uses gives 400 `Enterprise key is not valid`,
+which does not tell the cause, so the resource checks the key first.
+
+`?enterpriseKey=` answers a list of one item, and 404 for an unknown key. A
+read leaves out `avatar` when the enterprise never had one. `PATCH` takes
+`application/merge-patch+json`. It also changes `key`, but the docs do not
+list `key`, so the client does not send it.
+
+`DELETE` gives 204, also for an enterprise that is already gone. It deletes
+the portfolios of the enterprise. The organizations stay, on a paid plan
+without enterprise features.

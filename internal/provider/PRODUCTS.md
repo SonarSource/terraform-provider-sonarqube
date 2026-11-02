@@ -28,6 +28,7 @@ will also work on SonarQube Server when the provider supports it.
 | `sonarqube_cloud_organization_default_permission_template` | SonarQube Cloud | The default belongs to an organization, which SonarQube Server does not have. On SonarQube Server, the default belongs to the instance, has a default for each of projects, applications and portfolios, and has a different import ID. |
 | `sonarqube_cloud_project_quality_gate` | SonarQube Cloud | The assignment uses organization scope and gate UUIDs, and the import ID is `<organization>/<project_key>`. SonarQube Server has no organizations and names a gate by its name. |
 | `sonarqube_cloud_scoped_organization_token` | SonarQube Cloud | The token belongs to an organization. SonarQube Server tokens belong to users and have a different lifecycle. |
+| `sonarqube_cloud_enterprise` | SonarQube Cloud | A SonarQube Cloud enterprise groups organizations under one license. SonarQube Server has no organizations and no enterprise entity. |
 
 ## Data sources
 
@@ -40,3 +41,4 @@ will also work on SonarQube Server when the provider supports it.
 | `sonarqube_cloud_project_binding` | SonarQube Cloud | Same reason as the resource. |
 | `sonarqube_cloud_dop_applications` | SonarQube Cloud | It lists the DevOps platform applications of a SonarQube Cloud instance, which an organization binding uses. SonarQube Server keeps DevOps platform integration settings instead, with a different schema. |
 | `sonarqube_cloud_quality_gate` | SonarQube Cloud | Same Cloud-specific gate identity and attributes as the resource. |
+| `sonarqube_cloud_enterprise` | SonarQube Cloud | Same reason as the resource. |

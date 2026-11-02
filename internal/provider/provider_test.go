@@ -231,6 +231,7 @@ func TestProviderRegistersItsDataSources(t *testing.T) {
 		"sonarqube_cloud_dop_applications",
 		"sonarqube_cloud_project_binding",
 		"sonarqube_cloud_quality_gate",
+		"sonarqube_cloud_enterprise",
 	})
 
 	resourceNames := []string{}
@@ -261,6 +262,7 @@ func TestProviderRegistersItsDataSources(t *testing.T) {
 		"sonarqube_cloud_project_quality_gate",
 		"sonarqube_cloud_scoped_organization_token",
 		"sonarqube_cloud_project_permissions",
+		"sonarqube_cloud_enterprise",
 	})
 }
 

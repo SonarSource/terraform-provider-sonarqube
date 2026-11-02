@@ -6,9 +6,10 @@ SHELL := bash
 ACCEPTANCE_LOG ?= acceptance-tests.log
 
 # Go counts a skipped test as a pass. A missing variable would thus give a
-# green run that tests nothing, so testacc fails when a test skips. This test
-# skips until it has a second staging user (TFP-36).
-ALLOWED_SKIP := TestAccOrganizationPermissionsUserResource
+# green run that tests nothing, so testacc fails when a test skips. These tests
+# can skip: the first until it has a second staging user (TFP-36), the second
+# when no enterprise license is set, because each run uses up one license.
+ALLOWED_SKIP := TestAccOrganizationPermissionsUserResource TestAccEnterpriseResource
 
 .PHONY: testacc sweep release-check docs
 
@@ -16,7 +17,7 @@ ALLOWED_SKIP := TestAccOrganizationPermissionsUserResource
 # lists must be set. The timeout applies to each package, not to the whole run.
 testacc:
 	set -o pipefail; TF_ACC=1 go test -v -count=1 -p 1 -timeout 40m -run '^TestAcc' ./internal/provider/... 2>&1 | tee $(ACCEPTANCE_LOG)
-	@skipped=$$(grep -oE -- '--- SKIP: [^ ]+' $(ACCEPTANCE_LOG) | cut -d' ' -f3 | grep -vxF $(ALLOWED_SKIP) || true); \
+	@skipped=$$(grep -oE -- '--- SKIP: [^ ]+' $(ACCEPTANCE_LOG) | cut -d' ' -f3 | grep -vxF $(addprefix -e ,$(ALLOWED_SKIP)) || true); \
 	if [[ -n "$${skipped}" ]]; then \
 		echo "These acceptance tests skipped:"; \
 		echo "$${skipped}"; \
