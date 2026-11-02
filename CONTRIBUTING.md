@@ -97,12 +97,14 @@ tests, and fails when a test skips, except the ones that `ALLOWED_SKIP` in the
   serves every run.
 * `SONARQUBE_TEST_ENTERPRISE_LICENSE`: an Enterprise license of the test
   instance that no enterprise uses, for the test of
-  `sonarqube_cloud_enterprise`. A successful create uses up the license, also
+  `sonarqube_cloud_enterprise` and `sonarqube_cloud_enterprise_organization`. A successful create uses up the license, also
   when the test deletes the enterprise later, so each run needs a new license.
   The SonarQube Cloud team issues licenses for the test instances: ask them
   for an Enterprise license with a lines-of-code limit and an expiration date.
   The nightly runs do not set this variable, and `make testacc` allows this
-  test to skip. Run the test by itself:
+  test to skip. The test needs Terraform 1.7 or later, because it uses a
+  `removed` block. On an older version, it fails before it uses the license.
+  Run the test by itself:
 
   ```bash
   SONARQUBE_TEST_ENTERPRISE_LICENSE=<license> TF_ACC=1 \

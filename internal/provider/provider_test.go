@@ -263,6 +263,7 @@ func TestProviderRegistersItsDataSources(t *testing.T) {
 		"sonarqube_cloud_scoped_organization_token",
 		"sonarqube_cloud_project_permissions",
 		"sonarqube_cloud_enterprise",
+		"sonarqube_cloud_enterprise_organization",
 	})
 }
 
