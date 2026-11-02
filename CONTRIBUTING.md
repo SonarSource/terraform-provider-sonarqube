@@ -65,8 +65,8 @@ The acceptance tests make, change and delete real objects on a SonarQube
 Cloud instance. Do not run them against production.
 
 Run the acceptance tests with `make testacc`. It sets `TF_ACC=1`, runs the
-tests, and fails when a test skips, except the one that the `Makefile` names.
-It needs `SONARQUBE_URL` and `SONARQUBE_TOKEN`, and four more variables:
+tests, and fails when a test skips, except the ones that `ALLOWED_SKIP` in the
+`Makefile` names. It needs `SONARQUBE_URL` and `SONARQUBE_TOKEN`, and five more variables:
 
 * `SONARQUBE_TEST_ALLOWED_HOSTS`: the hosts where a test may make and delete
   an organization, separated by commas. An entry allows its sub-domains as
@@ -95,12 +95,25 @@ It needs `SONARQUBE_URL` and `SONARQUBE_TOKEN`, and four more variables:
   Write the slug with the case that GitHub shows. The test deletes its
   organization at the end, which removes the binding, so one repository
   serves every run.
+* `SONARQUBE_TEST_ENTERPRISE_LICENSE`: an Enterprise license of the test
+  instance that no enterprise uses, for the test of
+  `sonarqube_cloud_enterprise`. A successful create uses up the license, also
+  when the test deletes the enterprise later, so each run needs a new license.
+  The SonarQube Cloud team issues licenses for the test instances: ask them
+  for an Enterprise license with a lines-of-code limit and an expiration date.
+  The nightly runs do not set this variable, and `make testacc` allows this
+  test to skip. Run the test by itself:
+
+  ```bash
+  SONARQUBE_TEST_ENTERPRISE_LICENSE=<license> TF_ACC=1 \
+    go test ./internal/provider/cloud -run '^TestAccEnterpriseResource$' -count=1 -v
+  ```
 
 Each test gives the prefix `acctest.KeyPrefix` (`tf-acc-test-`) to what it
 makes. When a run stops before its cleanup, the sweepers in
 `internal/acctest/sweep.go` delete what starts with the prefix: the
-organizations of the token user, and the projects, groups, permission
-templates, quality gates and scoped organization tokens of
+enterprises and the organizations of the token user, and the projects,
+groups, permission templates, quality gates and scoped organization tokens of
 `SONARQUBE_TEST_ORGANIZATION`. They never
 delete `SONARQUBE_TEST_ORGANIZATION` itself. Run them with the same variables:
 

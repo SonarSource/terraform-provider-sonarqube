@@ -183,6 +183,7 @@ func (p *sonarqubeProvider) Resources(_ context.Context) []func() resource.Resou
 		cloud.NewOrganizationDefaultPermissionTemplateResource,
 		cloud.NewProjectQualityGateResource,
 		cloud.NewScopedOrganizationTokenResource,
+		cloud.NewEnterpriseResource,
 	}
 }
 
@@ -195,6 +196,7 @@ func (p *sonarqubeProvider) DataSources(_ context.Context) []func() datasource.D
 		cloud.NewDopApplicationsDataSource,
 		cloud.NewProjectBindingDataSource,
 		cloud.NewQualityGateDataSource,
+		cloud.NewEnterpriseDataSource,
 	}
 }
 

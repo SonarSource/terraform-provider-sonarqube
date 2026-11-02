@@ -281,6 +281,25 @@ func PreCheckBinding(t *testing.T) {
 	}
 }
 
+// EnvTestEnterpriseLicense holds an enterprise license that no enterprise
+// uses. A create uses up the license, so each run needs a new one, and the
+// nightly runs do not set it.
+const EnvTestEnterpriseLicense = "SONARQUBE_TEST_ENTERPRISE_LICENSE"
+
+// PreCheckEnterprise stops a test that has no license for an enterprise. It
+// returns the license.
+func PreCheckEnterprise(t *testing.T) string {
+	t.Helper()
+
+	PreCheckDestructive(t)
+
+	license := os.Getenv(EnvTestEnterpriseLicense)
+	if license == "" {
+		t.Skipf("%s is not set. A test that creates an enterprise uses up one license.", EnvTestEnterpriseLicense)
+	}
+	return license
+}
+
 // EnvTestRepository names a public GitHub repository that the installation of
 // EnvTestInstallationID can see. The repository must be public, because the
 // project that the test makes is public, and the server refuses to bind a

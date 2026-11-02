@@ -62,6 +62,24 @@ var sweepers = []sweeper{
 		},
 	},
 	{
+		// The organizations of a deleted enterprise stay. The license of the
+		// enterprise is used up in all cases. The organization sweeper does not
+		// depend on this one, so that a token without access to the enterprise
+		// API does not stop it.
+		name: "sonarqube_cloud_enterprise",
+		list: func(ctx context.Context, c *client.Client, _ string) ([]item, error) {
+			enterprises, err := c.ListEnterprises(ctx)
+			items := make([]item, len(enterprises))
+			for i, enterprise := range enterprises {
+				items[i] = item{id: enterprise.ID, name: enterprise.Key}
+			}
+			return items, err
+		},
+		delete: func(ctx context.Context, c *client.Client, _ string, it item) error {
+			return c.DeleteEnterprise(ctx, it.id)
+		},
+	},
+	{
 		name: "sonarqube_cloud_organization",
 		// The shared organization stays, also when a wrong setup gives it
 		// the prefix: its deletion would delete all that the tests need.
