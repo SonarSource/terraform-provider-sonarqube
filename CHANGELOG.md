@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.1.0-alpha.2 (Unreleased)
+## 0.1.0-alpha.2 (November 2, 2026)
 
 FEATURES:
 
@@ -9,6 +9,7 @@ FEATURES:
 * **New Resource:** `sonarqube_cloud_scoped_organization_token`
 * **New Resource:** `sonarqube_cloud_enterprise`
 * **New Data Source:** `sonarqube_cloud_enterprise`
+* **New Resource:** `sonarqube_cloud_enterprise_organization`
 
 ## 0.1.0-alpha.1 (October 21, 2026)
 
