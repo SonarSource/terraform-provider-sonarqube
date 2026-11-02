@@ -132,16 +132,22 @@ func TestUpdateEnterpriseSendsMergePatch(t *testing.T) {
 
 func TestDeleteEnterprise(t *testing.T) {
 	for _, tc := range []struct {
-		name    string
-		status  int
-		wantErr bool
+		name               string
+		status, readStatus int
+		wantErr            bool
 	}{
-		{"deleted", 204, false}, {"gone", 404, false}, {"forbidden", 403, true},
+		{"deleted", 204, 404, false}, {"gone", 404, 404, false}, {"forbidden", 403, 404, true},
+		{"still there", 204, 200, true}, {"read fails", 204, 500, true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				if r.Method != http.MethodDelete || r.URL.Path != enterprisesPath+"/id" {
+				if r.URL.Path != enterprisesPath+"/id" {
 					t.Errorf("unexpected request: %s %s", r.Method, r.URL.Path)
+				}
+				if r.Method == http.MethodGet {
+					w.WriteHeader(tc.readStatus)
+					fmt.Fprint(w, enterpriseAnswer)
+					return
 				}
 				w.WriteHeader(tc.status)
 			}))

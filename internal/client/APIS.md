@@ -340,7 +340,7 @@ unit test coverage; the acceptance test checks the live lifecycle.
 | `GetEnterpriseByKey` | `GET {api_url}/enterprises/enterprises?enterpriseKey=` | Web API v2 | [Public](https://api-docs.sonarsource.com/sonarqube-cloud/default/public-sonarcloud-organizations-enterprises-external-1-2-0) |
 | `ListEnterprises` | `GET {api_url}/enterprises/enterprises` | Web API v2 | [Public](https://api-docs.sonarsource.com/sonarqube-cloud/default/public-sonarcloud-organizations-enterprises-external-1-2-0) |
 | `UpdateEnterprise` | `PATCH {api_url}/enterprises/enterprises/{id}` | Web API v2 | [Public](https://api-docs.sonarsource.com/sonarqube-cloud/default/public-sonarcloud-organizations-enterprises-external-1-2-0) |
-| `DeleteEnterprise` | `DELETE {api_url}/enterprises/enterprises/{id}` | Web API v2 | [Public](https://api-docs.sonarsource.com/sonarqube-cloud/default/public-sonarcloud-organizations-enterprises-external-1-2-0) |
+| `DeleteEnterprise` | `DELETE {api_url}/enterprises/enterprises/{id}`, then `GET {api_url}/enterprises/enterprises/{id}` | Web API v2 | [Public](https://api-docs.sonarsource.com/sonarqube-cloud/default/public-sonarcloud-organizations-enterprises-external-1-2-0) |
 
 The API needs a user token. With a scoped organization token, the list is
 empty, and the other calls give 403 or 404.
@@ -358,6 +358,7 @@ read leaves out `avatar` when the enterprise never had one. `PATCH` takes
 `application/merge-patch+json`. It also changes `key`, but the docs do not
 list `key`, so the client does not send it.
 
-`DELETE` gives 204, also for an enterprise that is already gone. It deletes
-the portfolios of the enterprise. The organizations stay, on a paid plan
+`DELETE` gives 204, also for an enterprise that is already gone, so
+`DeleteEnterprise` reads the enterprise after the delete and expects 404. It
+deletes the portfolios of the enterprise. The organizations stay, on a paid plan
 without enterprise features.

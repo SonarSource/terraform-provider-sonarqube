@@ -3,6 +3,7 @@ package client
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/url"
 )
@@ -87,13 +88,21 @@ func (c *Client) UpdateEnterprise(ctx context.Context, id string, update Enterpr
 
 // DeleteEnterprise deletes an enterprise and its portfolios. The organizations
 // stay, on a paid plan without enterprise features. The API answers 204 also
-// for an enterprise that is already gone, and a 404 is not an error either.
+// for an enterprise that is already gone, so the client reads the enterprise
+// after the delete to confirm it.
 func (c *Client) DeleteEnterprise(ctx context.Context, id string) error {
 	err := c.apiSend(ctx, http.MethodDelete, enterprisesPath+"/"+url.PathEscape(id), nil, nil, nil)
+	if err != nil && !errors.Is(err, ErrNotFound) {
+		return err
+	}
+	_, err = c.GetEnterprise(ctx, id)
 	if errors.Is(err, ErrNotFound) {
 		return nil
 	}
-	return err
+	if err != nil {
+		return fmt.Errorf("cannot confirm the enterprise deletion: %w", err)
+	}
+	return fmt.Errorf("the enterprise still exists after the delete; check that the token user is an enterprise administrator")
 }
 
 // IsEnterpriseKeyRefused reports the 400 that a create gives for a key that
