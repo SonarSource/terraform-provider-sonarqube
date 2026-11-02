@@ -33,6 +33,10 @@ var (
 //go:embed enterprise_resource.md
 var enterpriseDescription string
 
+// userTokenHint ends each error of the enterprise API. With a scoped
+// organization token, the API gives 403 or 404, which does not tell the cause.
+const userTokenHint = "\n\nThe enterprise API needs a user token. Scoped organization tokens are not supported."
+
 type enterpriseResource struct{ client *client.Client }
 
 type enterpriseModel struct {
@@ -129,7 +133,7 @@ func (r *enterpriseResource) Create(ctx context.Context, req resource.CreateRequ
 			"An enterprise with this key exists. Use a different key, or import the enterprise.")
 		return
 	case !errors.Is(err, client.ErrNotFound):
-		resp.Diagnostics.AddError("Cannot check the enterprise key "+key, err.Error())
+		resp.Diagnostics.AddError("Cannot check the enterprise key "+key, err.Error()+userTokenHint)
 		return
 	}
 	enterprise, err := r.client.CreateEnterprise(ctx, client.EnterpriseRequest{
@@ -142,7 +146,7 @@ func (r *enterpriseResource) Create(ctx context.Context, req resource.CreateRequ
 		return
 	}
 	if refusedByServer(err) {
-		resp.Diagnostics.AddError("Cannot create the enterprise "+key, err.Error())
+		resp.Diagnostics.AddError("Cannot create the enterprise "+key, err.Error()+userTokenHint)
 		return
 	}
 	if err != nil || enterprise.ID == "" {
@@ -192,12 +196,15 @@ func (r *enterpriseResource) Read(ctx context.Context, req resource.ReadRequest,
 	}
 	enterprise, err := r.client.GetEnterprise(ctx, state.ID.ValueString())
 	if errors.Is(err, client.ErrNotFound) {
+		resp.Diagnostics.AddWarning("The enterprise "+state.Key.ValueString()+" was not found",
+			"Terraform removes the enterprise from the state. The enterprise was deleted, or the token cannot read it "+
+				"any more. In the second case, the next apply fails, because the key is already used.")
 		resp.State.RemoveResource(ctx)
 		return
 	}
 	if err != nil {
 		resp.Diagnostics.AddError("Cannot read the enterprise "+state.Key.ValueString(),
-			err.Error()+"\n\nThe enterprise API needs a user token. Scoped organization tokens are not supported.")
+			err.Error()+userTokenHint)
 		return
 	}
 	state.setFrom(enterprise)
@@ -227,7 +234,7 @@ func (r *enterpriseResource) Update(ctx context.Context, req resource.UpdateRequ
 		Name: plan.Name.ValueString(), Avatar: plan.Avatar.ValueString(),
 	})
 	if err != nil {
-		resp.Diagnostics.AddError("Cannot update the enterprise "+plan.Key.ValueString(), err.Error())
+		resp.Diagnostics.AddError("Cannot update the enterprise "+plan.Key.ValueString(), err.Error()+userTokenHint)
 		return
 	}
 	plan.Name = types.StringValue(enterprise.Name)
@@ -242,7 +249,7 @@ func (r *enterpriseResource) Delete(ctx context.Context, req resource.DeleteRequ
 		return
 	}
 	if err := r.client.DeleteEnterprise(ctx, state.ID.ValueString()); err != nil {
-		resp.Diagnostics.AddError("Cannot delete the enterprise "+state.Key.ValueString(), err.Error())
+		resp.Diagnostics.AddError("Cannot delete the enterprise "+state.Key.ValueString(), err.Error()+userTokenHint)
 	}
 }
 

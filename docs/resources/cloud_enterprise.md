@@ -23,6 +23,8 @@ change to `name` or `avatar` updates the enterprise in place.
 
 - The license cannot be used again. A new enterprise needs a new license.
 - The organizations stay, on a paid plan without enterprise features.
+- `terraform apply -replace` and `terraform taint` also delete the enterprise.
+  The create after that fails, because the license is used up.
 
 We recommend `prevent_destroy`:
 

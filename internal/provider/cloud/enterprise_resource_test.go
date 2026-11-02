@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
@@ -138,6 +139,9 @@ func TestEnterpriseCreateFailures(t *testing.T) {
 			resp := resource.CreateResponse{State: providertest.EmptyState(t, enterpriseSchema(t))}
 			r.Create(t.Context(), resource.CreateRequest{Plan: enterprisePlan(t, enterpriseValues(nil))}, &resp)
 			providertest.AssertDiagnosticsContain(t, resp.Diagnostics, tc.want)
+			if tc.want != "possibly created" && strings.Contains(fmt.Sprint(resp.Diagnostics), "possibly created") {
+				t.Errorf("a refused create went to the recovery path: %v", resp.Diagnostics)
+			}
 			if _, posted := f.bodies["POST "+enterprisePath]; posted != tc.posted {
 				t.Errorf("posted = %v, want %v", posted, tc.posted)
 			}
@@ -195,6 +199,9 @@ func TestEnterpriseRead(t *testing.T) {
 			r.Read(t.Context(), resource.ReadRequest{State: state}, &resp)
 			if resp.Diagnostics.HasError() != tc.fails || resp.State.Raw.IsNull() != tc.removed {
 				t.Fatalf("diagnostics = %v, removed = %v", resp.Diagnostics, resp.State.Raw.IsNull())
+			}
+			if tc.removed && resp.Diagnostics.WarningsCount() != 1 {
+				t.Errorf("a removal must warn, got %v", resp.Diagnostics)
 			}
 			switch {
 			case tc.fails:
@@ -273,6 +280,9 @@ func TestEnterpriseDelete(t *testing.T) {
 			r.Delete(t.Context(), resource.DeleteRequest{State: state}, &resp)
 			if resp.Diagnostics.HasError() != tc.fails {
 				t.Fatal(resp.Diagnostics)
+			}
+			if tc.fails {
+				providertest.AssertDiagnosticsContain(t, resp.Diagnostics, "Scoped organization tokens are not supported")
 			}
 		})
 	}

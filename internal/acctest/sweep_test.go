@@ -41,6 +41,8 @@ func sweepServer(t *testing.T) (*httptest.Server, func() []string) {
 		case strings.HasPrefix(r.URL.Path, "/enterprises/enterprises/") && r.Method == http.MethodDelete:
 			deleted = append(deleted, "enterprise "+strings.TrimPrefix(r.URL.Path, "/enterprises/enterprises/"))
 			w.WriteHeader(http.StatusNoContent)
+		case strings.HasPrefix(r.URL.Path, "/enterprises/enterprises/") && r.Method == http.MethodGet:
+			w.WriteHeader(http.StatusNotFound)
 		case r.URL.Path == "/api/organizations/search":
 			fmt.Fprint(w, `{"organizations":[{"key":"tf-acc-test-1"},{"key":"customer-org"}],"paging":{"total":2}}`)
 		case r.URL.Path == "/api/organizations/delete":
