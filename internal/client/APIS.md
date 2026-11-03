@@ -299,6 +299,7 @@ gate. That web service is marked deprecated, so the provider does not use it.
 | `RenameQualityProfile` | `POST {url}/api/qualityprofiles/rename` | Web API v1 | [Public](https://sonarcloud.io/web_api/api/qualityprofiles/rename) |
 | `DeleteQualityProfile` | `POST {url}/api/qualityprofiles/delete` | Web API v1 | [Public](https://sonarcloud.io/web_api/api/qualityprofiles/delete) |
 | `ListQualityProfiles`, `GetQualityProfile`, `FindQualityProfileByName` | `GET {url}/api/qualityprofiles/search?organization=&language=&qualityProfile=` | Web API v1 | [Public](https://sonarcloud.io/web_api/api/qualityprofiles/search) |
+| `GetQualityProfileParentKey` | `GET {url}/api/qualityprofiles/inheritance?key=` | Web API v1 | [Public](https://sonarcloud.io/web_api/api/qualityprofiles/inheritance) |
 
 The write actions take the profile key as `key`. `change_parent` and
 `delete` also take `qualityProfile`, but that is the profile name, not its
@@ -309,6 +310,54 @@ does not exist. `search` has no pages, shows a change at once, and gives
 profiles of all the languages. Its `qualityProfile` filter matches the exact
 name, with the same case. A missing organization is a 404 with the message
 `No organization with key '<key>'`.
+
+`inheritance` takes the profile key without `organization`, and `ancestors`
+lists the ancestors from the parent up. The import of
+`sonarqube_quality_profile_rule` uses it to compare an inherited rule with the
+rule of the parent profile.
+
+## Quality profile rules (`quality_profile_rules.go`)
+
+| Function | Endpoint | Surface | Public or internal |
+| --- | --- | --- | --- |
+| `ActivateQualityProfileRule`, `ResetQualityProfileRule` | `POST {url}/api/qualityprofiles/activate_rule` | Web API v1 | [Public](https://sonarcloud.io/web_api/api/qualityprofiles/activate_rule) |
+| `DeactivateQualityProfileRule` | `POST {url}/api/qualityprofiles/deactivate_rule` | Web API v1 | [Public](https://sonarcloud.io/web_api/api/qualityprofiles/deactivate_rule) |
+| `GetActiveRule` | `GET {url}/api/rules/search?qprofile=&activation=true&rule_key=&f=actives,params,impacts` | Web API v1 | [Public](https://sonarcloud.io/web_api/api/rules/search) |
+
+No Web API v2 endpoint manages the rules of a quality profile.
+
+`activate_rule` takes `params` and `impacts` as `key1="value1";key2="value2"`.
+The quotes let a value contain `;`, but the server does not read a doubled
+quote as one quote, so a value cannot contain `"`. The provider does not send
+`severity`, which is deprecated and replaced by `impacts`. `reset=true` sets
+the values of the parent profile on an inherited rule, and the default values
+of the rule on a rule that the profile activates itself.
+
+On SonarQube Cloud, the call keeps the current value of each parameter and
+impact that it does not get. It ignores an impact for a software quality that
+the rule does not have, and still answers 204. SonarQube Server is different
+([`ActivateRuleAction`](https://github.com/SonarSource/sonarqube/blob/master/server/sonar-webserver-webapi/src/main/java/org/sonar/server/qualityprofile/ws/ActivateRuleAction.java)):
+an impact for a software quality that the rule does not have gives 400 `Only
+impacts defined on the rule can be overridden`, and `impacts` probably sets
+the whole set of impacts. Check this before the provider supports SonarQube
+Server.
+
+`deactivate_rule` answers 204 for a rule that is not active. SonarQube Cloud
+also deactivates an inherited rule.
+
+`rules/search` finds the profile by `qprofile`, so it needs no
+`organization`. With `f=actives`, `actives` gives the activation of the rule
+in this profile only: `inherit` (`NONE`, `INHERITED` or `OVERRIDES`), all the
+parameters with their values, also the default ones, and the impacts.
+`rules[].params[].defaultValue` and `rules[].impacts` give the defaults of the
+rule. A rule that is not active gives `total` 0, and an unknown profile gives
+404. The search index can lag behind a write by some seconds. `rules/show`
+needs `organization` and gives the activations of all the profiles, so the
+provider does not use it.
+
+A built-in profile refuses each change with 400 `Operation forbidden for
+built-in Quality Profile`. A MISRA rule without the MISRA entitlement of the
+organization gives 403 `Enterprise MISRA rules require a MISRA entitlement`.
 
 ## Organization tokens (`organization_tokens.go`)
 

@@ -183,3 +183,27 @@ func TestQualityProfileSearchReportsMissingOrganization(t *testing.T) {
 		t.Fatalf("err = %v", err)
 	}
 }
+
+func TestGetQualityProfileParentKey(t *testing.T) {
+	t.Parallel()
+	tests := map[string]struct {
+		body string
+		want string
+	}{
+		"parent":    {`{"profile":{"key":"profile-1"},"ancestors":[{"key":"parent-1"},{"key":"root-1"}]}`, "parent-1"},
+		"no parent": {`{"profile":{"key":"profile-1"},"ancestors":[]}`, ""},
+	}
+	for name, tt := range tests {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			var requests []string
+			got, err := profileServer(t, http.StatusOK, tt.body, &requests).GetQualityProfileParentKey(t.Context(), "profile-1")
+			if err != nil || got != tt.want {
+				t.Fatalf("parent = %q, err = %v", got, err)
+			}
+			if requests[0] != "GET /api/qualityprofiles/inheritance key=profile-1" {
+				t.Errorf("request = %s", requests[0])
+			}
+		})
+	}
+}

@@ -250,6 +250,7 @@ func TestProviderRegistersItsDataSources(t *testing.T) {
 		"sonarqube_group_member",
 		"sonarqube_permission_template",
 		"sonarqube_quality_profile",
+		"sonarqube_quality_profile_rule",
 		"sonarqube_cloud_organization",
 		"sonarqube_cloud_organization_permissions",
 		"sonarqube_cloud_organization_binding",
