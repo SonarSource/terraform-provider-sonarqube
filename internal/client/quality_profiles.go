@@ -60,6 +60,25 @@ func (c *Client) ChangeQualityProfileParent(ctx context.Context, key, parentKey 
 	return c.post(ctx, qualityProfilesPath+"/change_parent", params)
 }
 
+// GetQualityProfileParentKey returns the key of the parent of the profile, or
+// an empty key when the profile has no parent. The web service takes the
+// profile key without the organization, and lists the ancestors from the
+// parent up.
+func (c *Client) GetQualityProfileParentKey(ctx context.Context, key string) (string, error) {
+	var answer struct {
+		Ancestors []struct {
+			Key string `json:"key"`
+		} `json:"ancestors"`
+	}
+	if err := c.get(ctx, qualityProfilesPath+"/inheritance", url.Values{"key": {key}}, &answer); err != nil {
+		return "", err
+	}
+	if len(answer.Ancestors) == 0 {
+		return "", nil
+	}
+	return answer.Ancestors[0].Key, nil
+}
+
 // RenameQualityProfile sets the name of the profile with the key.
 func (c *Client) RenameQualityProfile(ctx context.Context, key, name string) error {
 	return c.post(ctx, qualityProfilesPath+"/rename", url.Values{"key": {key}, "name": {name}})
