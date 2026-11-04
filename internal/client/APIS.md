@@ -302,6 +302,9 @@ gate. That web service is marked deprecated, so the provider does not use it.
 | `GetQualityProfileParentKey` | `GET {url}/api/qualityprofiles/inheritance?key=` | Web API v1 | [Public](https://sonarcloud.io/web_api/api/qualityprofiles/inheritance) |
 | `GetDefaultQualityProfile` | `GET {url}/api/qualityprofiles/search?organization=&language=&defaults=true` | Web API v1 | [Public](https://sonarcloud.io/web_api/api/qualityprofiles/search) |
 | `SetDefaultQualityProfile` | `POST {url}/api/qualityprofiles/set_default` | Web API v1 | [Public](https://sonarcloud.io/web_api/api/qualityprofiles/set_default) |
+| `AddQualityProfileProject` | `POST {url}/api/qualityprofiles/add_project` | Web API v1 | [Public](https://sonarcloud.io/web_api/api/qualityprofiles/add_project) |
+| `RemoveQualityProfileProject` | `POST {url}/api/qualityprofiles/remove_project` | Web API v1 | [Public](https://sonarcloud.io/web_api/api/qualityprofiles/remove_project) |
+| `GetProjectQualityProfile` | `GET {url}/api/qualityprofiles/search?organization=&project=&language=` | Web API v1 | [Public](https://sonarcloud.io/web_api/api/qualityprofiles/search) |
 
 The write actions take the profile key as `key`. `change_parent` and
 `delete` also take `qualityProfile`, but that is the profile name, not its
@@ -329,6 +332,28 @@ the Administer Quality Profiles permission with 403.
 lists the ancestors from the parent up. The import of
 `sonarqube_quality_profile_rule` uses it to compare an inherited rule with the
 rule of the parent profile.
+
+No Web API v2 endpoint assigns a profile to a project. `add_project` and
+`remove_project` take the profile key and the project key, without
+`organization`. `add_project` replaces the profile of the same language and
+does not change the other languages. With the default profile, it makes an
+explicit assignment. `remove_project` of a profile that the project does not
+use answers 204 and does nothing. Both answer 404 `Component key '<key>' not
+found` for a missing project and 404 `Quality Profile with key '<key>' does
+not exist` for a missing profile. A token without one of the permissions
+Administer Quality Profiles, edit of the profile, or Administer of the project
+also gets a 404, with a different message. Both refuse an organization whose
+plan does not permit custom profiles with 400 `Organization '<uuid>' is not
+allowed to perform this action`.
+
+`search` with `project` and `language` gives the profile that the project
+uses for the language: the assigned profile, or else the default profile.
+`sonarqube_project_quality_profile` reads it, and not
+`projects?selected=selected`, so that a change outside of Terraform shows as
+drift and not as a deleted assignment. With `project`, `search` needs
+`organization`. It does not check a permission on the project. It answers
+404 `Component key '<key>' not found` for a missing project, and a different
+404 for a project of a different organization.
 
 ## Quality profile rules (`quality_profile_rules.go`)
 

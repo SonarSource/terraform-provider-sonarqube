@@ -6,6 +6,7 @@ FEATURES:
 
 * **New Resource:** `sonarqube_cloud_organization_default_quality_profile`
 * **New Resource:** `sonarqube_quality_profile_rule`
+* **New Resource:** `sonarqube_project_quality_profile`
 
 ## 0.1.0-alpha.2 (November 2, 2026)
 
