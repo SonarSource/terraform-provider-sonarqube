@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"slices"
 )
 
 const qualityProfilesPath = "/api/qualityprofiles"
@@ -101,7 +102,7 @@ func (c *Client) DeleteQualityProfile(ctx context.Context, key string) error {
 // language, or for all languages when language is empty. The web service has
 // no pages.
 func (c *Client) ListQualityProfiles(ctx context.Context, organization, language string) ([]QualityProfile, error) {
-	return c.searchQualityProfiles(ctx, organization, language, "")
+	return c.searchQualityProfiles(ctx, organization, language, "", false)
 }
 
 // GetQualityProfile returns the profile with the key, or ErrNotFound. The
@@ -117,20 +118,66 @@ func (c *Client) GetQualityProfile(ctx context.Context, organization, language, 
 // FindQualityProfileByName returns the profile with the exact name, also a
 // built-in one, or ErrNotFound. Names are case-sensitive.
 func (c *Client) FindQualityProfileByName(ctx context.Context, organization, language, name string) (*QualityProfile, error) {
-	profiles, err := c.searchQualityProfiles(ctx, organization, language, name)
+	profiles, err := c.searchQualityProfiles(ctx, organization, language, name, false)
 	if err != nil {
 		return nil, err
 	}
 	return findByKey(profiles, name, func(profile QualityProfile) string { return profile.Name })
 }
 
-func (c *Client) searchQualityProfiles(ctx context.Context, organization, language, name string) ([]QualityProfile, error) {
+// GetDefaultQualityProfile returns the default profile of the language, or
+// ErrNotFound when the search gives none.
+func (c *Client) GetDefaultQualityProfile(ctx context.Context, organization, language string) (*QualityProfile, error) {
+	profiles, err := c.searchQualityProfiles(ctx, organization, language, "", true)
+	if err != nil {
+		return nil, err
+	}
+	i := slices.IndexFunc(profiles, func(profile QualityProfile) bool { return profile.IsDefault })
+	if i < 0 {
+		return nil, ErrNotFound
+	}
+	return &profiles[i], nil
+}
+
+// SetDefaultQualityProfile makes the profile with the key the default of its
+// own language. The web service does not check a language, so the caller must
+// check that the profile is of the expected language.
+func (c *Client) SetDefaultQualityProfile(ctx context.Context, key string) error {
+	return setDefaultQualityProfileError(c.post(ctx, qualityProfilesPath+"/set_default", url.Values{"key": {key}}))
+}
+
+// setDefaultQualityProfileError explains the refusals that the server message
+// does not make clear.
+func setDefaultQualityProfileError(err error) error {
+	var apiErr *APIError
+	if !errors.As(err, &apiErr) {
+		return err
+	}
+	switch {
+	case isMissingMisraEntitlement(apiErr):
+		return fmt.Errorf("the profile is a MISRA profile, and the organization does not have the MISRA "+
+			"entitlement that it needs. Use a different profile, or get the entitlement for the organization: %w", err)
+	case apiErr.StatusCode == http.StatusForbidden:
+		return fmt.Errorf("SonarQube Cloud refused the change. Check that the token has the Administer Quality "+
+			"Profiles permission of the organization: %w", err)
+	case apiErr.StatusCode == http.StatusBadRequest && hasMessageContaining(apiErr.Messages, "is not allowed to perform this action"):
+		return fmt.Errorf("the plan of the organization does not permit custom quality profiles. Use a built-in "+
+			"profile, or move the organization to the Team or the Enterprise plan: %w", err)
+	}
+	return err
+}
+
+// searchQualityProfiles gives only the default profiles when defaults is true.
+func (c *Client) searchQualityProfiles(ctx context.Context, organization, language, name string, defaults bool) ([]QualityProfile, error) {
 	params := profileParameters(organization)
 	if language != "" {
 		params.Set("language", language)
 	}
 	if name != "" {
 		params.Set("qualityProfile", name)
+	}
+	if defaults {
+		params.Set("defaults", "true")
 	}
 	var answer struct {
 		Profiles []QualityProfile `json:"profiles"`

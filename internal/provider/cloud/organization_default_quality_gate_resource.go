@@ -35,7 +35,7 @@ var defaultQualityGate = organizationDefault{
 	set: setDefaultQualityGate,
 }
 
-func getDefaultQualityGate(ctx context.Context, c *client.Client, organization string) (string, error) {
+func getDefaultQualityGate(ctx context.Context, c *client.Client, organization, _ string) (string, error) {
 	org, err := c.GetOrganization(ctx, organization)
 	if errors.Is(err, client.ErrNotFound) {
 		return "", fmt.Errorf("%w: %w", client.ErrOrganizationNotFound, err)
@@ -48,7 +48,7 @@ func getDefaultQualityGate(ctx context.Context, c *client.Client, organization s
 
 // setDefaultQualityGate needs the UUID of the organization, because the
 // quality gate API does not take its key.
-func setDefaultQualityGate(ctx context.Context, c *client.Client, organization, gateID string) diag.Diagnostics {
+func setDefaultQualityGate(ctx context.Context, c *client.Client, organization, _, gateID string) diag.Diagnostics {
 	var diagnostics diag.Diagnostics
 	org, ok := lookupOrganization(ctx, c, organization, path.Root("organization"), &diagnostics)
 	if !ok {
