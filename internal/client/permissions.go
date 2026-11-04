@@ -42,7 +42,8 @@ type PermissionPrincipal struct {
 	Name  string
 }
 
-func (p PermissionPrincipal) kind() string {
+// Kind is "group" or "user", as the web services and the import IDs name it.
+func (p PermissionPrincipal) Kind() string {
 	if p.Group {
 		return "group"
 	}
@@ -90,12 +91,12 @@ func (c *Client) GetPermissions(ctx context.Context, scope PermissionScope, prin
 	if utf8.RuneCountInString(principal.Name) >= permissionQueryMinLength {
 		params.Set("q", principal.Name)
 	}
-	entries, err := c.listPermissions(ctx, "/api/permissions/"+principal.kind()+"s", params)
+	entries, err := c.listPermissions(ctx, "/api/permissions/"+principal.Kind()+"s", params)
 	if errors.Is(err, ErrNotFound) {
 		return nil, scope.notFound(err)
 	}
 	if err != nil {
-		return nil, fmt.Errorf("cannot read the permissions of %s %q: %w", principal.kind(), principal.Name, err)
+		return nil, fmt.Errorf("cannot read the permissions of %s %q: %w", principal.Kind(), principal.Name, err)
 	}
 	entry, err := findByKey(entries, principal.Name, func(entry permissionEntry) string {
 		if principal.Group {
@@ -151,7 +152,7 @@ func (c *Client) changePermission(ctx context.Context, action string, scope Perm
 	params := scope.parameters()
 	params.Set(principal.nameParameter(), principal.Name)
 	params.Set("permission", permission)
-	err := c.post(ctx, "/api/permissions/"+action+"_"+principal.kind(), params)
+	err := c.post(ctx, "/api/permissions/"+action+"_"+principal.Kind(), params)
 	var apiErr *APIError
 	switch {
 	case err == nil:
@@ -159,7 +160,7 @@ func (c *Client) changePermission(ctx context.Context, action string, scope Perm
 	case errors.Is(err, ErrNotFound) && isProjectNotFound(err, scope):
 		return scope.notFound(err)
 	case errors.Is(err, ErrNotFound):
-		return fmt.Errorf("%s %q was not found: %w", principal.kind(), principal.Name, err)
+		return fmt.Errorf("%s %q was not found: %w", principal.Kind(), principal.Name, err)
 	case errors.As(err, &apiErr) && apiErr.StatusCode == http.StatusBadRequest && isLastAdminMessage(apiErr.Messages):
 		return fmt.Errorf("cannot remove the last administrator. Give admin to another user first: %w", err)
 	default:
