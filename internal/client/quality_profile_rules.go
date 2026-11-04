@@ -180,10 +180,16 @@ func ruleActivationError(err error) error {
 		hasMessagePrefix(apiErr.Messages, "Operation forbidden for built-in Quality Profile"):
 		return fmt.Errorf("a built-in quality profile is read-only. Create a sonarqube_quality_profile that "+
 			"extends it, and change the rules of that profile: %w", err)
-	case apiErr.StatusCode == http.StatusForbidden && hasMessageContaining(apiErr.Messages, "MISRA entitlement"):
+	case isMissingMisraEntitlement(apiErr):
 		return fmt.Errorf("the rule is a MISRA rule, and the organization does not have the MISRA "+
 			"entitlement that it needs. Remove the rule from the configuration, or get the entitlement "+
 			"for the organization: %w", err)
 	}
 	return err
+}
+
+// isMissingMisraEntitlement reports the refusal of a MISRA rule or profile in
+// an organization without the MISRA entitlement.
+func isMissingMisraEntitlement(apiErr *APIError) bool {
+	return apiErr.StatusCode == http.StatusForbidden && hasMessageContaining(apiErr.Messages, "MISRA entitlement")
 }

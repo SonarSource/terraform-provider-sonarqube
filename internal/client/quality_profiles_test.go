@@ -84,6 +84,12 @@ func TestQualityProfileWritesSendKey(t *testing.T) {
 			call: func(ctx context.Context, c *Client) error { return c.DeleteQualityProfile(ctx, "profile-1") },
 			want: "POST /api/qualityprofiles/delete key=profile-1",
 		},
+		"set default": {
+			call: func(ctx context.Context, c *Client) error {
+				return c.SetDefaultQualityProfile(ctx, "profile-1")
+			},
+			want: "POST /api/qualityprofiles/set_default key=profile-1",
+		},
 	}
 	for name, tt := range tests {
 		t.Run(name, func(t *testing.T) {
@@ -203,6 +209,73 @@ func TestGetQualityProfileParentKey(t *testing.T) {
 			}
 			if requests[0] != "GET /api/qualityprofiles/inheritance key=profile-1" {
 				t.Errorf("request = %s", requests[0])
+			}
+		})
+	}
+}
+
+func TestGetDefaultQualityProfileAsksForDefaults(t *testing.T) {
+	t.Parallel()
+	var requests []string
+	c := profileServer(t, http.StatusOK, testProfileList, &requests)
+	profile, err := c.GetDefaultQualityProfile(t.Context(), "my-org", "java")
+	if err != nil || profile.Key != "profile-1" {
+		t.Fatalf("profile = %+v, err = %v", profile, err)
+	}
+	if requests[0] != "GET /api/qualityprofiles/search defaults=true&language=java&organization=my-org" {
+		t.Errorf("request = %s", requests[0])
+	}
+}
+
+func TestGetDefaultQualityProfileWithoutDefault(t *testing.T) {
+	t.Parallel()
+	var requests []string
+	c := profileServer(t, http.StatusOK, `{"profiles":[]}`, &requests)
+	if _, err := c.GetDefaultQualityProfile(t.Context(), "my-org", "java"); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("err = %v", err)
+	}
+}
+
+func TestGetDefaultQualityProfileReportsMissingOrganization(t *testing.T) {
+	t.Parallel()
+	var requests []string
+	c := profileServer(t, http.StatusNotFound, `{"errors":[{"msg":"No organization with key 'my-org'"}]}`, &requests)
+	if _, err := c.GetDefaultQualityProfile(t.Context(), "my-org", "java"); !errors.Is(err, ErrOrganizationNotFound) {
+		t.Fatalf("err = %v", err)
+	}
+}
+
+func TestSetDefaultQualityProfileExplainsRefusals(t *testing.T) {
+	t.Parallel()
+	tests := map[string]struct {
+		status int
+		body   string
+		want   string
+	}{
+		"MISRA entitlement": {
+			http.StatusForbidden, `{"errors":[{"msg":"Enterprise MISRA rules require a MISRA entitlement"}]}`,
+			"does not have the MISRA entitlement",
+		},
+		"permission": {
+			http.StatusForbidden, `{"errors":[{"msg":"Insufficient privileges"}]}`,
+			"Administer Quality Profiles permission",
+		},
+		"plan": {
+			http.StatusBadRequest, `{"errors":[{"msg":"Organization 'organization-uuid' is not allowed to perform this action"}]}`,
+			"Team or the Enterprise plan",
+		},
+		"other": {
+			http.StatusBadRequest, `{"errors":[{"msg":"Something else"}]}`,
+			"Something else",
+		},
+	}
+	for name, tt := range tests {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			var requests []string
+			err := profileServer(t, tt.status, tt.body, &requests).SetDefaultQualityProfile(t.Context(), "profile-1")
+			if err == nil || !strings.Contains(err.Error(), tt.want) {
+				t.Fatalf("err = %v, want %q", err, tt.want)
 			}
 		})
 	}

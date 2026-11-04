@@ -300,6 +300,8 @@ gate. That web service is marked deprecated, so the provider does not use it.
 | `DeleteQualityProfile` | `POST {url}/api/qualityprofiles/delete` | Web API v1 | [Public](https://sonarcloud.io/web_api/api/qualityprofiles/delete) |
 | `ListQualityProfiles`, `GetQualityProfile`, `FindQualityProfileByName` | `GET {url}/api/qualityprofiles/search?organization=&language=&qualityProfile=` | Web API v1 | [Public](https://sonarcloud.io/web_api/api/qualityprofiles/search) |
 | `GetQualityProfileParentKey` | `GET {url}/api/qualityprofiles/inheritance?key=` | Web API v1 | [Public](https://sonarcloud.io/web_api/api/qualityprofiles/inheritance) |
+| `GetDefaultQualityProfile` | `GET {url}/api/qualityprofiles/search?organization=&language=&defaults=true` | Web API v1 | [Public](https://sonarcloud.io/web_api/api/qualityprofiles/search) |
+| `SetDefaultQualityProfile` | `POST {url}/api/qualityprofiles/set_default` | Web API v1 | [Public](https://sonarcloud.io/web_api/api/qualityprofiles/set_default) |
 
 The write actions take the profile key as `key`. `change_parent` and
 `delete` also take `qualityProfile`, but that is the profile name, not its
@@ -310,6 +312,18 @@ does not exist. `search` has no pages, shows a change at once, and gives
 profiles of all the languages. Its `qualityProfile` filter matches the exact
 name, with the same case. A missing organization is a 404 with the message
 `No organization with key '<key>'`.
+
+No Web API v2 endpoint reads or sets the default profile of a language.
+`set_default` takes the profile key and makes the profile the default of its
+own language. It does not check a language, so
+`sonarqube_cloud_organization_default_quality_profile` first finds the profile
+in `search` and refuses a profile of a different language. The API has no
+operation to remove a default. `set_default` refuses a custom profile with 400
+`Organization '<uuid>' is not allowed to perform this action` when the plan of
+the organization does not permit custom profiles. It refuses a MISRA built-in
+profile with 403 `Enterprise MISRA rules require a MISRA entitlement` when the
+organization does not have the MISRA entitlement, and refuses a token without
+the Administer Quality Profiles permission with 403.
 
 `inheritance` takes the profile key without `organization`, and `ancestors`
 lists the ancestors from the parent up. The import of

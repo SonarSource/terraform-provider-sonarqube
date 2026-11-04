@@ -129,6 +129,10 @@ func TestOrganizationDefaultQualityGateResourceSchema(t *testing.T) {
 	if gate, ok := s.Attributes["quality_gate_id"].(schema.StringAttribute); !ok || len(gate.PlanModifiers) != 0 {
 		t.Error("quality_gate_id must not require a replacement")
 	}
+	// The gate has no scope, so it has no language attribute.
+	if _, ok := s.Attributes["language"]; ok {
+		t.Error("the default quality gate has a language attribute")
+	}
 	resp := &resource.MetadataResponse{}
 	NewOrganizationDefaultQualityGateResource().Metadata(context.Background(), resource.MetadataRequest{ProviderTypeName: "sonarqube"}, resp)
 	if resp.TypeName != "sonarqube_cloud_organization_default_quality_gate" {

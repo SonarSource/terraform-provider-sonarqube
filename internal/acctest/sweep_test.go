@@ -64,12 +64,19 @@ func sweepServer(t *testing.T) (*httptest.Server, func() []string) {
 		case r.URL.Path == "/api/permissions/delete_template":
 			deleted = append(deleted, "template "+r.Form.Get("templateId"))
 		case r.URL.Path == "/api/qualityprofiles/search":
-			fmt.Fprint(w, `{"profiles":[{"key":"p1","name":"tf-acc-test-1"},{"key":"p2","name":"Sonar way core","isBuiltIn":true},`+
-				`{"key":"p3","name":"customer profile"},{"key":"p4","name":"tf-acc-test-default","isDefault":true,"parentKey":"p5"},`+
+			fmt.Fprint(w, `{"profiles":[{"key":"p1","name":"tf-acc-test-1"},{"key":"p2","name":"Sonar way core","language":"java","isBuiltIn":true},`+
+				`{"key":"p3","name":"customer profile"},{"key":"p4","name":"tf-acc-test-default","language":"java","isDefault":true,"parentKey":"p5"},`+
 				`{"key":"p5","name":"tf-acc-test-parent-of-default"},`+
 				`{"key":"p6","name":"tf-acc-test-parent"},{"key":"p7","name":"customer child","parentKey":"p6"},`+
 				`{"key":"p8","name":"tf-acc-test-grandparent"},{"key":"p9","name":"tf-acc-test-middle","parentKey":"p8"},`+
-				`{"key":"p10","name":"customer grandchild","parentKey":"p9"}]}`)
+				`{"key":"p10","name":"customer grandchild","parentKey":"p9"},`+
+				`{"key":"p11","name":"Sonar way","language":"java","isBuiltIn":true},`+
+				`{"key":"p12","name":"tf-acc-test-extended-default","language":"py","isDefault":true},`+
+				`{"key":"p13","name":"customer py child","language":"py","parentKey":"p12"},`+
+				`{"key":"p14","name":"Sonar way","language":"py","isBuiltIn":true}]}`)
+		case r.URL.Path == "/api/qualityprofiles/set_default":
+			deleted = append(deleted, "default profile "+r.Form.Get("key"))
+			w.WriteHeader(http.StatusNoContent)
 		case r.URL.Path == "/api/qualityprofiles/delete":
 			deleted = append(deleted, "profile "+r.Form.Get("key"))
 		case r.URL.Path == "/quality-gates/quality-gates" && r.Method == http.MethodGet:
@@ -100,7 +107,10 @@ func setSweepEnvironment(t *testing.T, srv *httptest.Server) {
 	t.Setenv(EnvAllowedHosts, "")
 }
 
-// The defaults have the prefix too, but the server cannot delete them. A key
+// The defaults have the prefix too, but the server cannot delete them. A
+// default quality profile with the prefix first gives its place to the
+// built-in Sonar way profile, so it and its parent go. A default that a
+// profile without the prefix extends keeps its place. A key
 // that holds the prefix but does not start with it stays. A quality profile
 // with the prefix stays when a default profile or a profile without the
 // prefix extends it, also through a profile between them, because its delete
@@ -117,7 +127,8 @@ func TestSweepersDeleteOnlyWhatHasThePrefix(t *testing.T) {
 
 	got := deleted()
 	slices.Sort(got)
-	want := []string{"enterprise e1", "gate q1", "group g1", "organization tf-acc-test-1", "profile p1", "project tf-acc-test-1", "template t1", "token token-1"}
+	want := []string{"default profile p11", "enterprise e1", "gate q1", "group g1", "organization tf-acc-test-1",
+		"profile p1", "profile p4", "profile p5", "project tf-acc-test-1", "template t1", "token token-1"}
 	if !slices.Equal(got, want) {
 		t.Errorf("deleted %v, want %v", got, want)
 	}
@@ -191,5 +202,73 @@ func TestAncestorsOfWalksUpTheParents(t *testing.T) {
 	}, func(profile client.QualityProfile) bool { return profile.IsDefault })
 	if want := map[string]bool{"middle": true, "root": true}; !maps.Equal(got, want) {
 		t.Errorf("ancestors = %v, want %v", got, want)
+	}
+}
+
+func TestBuiltInDefaultsPreferSonarWay(t *testing.T) {
+	t.Parallel()
+	profiles := []client.QualityProfile{
+		{Key: "py-way", Name: "Sonar way", Language: "py", IsBuiltIn: true},
+		{Key: "core", Name: "Sonar way core", Language: "java", IsBuiltIn: true},
+		{Key: "custom", Name: "Sonar way", Language: "java"},
+		{Key: "comprehensive", Name: "Sonar way comprehensive", Language: "java", IsBuiltIn: true},
+	}
+	keys := func(profiles []client.QualityProfile) []string {
+		var keys []string
+		for _, profile := range profiles {
+			keys = append(keys, profile.Key)
+		}
+		return keys
+	}
+	for language, want := range map[string][]string{"java": {"comprehensive", "core"}, "py": {"py-way"}, "go": nil} {
+		if got := keys(builtInDefaults(profiles, language)); !slices.Equal(got, want) {
+			t.Errorf("%s: built-in defaults = %v, want %v", language, got, want)
+		}
+	}
+}
+
+// When the server refuses a built-in profile, the next one takes the place. A
+// default that keeps its place is not replaced.
+func TestReplaceTestDefaultsTriesTheNextBuiltIn(t *testing.T) {
+	t.Parallel()
+	for name, test := range map[string]struct {
+		refused      []string
+		wantTried    []string
+		wantReplaced bool
+	}{
+		"first refused": {refused: []string{"misra"}, wantTried: []string{"misra", "core"}, wantReplaced: true},
+		"all refused":   {refused: []string{"misra", "core"}, wantTried: []string{"misra", "core"}, wantReplaced: false},
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			var tried []string
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if err := r.ParseForm(); err != nil {
+					t.Error(err)
+				}
+				if r.Method != http.MethodPost || r.URL.Path != "/api/qualityprofiles/set_default" {
+					t.Errorf("unexpected request: %s %s", r.Method, r.URL.Path)
+				}
+				key := r.Form.Get("key")
+				tried = append(tried, key)
+				if slices.Contains(test.refused, key) {
+					w.WriteHeader(http.StatusForbidden)
+					fmt.Fprint(w, `{"errors":[{"msg":"Enterprise MISRA rules require a MISRA entitlement"}]}`)
+					return
+				}
+				w.WriteHeader(http.StatusNoContent)
+			}))
+			t.Cleanup(srv.Close)
+			c := client.New(client.Config{URL: srv.URL, APIURL: srv.URL, Token: "test-token", Product: client.ProductCloud})
+			profiles := []client.QualityProfile{
+				{Key: "misra", Name: "Sonar MISRA", Language: "cpp", IsBuiltIn: true},
+				{Key: "core", Name: "Sonar way core", Language: "cpp", IsBuiltIn: true},
+				{Key: "test", Name: KeyPrefix + "default", Language: "cpp", IsDefault: true},
+			}
+			replaced := replaceTestDefaults(t.Context(), c, "shared", profiles, nil)
+			if !slices.Equal(tried, test.wantTried) || replaced["test"] != test.wantReplaced {
+				t.Errorf("tried %v, replaced %v; want %v, %v", tried, replaced, test.wantTried, test.wantReplaced)
+			}
+		})
 	}
 }

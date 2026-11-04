@@ -27,13 +27,13 @@ var defaultPermissionTemplate = organizationDefault{
 		"Cloud made with the organization.",
 	attributeDescription: "Identifier of the permission template to set as the default. The template must " +
 		"belong to the organization.",
-	get: func(ctx context.Context, c *client.Client, organization string) (string, error) {
+	get: func(ctx context.Context, c *client.Client, organization, _ string) (string, error) {
 		return c.GetDefaultPermissionTemplateID(ctx, organization)
 	},
 	set: setDefaultPermissionTemplate,
 }
 
-func setDefaultPermissionTemplate(ctx context.Context, c *client.Client, organization, templateID string) diag.Diagnostics {
+func setDefaultPermissionTemplate(ctx context.Context, c *client.Client, organization, _, templateID string) diag.Diagnostics {
 	var diagnostics diag.Diagnostics
 	err := c.SetDefaultPermissionTemplate(ctx, organization, templateID)
 	switch {
