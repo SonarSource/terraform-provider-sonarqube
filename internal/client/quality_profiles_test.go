@@ -280,3 +280,116 @@ func TestSetDefaultQualityProfileExplainsRefusals(t *testing.T) {
 		})
 	}
 }
+
+func TestQualityProfileProjectWritesSendKeyAndProject(t *testing.T) {
+	t.Parallel()
+	var requests []string
+	c := profileServer(t, http.StatusNoContent, "", &requests)
+	if err := c.AddQualityProfileProject(t.Context(), "profile-1", "my-project"); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.RemoveQualityProfileProject(t.Context(), "profile-1", "my-project"); err != nil {
+		t.Fatal(err)
+	}
+	form := url.Values{"key": {"profile-1"}, "project": {"my-project"}}.Encode()
+	want := []string{"POST /api/qualityprofiles/add_project " + form, "POST /api/qualityprofiles/remove_project " + form}
+	if !reflect.DeepEqual(requests, want) {
+		t.Errorf("requests = %v", requests)
+	}
+}
+
+func TestAddQualityProfileProjectExplainsRefusals(t *testing.T) {
+	t.Parallel()
+	tests := map[string]struct {
+		status   int
+		body     string
+		want     string
+		sentinel error
+	}{
+		"missing project": {
+			http.StatusNotFound, `{"errors":[{"msg":"Component key 'my-project' not found"}]}`, "my-project", ErrProjectNotFound,
+		},
+		"missing profile": {
+			http.StatusNotFound, `{"errors":[{"msg":"Quality Profile with key 'profile-1' does not exist"}]}`, "profile-1", ErrNotFound,
+		},
+		"permission": {
+			http.StatusNotFound, `{"errors":[{"msg":"Project doesn't exist"}]}`, "Administer permission of the project", nil,
+		},
+		"MISRA entitlement": {
+			http.StatusForbidden, `{"errors":[{"msg":"Enterprise MISRA rules require a MISRA entitlement"}]}`,
+			"does not have the MISRA entitlement", nil,
+		},
+		"plan": {
+			http.StatusBadRequest, `{"errors":[{"msg":"Organization 'organization-uuid' is not allowed to perform this action"}]}`,
+			"Team or the Enterprise plan", ErrQualityProfilePlanRefused,
+		},
+	}
+	for name, tt := range tests {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			var requests []string
+			err := profileServer(t, tt.status, tt.body, &requests).AddQualityProfileProject(t.Context(), "profile-1", "my-project")
+			if err == nil || !strings.Contains(err.Error(), tt.want) {
+				t.Fatalf("err = %v, want %q", err, tt.want)
+			}
+			if tt.sentinel != nil && !errors.Is(err, tt.sentinel) {
+				t.Errorf("err = %v, want %v", err, tt.sentinel)
+			}
+			if tt.sentinel == nil && (errors.Is(err, ErrNotFound) || errors.Is(err, ErrProjectNotFound)) {
+				t.Errorf("err = %v matches a not-found error", err)
+			}
+		})
+	}
+}
+
+func TestRemoveQualityProfileProjectAcceptsMissingProjectOrProfileOnly(t *testing.T) {
+	t.Parallel()
+	for body, wantErr := range map[string]bool{
+		`{"errors":[{"msg":"Component key 'my-project' not found"}]}`:                false,
+		`{"errors":[{"msg":"Quality Profile with key 'profile-1' does not exist"}]}`: false,
+		`{"errors":[{"msg":"Project doesn't exist"}]}`:                               true,
+	} {
+		var requests []string
+		err := profileServer(t, http.StatusNotFound, body, &requests).RemoveQualityProfileProject(t.Context(), "profile-1", "my-project")
+		if (err != nil) != wantErr {
+			t.Errorf("body %s: err = %v, want error %v", body, err, wantErr)
+		}
+	}
+}
+
+func TestGetProjectQualityProfile(t *testing.T) {
+	t.Parallel()
+	var requests []string
+	c := profileServer(t, http.StatusOK, `{"profiles":[{"key":"profile-1","language":"java","isDefault":true}]}`, &requests)
+	profile, err := c.GetProjectQualityProfile(t.Context(), "my-org", "my-project", "java")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if profile.Key != "profile-1" {
+		t.Errorf("profile = %+v", *profile)
+	}
+	form := url.Values{"organization": {"my-org"}, "project": {"my-project"}, "language": {"java"}}
+	if requests[0] != "GET /api/qualityprofiles/search "+form.Encode() {
+		t.Errorf("request = %s", requests[0])
+	}
+
+	empty := profileServer(t, http.StatusOK, `{"profiles":[]}`, &requests)
+	if _, err := empty.GetProjectQualityProfile(t.Context(), "my-org", "my-project", "java"); !errors.Is(err, ErrNotFound) {
+		t.Errorf("err = %v, want ErrNotFound", err)
+	}
+	for body, want := range map[string]error{
+		`{"errors":[{"msg":"Component key 'my-project' not found"}]}`: ErrProjectNotFound,
+		`{"errors":[{"msg":"No organization with key 'my-org'"}]}`:    ErrOrganizationNotFound,
+	} {
+		_, err := profileServer(t, http.StatusNotFound, body, &requests).GetProjectQualityProfile(t.Context(), "my-org", "my-project", "java")
+		if !errors.Is(err, want) || errors.Is(err, ErrNotFound) {
+			t.Errorf("body %s: err = %v, want %v", body, err, want)
+		}
+	}
+	// search answers this for a project of a different organization.
+	_, err = profileServer(t, http.StatusNotFound, `{"errors":[{"msg":"Project 'my-project' not found"}]}`, &requests).
+		GetProjectQualityProfile(t.Context(), "my-org", "my-project", "java")
+	if !errors.Is(err, ErrProjectNotFound) {
+		t.Errorf("err = %v, want ErrProjectNotFound", err)
+	}
+}

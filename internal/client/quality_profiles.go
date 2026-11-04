@@ -11,6 +11,12 @@ import (
 
 const qualityProfilesPath = "/api/qualityprofiles"
 
+// ErrQualityProfilePlanRefused reports that add_project or remove_project
+// refused the call, because the plan of the organization does not permit
+// custom quality profiles.
+var ErrQualityProfilePlanRefused = errors.New("the plan of the organization does not permit to change the " +
+	"quality profile of a project")
+
 // QualityProfile is a quality profile of one language. An empty ParentKey
 // means that the profile extends no other profile.
 type QualityProfile struct {
@@ -155,8 +161,7 @@ func setDefaultQualityProfileError(err error) error {
 	}
 	switch {
 	case isMissingMisraEntitlement(apiErr):
-		return fmt.Errorf("the profile is a MISRA profile, and the organization does not have the MISRA "+
-			"entitlement that it needs. Use a different profile, or get the entitlement for the organization: %w", err)
+		return misraProfileError(err)
 	case apiErr.StatusCode == http.StatusForbidden:
 		return fmt.Errorf("SonarQube Cloud refused the change. Check that the token has the Administer Quality "+
 			"Profiles permission of the organization: %w", err)
@@ -192,10 +197,107 @@ func (c *Client) searchQualityProfiles(ctx context.Context, organization, langua
 // other messages of the server are clear, for example for a parent of a
 // different language or for a member of a combined quality profile group.
 func qualityProfileError(err error, organization string) error {
-	var apiErr *APIError
-	if errors.As(err, &apiErr) && apiErr.StatusCode == http.StatusNotFound &&
-		hasMessagePrefix(apiErr.Messages, "No organization with key ") {
+	if isMissingOrganization(err) {
 		return &ScopeNotFoundError{Kind: ScopeOrganization, Key: organization, Cause: err}
 	}
 	return err
+}
+
+// isMissingOrganization reports the 404 of an organization key that does not
+// exist.
+func isMissingOrganization(err error) bool {
+	var apiErr *APIError
+	return errors.As(err, &apiErr) && apiErr.StatusCode == http.StatusNotFound &&
+		hasMessagePrefix(apiErr.Messages, "No organization with key ")
+}
+
+// AddQualityProfileProject makes the project use the profile for the language
+// of the profile. It replaces the profile that the project used for that
+// language, and it does not change the other languages. The key is unique on
+// the instance, so the call takes no organization.
+func (c *Client) AddQualityProfileProject(ctx context.Context, key, project string) error {
+	err := c.post(ctx, qualityProfilesPath+"/add_project", url.Values{"key": {key}, "project": {project}})
+	return projectQualityProfileError(err, project)
+}
+
+// RemoveQualityProfileProject makes the project use the default profile of the
+// language again. The call succeeds when the project does not use the
+// profile. A missing project or profile is success too, but a missing
+// permission is not.
+func (c *Client) RemoveQualityProfileProject(ctx context.Context, key, project string) error {
+	err := projectQualityProfileError(c.post(ctx, qualityProfilesPath+"/remove_project",
+		url.Values{"key": {key}, "project": {project}}), project)
+	if errors.Is(err, ErrProjectNotFound) || errors.Is(err, ErrNotFound) {
+		return nil
+	}
+	return err
+}
+
+// GetProjectQualityProfile returns the profile that the project uses for the
+// language: the profile that add_project gave, or else the default profile.
+// It returns a ScopeNotFoundError for a missing organization, and for a
+// project that is missing or is in a different organization. search does not
+// check a permission on the project, so it has no 404 for a permission.
+func (c *Client) GetProjectQualityProfile(ctx context.Context, organization, project, language string) (*QualityProfile, error) {
+	params := profileParameters(organization)
+	params.Set("project", project)
+	params.Set("language", language)
+	var answer struct {
+		Profiles []QualityProfile `json:"profiles"`
+	}
+	if err := c.get(ctx, qualityProfilesPath+"/search", params, &answer); err != nil {
+		switch {
+		case isMissingOrganization(err):
+			return nil, &ScopeNotFoundError{Kind: ScopeOrganization, Key: organization, Cause: err}
+		case errors.Is(err, ErrNotFound):
+			return nil, &ScopeNotFoundError{Kind: ScopeProject, Key: project, Cause: err}
+		}
+		return nil, err
+	}
+	if len(answer.Profiles) == 0 {
+		return nil, ErrNotFound
+	}
+	return &answer.Profiles[0], nil
+}
+
+// isMissingComponent reports the 404 of a project key that does not exist.
+func isMissingComponent(err error) bool {
+	var apiErr *APIError
+	return errors.As(err, &apiErr) && apiErr.StatusCode == http.StatusNotFound && hasMessagePrefix(apiErr.Messages, "Component key ")
+}
+
+// projectQualityProfileError explains the refusals of add_project and
+// remove_project. A missing project becomes a ScopeNotFoundError, and a
+// missing profile stays a 404 that matches ErrNotFound. The server also
+// answers 404 when the token has no permission, so that it does not show that
+// the project exists. That 404 has a different message and becomes an error
+// that does not match ErrNotFound.
+func projectQualityProfileError(err error, project string) error {
+	var apiErr *APIError
+	if !errors.As(err, &apiErr) {
+		return err
+	}
+	switch {
+	case isMissingComponent(err):
+		return &ScopeNotFoundError{Kind: ScopeProject, Key: project, Cause: err}
+	case apiErr.StatusCode == http.StatusNotFound && hasMessagePrefix(apiErr.Messages, "Quality Profile with key "):
+		return err
+	case apiErr.StatusCode == http.StatusNotFound:
+		return fmt.Errorf("the server refused the call. Check that the token has the Administer Quality "+
+			"Profiles permission, the permission to edit the profile, or the Administer permission of the "+
+			"project: %s", apiErr.Error())
+	case isMissingMisraEntitlement(apiErr):
+		return misraProfileError(err)
+	case apiErr.StatusCode == http.StatusBadRequest && hasMessageContaining(apiErr.Messages, "is not allowed to perform this action"):
+		return fmt.Errorf("%w. On SonarQube Cloud, move the organization to the Team or the Enterprise plan: %w",
+			ErrQualityProfilePlanRefused, err)
+	}
+	return err
+}
+
+// misraProfileError explains the refusal of a MISRA profile in an
+// organization without the MISRA entitlement.
+func misraProfileError(err error) error {
+	return fmt.Errorf("the profile is a MISRA profile, and the organization does not have the MISRA "+
+		"entitlement that it needs. Use a different profile, or get the entitlement for the organization: %w", err)
 }
