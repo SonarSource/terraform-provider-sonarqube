@@ -355,6 +355,40 @@ drift and not as a deleted assignment. With `project`, `search` needs
 404 `Component key '<key>' not found` for a missing project, and a different
 404 for a project of a different organization.
 
+## Quality profile editors (`quality_profile_editors.go`)
+
+| Function | Endpoint | Surface | Public or internal |
+| --- | --- | --- | --- |
+| `AddQualityProfileEditor` | `POST {url}/api/qualityprofiles/add_group`, `POST {url}/api/qualityprofiles/add_user` | Web API v1 | Internal |
+| `RemoveQualityProfileEditor` | `POST {url}/api/qualityprofiles/remove_group`, `POST {url}/api/qualityprofiles/remove_user` | Web API v1 | Internal |
+| `HasQualityProfileEditor` | `GET {url}/api/qualityprofiles/search_groups`, `GET {url}/api/qualityprofiles/search_users` | Web API v1 | Internal |
+
+No public endpoint and no Web API v2 endpoint lets a group or a user edit a
+profile. The SonarQube Cloud web application uses these internal web
+services. They name the profile by `qualityProfile` (its name), `language`
+and `organization`, not by its key, so the caller reads the profile from its
+key first. A rename keeps the editors.
+
+`add_*` and `remove_*` succeed when nothing changes. A missing group answers
+404 `No group with name '<name>' in organization '<key>'`, and a missing user
+answers 404 `User with login '<login>' is not found'`. A missing profile
+answers 404 `Quality Profile for language '<language>' and name '<name>' does
+not exist in organization '<key>'`. A built-in profile answers 400
+`Operation forbidden for built-in Quality Profile ...`, and a user who is not
+a member of the organization answers 400. On a plan without custom profiles,
+the writes answer 403 `This action is not allowed for your current
+subscription plan`, and the searches answer an empty list.
+
+`search_groups` and `search_users` with `selected=selected` give the editors,
+with `paging.total`. Their `q` filter keeps the groups whose name holds the
+value, and the users whose login or name holds it, without regard to case.
+The searches show a change at once. On SonarQube Cloud, `add_group` and
+`remove_group` find the group without regard to case (SonarQube Server is not
+checked yet), so `HasQualityProfileEditor` matches a group
+name without regard to case and a login exactly. `remove_user` refuses a
+user who is not a member of the organization any more with 400, and
+`RemoveQualityProfileEditor` takes this as success.
+
 ## Quality profile rules (`quality_profile_rules.go`)
 
 | Function | Endpoint | Surface | Public or internal |

@@ -249,11 +249,7 @@ func (r *permissionsResource[M, P]) importID(model P) string {
 // permissionImportID uses the first scopeParts of organization and project key.
 func permissionImportID(scope client.PermissionScope, principal client.PermissionPrincipal, scopeParts int) string {
 	parts := []string{scope.Organization, scope.ProjectKey}[:scopeParts]
-	kind := "user"
-	if principal.Group {
-		kind = "group"
-	}
-	return strings.Join(append(parts, kind, principal.Name), "/")
+	return strings.Join(append(parts, principal.Kind(), principal.Name), "/")
 }
 
 // parsePermissionImportID reads <scope...>/<group|user>/<name>. The name is

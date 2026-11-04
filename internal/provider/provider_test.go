@@ -252,6 +252,7 @@ func TestProviderRegistersItsDataSources(t *testing.T) {
 		"sonarqube_quality_profile",
 		"sonarqube_quality_profile_rule",
 		"sonarqube_project_quality_profile",
+		"sonarqube_quality_profile_editor",
 		"sonarqube_cloud_organization",
 		"sonarqube_cloud_organization_permissions",
 		"sonarqube_cloud_organization_binding",
