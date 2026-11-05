@@ -180,6 +180,9 @@ func ruleActivationError(err error) error {
 		hasMessagePrefix(apiErr.Messages, "Operation forbidden for built-in Quality Profile"):
 		return fmt.Errorf("a built-in quality profile is read-only. Create a sonarqube_quality_profile that "+
 			"extends it, and change the rules of that profile: %w", err)
+	case apiErr.StatusCode == http.StatusBadRequest && hasMessagePrefix(apiErr.Messages, "Cannot deactivate inherited rule"):
+		return fmt.Errorf("the instance does not permit to deactivate an inherited rule. An administrator can "+
+			"permit it with the setting sonar.qualityProfiles.allowDisableInheritedRules: %w", err)
 	case isMissingMisraEntitlement(apiErr):
 		return fmt.Errorf("the rule is a MISRA rule, and the organization does not have the MISRA "+
 			"entitlement that it needs. Remove the rule from the configuration, or get the entitlement "+

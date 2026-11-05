@@ -157,3 +157,13 @@ func TestGetActiveRuleNotFound(t *testing.T) {
 		})
 	}
 }
+
+func TestDeactivateQualityProfileRuleExplainsInheritedRuleSetting(t *testing.T) {
+	t.Parallel()
+	var requests []string
+	err := profileServer(t, http.StatusBadRequest, `{"errors":[{"msg":"Cannot deactivate inherited rule 'java:S3329'"}]}`, &requests).
+		DeactivateQualityProfileRule(t.Context(), "child", "java:S3329")
+	if err == nil || !strings.Contains(err.Error(), "sonar.qualityProfiles.allowDisableInheritedRules") {
+		t.Errorf("err = %v", err)
+	}
+}

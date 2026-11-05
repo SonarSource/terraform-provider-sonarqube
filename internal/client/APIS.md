@@ -415,8 +415,24 @@ impacts defined on the rule can be overridden`, and `impacts` probably sets
 the whole set of impacts. Check this before the provider supports SonarQube
 Server.
 
-`deactivate_rule` answers 204 for a rule that is not active. SonarQube Cloud
-also deactivates an inherited rule.
+`deactivate_rule` answers 204 for a rule that is not active. It also
+deactivates an inherited rule, and the deactivation applies to the
+descendants of the profile too, also to an `OVERRIDES` rule there. An
+activation again gives the descendants new activations with the values of
+the profile, so their overrides do not come back. The setting
+`sonar.qualityProfiles.allowDisableInheritedRules` (default `true`) permits
+this on SonarQube Cloud and on SonarQube Server. On SonarQube Server, an
+administrator can set it to `false`, and then `deactivate_rule` answers 400
+`Cannot deactivate inherited rule '<rule>'`.
+
+The server deletes the activation of a deactivated inherited rule. Thus
+`activate_rule` with `reset=true` does nothing for it: the server ignores a
+reset for a rule that is not active. `activate_rule` without values
+activates it again as `INHERITED`, with the values of the parent. With
+values, the server activates it as `NONE`, the profile's own rule, so the
+provider first activates it without values and then sends the values, which
+gives `OVERRIDES`. A change of the rule in the parent profile activates the
+rule again in the profile.
 
 `rules/search` finds the profile by `qprofile`, so it needs no
 `organization`. With `f=actives`, `actives` gives the activation of the rule

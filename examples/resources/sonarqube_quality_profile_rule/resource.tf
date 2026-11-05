@@ -32,3 +32,11 @@ resource "sonarqube_quality_profile_rule" "security" {
     SECURITY = "BLOCKER"
   }
 }
+
+# Deactivates a rule that the profile gets from its parent. A destroy
+# activates the rule again, with the values of the parent.
+resource "sonarqube_quality_profile_rule" "hardcoded_ip" {
+  quality_profile_key = sonarqube_quality_profile.backend.key
+  rule                = "java:S1313"
+  active              = false
+}
