@@ -224,14 +224,9 @@ func matchesState(group *client.Group, state groupResourceModel) bool {
 // groupLookupDetail explains why a lookup by name found no group, for import
 // and for the data source.
 func groupLookupDetail(err error, organization string) string {
-	switch {
-	case errors.Is(err, client.ErrOrganizationNotFound):
-		return "The organization " + organization + " was not found. Check the key, and check " +
-			"that the token can read the organization."
-	case errors.Is(err, client.ErrNotFound):
+	if errors.Is(err, client.ErrNotFound) {
 		return "No group with this name is in the organization " + organization + ". Check the name. " +
 			"The name must match exactly, with the same case."
-	default:
-		return err.Error()
 	}
+	return organizationErrorDetail(err, organization)
 }

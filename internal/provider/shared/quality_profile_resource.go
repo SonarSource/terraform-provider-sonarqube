@@ -253,3 +253,10 @@ func profileLookupDetail(err error, organization, language string) string {
 	}
 	return organizationErrorDetail(err, organization)
 }
+
+func optionalString(value string) types.String {
+	if value == "" {
+		return types.StringNull()
+	}
+	return types.StringValue(value)
+}

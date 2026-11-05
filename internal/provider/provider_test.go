@@ -248,7 +248,6 @@ func TestProviderRegistersItsDataSources(t *testing.T) {
 	assertNames(t, "resources", resourceNames, []string{
 		"sonarqube_group",
 		"sonarqube_group_member",
-		"sonarqube_permission_template",
 		"sonarqube_quality_profile",
 		"sonarqube_quality_profile_rule",
 		"sonarqube_project_quality_profile",
@@ -261,7 +260,6 @@ func TestProviderRegistersItsDataSources(t *testing.T) {
 		"sonarqube_cloud_quality_gate",
 		"sonarqube_cloud_organization_quality_gate_settings",
 		"sonarqube_cloud_organization_default_quality_gate",
-		"sonarqube_cloud_organization_default_permission_template",
 		"sonarqube_cloud_organization_default_quality_profile",
 		"sonarqube_cloud_project_quality_gate",
 		"sonarqube_cloud_scoped_organization_token",

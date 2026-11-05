@@ -76,9 +76,9 @@ tests, and fails when a test skips, except the ones that `ALLOWED_SKIP` in the
   production.
 * `SONARQUBE_TEST_ORGANIZATION`: an organization that the tests share. The
   tests that only read use it, and so do the tests that need a paid plan, such
-  as the tests of the default gate, the default template and the permission
-  templates. An organization that a test makes is on the Free plan, and no API
-  can change its plan. The tests that change the shared organization call
+  as the tests of the default gate and the default quality profile. An
+  organization that a test makes is on the Free plan, and no API can change
+  its plan. The tests that change the shared organization call
   `acctest.PreCheckSharedOrganization`, which stops the run when the
   organization is not on the Team or the Enterprise plan, when the token user
   has no direct `admin` grant on it, or when its key starts with
@@ -115,7 +115,7 @@ Each test gives the prefix `acctest.KeyPrefix` (`tf-acc-test-`) to what it
 makes. When a run stops before its cleanup, the sweepers in
 `internal/acctest/sweep.go` delete what starts with the prefix: the
 enterprises and the organizations of the token user, and the projects,
-groups, permission templates, quality gates and scoped organization tokens of
+groups, quality profiles, quality gates and scoped organization tokens of
 `SONARQUBE_TEST_ORGANIZATION`. They never
 delete `SONARQUBE_TEST_ORGANIZATION` itself. Run them with the same variables:
 
@@ -124,7 +124,7 @@ make sweep
 ```
 
 `-sweep-allow-failures` lets each sweeper run when another one fails. A
-sweeper keeps a default template or a default gate, because the server cannot
+sweeper keeps a default quality profile or a default gate, because the server cannot
 delete it, and logs a warning. Run them on one package only, because the
 sweepers are the same in each package that imports `acctest`. `-sweep` acts
 only where `TestMain` calls `resource.TestMain`. A package without that

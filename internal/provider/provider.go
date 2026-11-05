@@ -169,7 +169,6 @@ func (p *sonarqubeProvider) Resources(_ context.Context) []func() resource.Resou
 	return []func() resource.Resource{
 		shared.NewGroupResource,
 		shared.NewGroupMemberResource,
-		shared.NewPermissionTemplateResource,
 		shared.NewQualityProfileResource,
 		shared.NewQualityProfileRuleResource,
 		shared.NewProjectQualityProfileResource,
@@ -183,7 +182,6 @@ func (p *sonarqubeProvider) Resources(_ context.Context) []func() resource.Resou
 		cloud.NewProjectBindingResource,
 		cloud.NewQualityGateResource,
 		cloud.NewOrganizationDefaultQualityGateResource,
-		cloud.NewOrganizationDefaultPermissionTemplateResource,
 		cloud.NewOrganizationDefaultQualityProfileResource,
 		cloud.NewProjectQualityGateResource,
 		cloud.NewScopedOrganizationTokenResource,

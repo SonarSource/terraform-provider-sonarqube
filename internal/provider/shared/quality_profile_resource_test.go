@@ -2,6 +2,7 @@ package shared
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -409,4 +410,8 @@ func TestQualityProfileDataSourceReadsBuiltInAndCustomProfiles(t *testing.T) {
 	}
 
 	providertest.AssertDiagnosticsContain(t, readProfileDataSource(t, c, "Frontend").Diagnostics, "No java quality profile")
+}
+
+func writeJSON(w http.ResponseWriter, value any) {
+	_ = json.NewEncoder(w).Encode(value)
 }

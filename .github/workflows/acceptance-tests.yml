@@ -77,8 +77,8 @@ jobs:
             development/team/sonarcloud/kv/data/terraform-provider-acc-dopex repo_slug | SONARQUBE_TEST_GITHUB_REPOSITORY;
 
       # A run that stops before its cleanup leaves organizations, projects,
-      # groups, templates and gates. The sweepers delete them, so that this
-      # run can make them again.
+      # groups, quality profiles and gates. The sweepers delete them, so that
+      # this run can make them again.
       - name: Sweep what an earlier run left
         env:
           SONARQUBE_TOKEN: ${{ fromJSON(steps.secrets.outputs.vault).SONARQUBE_TOKEN }}
