@@ -4,6 +4,7 @@ import (
 	"maps"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -88,6 +89,8 @@ type fakeRules struct {
 	// lag makes the next searches find no rule, as the index can do after a
 	// write.
 	lag int
+	// refuseValues makes each activation with values fail.
+	refuseValues bool
 }
 
 var ruleDefaults = map[string]ruleActivation{
@@ -120,17 +123,11 @@ func (f *fakeRules) serve(w http.ResponseWriter, r *http.Request) {
 		f.search(w, r)
 		return
 	case "/api/qualityprofiles/inheritance":
-		ancestors := []any{}
-		if key == "child" {
-			ancestors = append(ancestors, map[string]string{"key": "core"})
-		}
-		writeJSON(w, map[string]any{"ancestors": ancestors})
+		f.inheritance(w, key)
 		return
 	case "/api/qualityprofiles/activate_rule":
-		if r.Form.Get("reset") == "true" {
-			f.calls = append(f.calls, "reset")
-		} else {
-			f.calls = append(f.calls, "activate "+r.Form.Get("impacts")+" "+r.Form.Get("params"))
+		if !f.recordActivation(w, r) {
+			return
 		}
 	case "/api/qualityprofiles/deactivate_rule":
 		f.calls = append(f.calls, "deactivate")
@@ -152,6 +149,33 @@ func (f *fakeRules) serve(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+func (f *fakeRules) inheritance(w http.ResponseWriter, key string) {
+	if _, ok := f.active[key]; !ok {
+		writeError(w, http.StatusNotFound, "Quality Profile with key '"+key+"' does not exist")
+		return
+	}
+	ancestors := []any{}
+	if key == "child" {
+		ancestors = append(ancestors, map[string]string{"key": "core"})
+	}
+	writeJSON(w, map[string]any{"ancestors": ancestors})
+}
+
+// recordActivation records the call, and reports false when refuseValues
+// refused it.
+func (f *fakeRules) recordActivation(w http.ResponseWriter, r *http.Request) bool {
+	if r.Form.Get("reset") == "true" {
+		f.calls = append(f.calls, "reset")
+	} else {
+		f.calls = append(f.calls, "activate "+r.Form.Get("impacts")+" "+r.Form.Get("params"))
+	}
+	if f.refuseValues && (r.Form.Get("impacts") != "" || r.Form.Get("params") != "") {
+		writeError(w, http.StatusBadRequest, "Value 'abc' must be an integer.")
+		return false
+	}
+	return true
+}
+
 func (f *fakeRules) activate(r *http.Request, rule string, defaults ruleActivation) {
 	parent := f.active["core"][rule]
 	if r.Form.Get("reset") == "true" {
@@ -163,11 +187,21 @@ func (f *fakeRules) activate(r *http.Request, rule string, defaults ruleActivati
 		return
 	}
 	current := f.active["child"][rule]
-	if current == nil {
+	withValues := r.Form.Get("impacts") != "" || r.Form.Get("params") != ""
+	switch {
+	case current == nil && parent != nil:
+		// A new activation of a rule of the parent starts from the values
+		// of the parent. With values, the server makes it the profile's own
+		// rule, and not an override.
+		current = copyActivation(*parent, "INHERITED")
+		if withValues {
+			current.inherit = "NONE"
+		}
+		f.active["child"][rule] = current
+	case current == nil:
 		current = copyActivation(defaults, "NONE")
 		f.active["child"][rule] = current
-	}
-	if parent != nil {
+	case parent != nil && withValues:
 		current.inherit = "OVERRIDES"
 	}
 	for quality, severity := range parseList(r.Form.Get("impacts")) {
@@ -227,7 +261,7 @@ func impactList(impacts map[string]string) []map[string]string {
 func ruleModel(profile, rule string, impacts, params map[string]string) qualityProfileRuleResourceModel {
 	return qualityProfileRuleResourceModel{
 		ID: types.StringUnknown(), QualityProfileKey: types.StringValue(profile), Rule: types.StringValue(rule),
-		Impacts: stringMap(impacts), Params: stringMap(params),
+		Impacts: stringMap(impacts), Params: stringMap(params), Active: types.BoolValue(true),
 	}
 }
 
@@ -456,4 +490,304 @@ func TestQualityProfileRuleResourceImport(t *testing.T) {
 		r.ImportState(t.Context(), resource.ImportStateRequest{ID: id}, resp)
 		providertest.AssertDiagnosticsContain(t, resp.Diagnostics, want)
 	}
+}
+
+func inactiveRuleModel(profile, rule string) qualityProfileRuleResourceModel {
+	m := ruleModel(profile, rule, nil, nil)
+	m.Active = types.BoolValue(false)
+	return m
+}
+
+// java:S3329 is active in the parent "core", so "child" gets it from its
+// parent and can deactivate it.
+func TestQualityProfileRuleResourceInactiveLifecycle(t *testing.T) {
+	t.Parallel()
+	f, r := newFakeRules(t)
+	create := createRule(t, r, inactiveRuleModel("child", "java:S3329"))
+	if create.Diagnostics.HasError() {
+		t.Fatal(create.Diagnostics)
+	}
+	if f.active["child"]["java:S3329"] != nil {
+		t.Fatal("the rule is still active")
+	}
+	read := readRule(t, r, create.State)
+	if !read.State.Raw.Equal(create.State.Raw) {
+		t.Fatalf("read changed the state: %v", read.State.Raw)
+	}
+
+	// A change in the parent activates the rule again, and the plan shows
+	// it.
+	f.active["child"]["java:S3329"] = copyActivation(*f.active["core"]["java:S3329"], "INHERITED")
+	drift := readRule(t, r, read.State)
+	if got := providertest.ReadModel[qualityProfileRuleResourceModel](t, drift.State); !got.Active.ValueBool() {
+		t.Fatal("the read did not show the rule as active again")
+	}
+	update := updateRule(t, r, drift.State, inactiveRuleModel("child", "java:S3329"))
+	if update.Diagnostics.HasError() || f.active["child"]["java:S3329"] != nil {
+		t.Fatalf("diagnostics = %v, active = %v", update.Diagnostics, f.active["child"]["java:S3329"])
+	}
+
+	// The destroy activates the rule again, with the values of the parent.
+	deleteRule(t, r, update.State)
+	got := f.active["child"]["java:S3329"]
+	if got == nil || got.inherit != "INHERITED" || got.impacts["SECURITY"] != "HIGH" {
+		t.Errorf("active = %+v, want the rule of the parent", got)
+	}
+}
+
+func TestQualityProfileRuleResourceActivateInactiveRuleAgain(t *testing.T) {
+	t.Parallel()
+	tests := map[string]struct {
+		model         qualityProfileRuleResourceModel
+		inherit, want string
+	}{
+		"without values": {ruleModel("child", "java:S3329", nil, nil), "INHERITED", "HIGH"},
+		"with an impact": {ruleModel("child", "java:S3329", map[string]string{"SECURITY": "LOW"}, nil), "OVERRIDES", "LOW"},
+	}
+	for name, tt := range tests {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			f, r := newFakeRules(t)
+			create := createRule(t, r, inactiveRuleModel("child", "java:S3329"))
+			if create.Diagnostics.HasError() {
+				t.Fatal(create.Diagnostics)
+			}
+			update := updateRule(t, r, create.State, tt.model)
+			if update.Diagnostics.HasError() {
+				t.Fatal(update.Diagnostics)
+			}
+			got := f.active["child"]["java:S3329"]
+			if got == nil || got.inherit != tt.inherit || got.impacts["SECURITY"] != tt.want {
+				t.Errorf("active = %+v", got)
+			}
+		})
+	}
+}
+
+func TestQualityProfileRuleResourceInactiveRuleThatTheParentDoesNotActivate(t *testing.T) {
+	t.Parallel()
+	_, r := newFakeRules(t)
+	resp := createRule(t, r, inactiveRuleModel("child", "java:S107"))
+	providertest.AssertDiagnosticsContain(t, resp.Diagnostics, "The parent profile does not activate the rule")
+	if !resp.State.Raw.IsNull() {
+		t.Error("the state keeps a rule that was not deactivated")
+	}
+}
+
+// A deactivation outside of Terraform of an inherited rule shows as
+// active = false. An own rule that is not active any more is gone.
+func TestQualityProfileRuleResourceReadsDeactivationOutside(t *testing.T) {
+	t.Parallel()
+	f, r := newFakeRules(t)
+	create := createRule(t, r, ruleModel("child", "java:S3329", map[string]string{"SECURITY": "LOW"}, nil))
+	if create.Diagnostics.HasError() {
+		t.Fatal(create.Diagnostics)
+	}
+	delete(f.active["child"], "java:S3329")
+	inactive := readRule(t, r, create.State).State
+	if got := providertest.ReadModel[qualityProfileRuleResourceModel](t, inactive); got.Active.ValueBool() || !got.Impacts.IsNull() {
+		t.Errorf("state = %+v, want active = false without values", got)
+	}
+
+	// When the parent does not activate the rule any more, there is nothing
+	// to activate again on destroy.
+	delete(f.active["core"], "java:S3329")
+	f.calls = nil
+	deleteRule(t, r, inactive)
+	if slices.ContainsFunc(f.calls, func(call string) bool { return strings.HasPrefix(call, "activate") }) {
+		t.Errorf("calls = %v", f.calls)
+	}
+}
+
+func TestQualityProfileRuleResourceImportsInactiveRule(t *testing.T) {
+	t.Parallel()
+	f, r := newFakeRules(t)
+	delete(f.active["child"], "java:S3329")
+	s := qualityProfileRuleSchema(t)
+	resp := &resource.ImportStateResponse{State: providertest.EmptyState(t, s)}
+	r.ImportState(t.Context(), resource.ImportStateRequest{ID: "child/java:S3329"}, resp)
+	if resp.Diagnostics.HasError() {
+		t.Fatal(resp.Diagnostics)
+	}
+	got := providertest.ReadModel[qualityProfileRuleResourceModel](t, resp.State)
+	if got.Active.ValueBool() || !got.Impacts.IsNull() || !got.Params.IsNull() {
+		t.Errorf("state = %+v", got)
+	}
+	if !readRule(t, r, resp.State).State.Raw.Equal(resp.State.Raw) {
+		t.Error("the read after the import changed the state")
+	}
+}
+
+func TestQualityProfileRuleResourceRefusesValuesOfInactiveRule(t *testing.T) {
+	t.Parallel()
+	_, r := newFakeRules(t)
+	model := inactiveRuleModel("child", "java:S3329")
+	model.Impacts = stringMap(map[string]string{"SECURITY": "LOW"})
+	plan := rulePlan(t, model)
+	resp := &resource.ValidateConfigResponse{}
+	r.ValidateConfig(t.Context(), resource.ValidateConfigRequest{Config: tfsdk.Config{Schema: plan.Schema, Raw: plan.Raw}}, resp)
+	providertest.AssertDiagnosticsContain(t, resp.Diagnostics, "A rule with active = false has no values")
+
+	model.Impacts = types.MapNull(types.StringType)
+	plan = rulePlan(t, model)
+	resp = &resource.ValidateConfigResponse{}
+	r.ValidateConfig(t.Context(), resource.ValidateConfigRequest{Config: tfsdk.Config{Schema: plan.Schema, Raw: plan.Raw}}, resp)
+	if resp.Diagnostics.HasError() {
+		t.Error(resp.Diagnostics)
+	}
+}
+
+// A deleted profile has no rules to manage, for active = true and for
+// active = false, and its destroy does nothing.
+func TestQualityProfileRuleResourceDeletedProfile(t *testing.T) {
+	t.Parallel()
+	for name, model := range map[string]qualityProfileRuleResourceModel{
+		"active":   ruleModel("child", "java:S3329", map[string]string{"SECURITY": "LOW"}, nil),
+		"inactive": inactiveRuleModel("child", "java:S3329"),
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			f, r := newFakeRules(t)
+			create := createRule(t, r, model)
+			if create.Diagnostics.HasError() {
+				t.Fatal(create.Diagnostics)
+			}
+			delete(f.active, "child")
+			if !readRule(t, r, create.State).State.Raw.IsNull() {
+				t.Error("the read did not remove the rule of a deleted profile")
+			}
+			deleteRule(t, r, create.State)
+		})
+	}
+}
+
+// When the parent does not activate the rule any more, a rule with
+// active = false manages nothing, so the read removes it, and the plan shows
+// that it must be created again.
+func TestQualityProfileRuleResourceInactiveRuleNotInheritedAnyMore(t *testing.T) {
+	t.Parallel()
+	f, r := newFakeRules(t)
+	create := createRule(t, r, inactiveRuleModel("child", "java:S3329"))
+	if create.Diagnostics.HasError() {
+		t.Fatal(create.Diagnostics)
+	}
+	delete(f.active["core"], "java:S3329")
+	if !readRule(t, r, create.State).State.Raw.IsNull() {
+		t.Error("the read kept a rule that the profile does not inherit any more")
+	}
+}
+
+func TestQualityProfileRuleResourceAcceptsUnknownValuesOfInactiveRule(t *testing.T) {
+	t.Parallel()
+	_, r := newFakeRules(t)
+	model := inactiveRuleModel("child", "java:S3329")
+	model.Impacts = types.MapUnknown(types.StringType)
+	plan := rulePlan(t, model)
+	resp := &resource.ValidateConfigResponse{}
+	r.ValidateConfig(t.Context(), resource.ValidateConfigRequest{Config: tfsdk.Config{Schema: plan.Schema, Raw: plan.Raw}}, resp)
+	if resp.Diagnostics.HasError() {
+		t.Error(resp.Diagnostics)
+	}
+}
+
+// With values, the server makes a deactivated inherited rule the profile's
+// own rule. The create must keep it an override of the rule of the parent,
+// so that a destroy gives it the values of the parent again.
+func TestQualityProfileRuleResourceCreateOnDeactivatedInheritedRule(t *testing.T) {
+	t.Parallel()
+	f, r := newFakeRules(t)
+	delete(f.active["child"], "java:S3329")
+	create := createRule(t, r, ruleModel("child", "java:S3329", map[string]string{"SECURITY": "LOW"}, nil))
+	if create.Diagnostics.HasError() {
+		t.Fatal(create.Diagnostics)
+	}
+	if got := f.active["child"]["java:S3329"]; got == nil || got.inherit != "OVERRIDES" || got.impacts["SECURITY"] != "LOW" {
+		t.Fatalf("active = %+v, want an override", got)
+	}
+	deleteRule(t, r, create.State)
+	if got := f.active["child"]["java:S3329"]; got == nil || got.inherit != "INHERITED" || got.impacts["SECURITY"] != "HIGH" {
+		t.Errorf("active = %+v, want the rule of the parent", got)
+	}
+}
+
+// When the values fail after the activation without values, the create
+// deactivates the rule again, so that nothing changes.
+func TestQualityProfileRuleResourceCreateRollsBackFailedValues(t *testing.T) {
+	t.Parallel()
+	f, r := newFakeRules(t)
+	delete(f.active["child"], "java:S3329")
+	f.refuseValues = true
+	resp := createRule(t, r, ruleModel("child", "java:S3329", map[string]string{"SECURITY": "LOW"}, nil))
+	providertest.AssertDiagnosticsContain(t, resp.Diagnostics, "must be an integer")
+	if f.active["child"]["java:S3329"] != nil {
+		t.Errorf("active = %+v, want the rule deactivated again", f.active["child"]["java:S3329"])
+	}
+
+	// An own rule needs one activation only, so a failure leaves nothing.
+	f.calls = nil
+	resp = createRule(t, r, ruleModel("child", "java:S107", nil, map[string]string{"max": "abc"}))
+	providertest.AssertDiagnosticsContain(t, resp.Diagnostics, "must be an integer")
+	activations := 0
+	for _, call := range f.calls {
+		if strings.HasPrefix(call, "activate") {
+			activations++
+		}
+	}
+	if f.active["child"]["java:S107"] != nil || activations != 1 {
+		t.Errorf("active = %+v, calls = %v", f.active["child"]["java:S107"], f.calls)
+	}
+}
+
+// A destroy without a refresh of a rule that someone deactivated outside of
+// Terraform still gives it the values of the parent.
+func TestQualityProfileRuleResourceDeleteActivatesDeactivatedInheritedRule(t *testing.T) {
+	t.Parallel()
+	f, r := newFakeRules(t)
+	r.readRetries = nil
+	create := createRule(t, r, ruleModel("child", "java:S3329", map[string]string{"SECURITY": "LOW"}, nil))
+	if create.Diagnostics.HasError() {
+		t.Fatal(create.Diagnostics)
+	}
+	delete(f.active["child"], "java:S3329")
+	deleteRule(t, r, create.State)
+	if got := f.active["child"]["java:S3329"]; got == nil || got.inherit != "INHERITED" {
+		t.Errorf("active = %+v, want the rule of the parent", got)
+	}
+}
+
+// The update reads the server, because the state can be out of date, for
+// example with -refresh=false.
+func TestQualityProfileRuleResourceUpdateWithOutOfDateState(t *testing.T) {
+	t.Parallel()
+	t.Run("state active, rule deactivated", func(t *testing.T) {
+		t.Parallel()
+		f, r := newFakeRules(t)
+		create := createRule(t, r, ruleModel("child", "java:S3329", map[string]string{"SECURITY": "LOW"}, nil))
+		if create.Diagnostics.HasError() {
+			t.Fatal(create.Diagnostics)
+		}
+		delete(f.active["child"], "java:S3329")
+		update := updateRule(t, r, create.State, ruleModel("child", "java:S3329", map[string]string{"SECURITY": "MEDIUM"}, nil))
+		if update.Diagnostics.HasError() {
+			t.Fatal(update.Diagnostics)
+		}
+		if got := f.active["child"]["java:S3329"]; got == nil || got.inherit != "OVERRIDES" || got.impacts["SECURITY"] != "MEDIUM" {
+			t.Errorf("active = %+v, want an override", got)
+		}
+	})
+	t.Run("state inactive, rule active again", func(t *testing.T) {
+		t.Parallel()
+		f, r := newFakeRules(t)
+		create := createRule(t, r, inactiveRuleModel("child", "java:S3329"))
+		if create.Diagnostics.HasError() {
+			t.Fatal(create.Diagnostics)
+		}
+		f.active["child"]["java:S3329"] = copyActivation(*f.active["core"]["java:S3329"], "INHERITED")
+		f.refuseValues = true
+		update := updateRule(t, r, create.State, ruleModel("child", "java:S3329", map[string]string{"SECURITY": "LOW"}, nil))
+		providertest.AssertDiagnosticsContain(t, update.Diagnostics, "must be an integer")
+		if f.active["child"]["java:S3329"] == nil {
+			t.Error("the failed update deactivated a rule that was active before it")
+		}
+	})
 }

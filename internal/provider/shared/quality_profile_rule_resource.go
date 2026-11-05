@@ -17,6 +17,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
@@ -27,13 +28,17 @@ import (
 )
 
 var (
-	_ resource.Resource                = &qualityProfileRuleResource{}
-	_ resource.ResourceWithConfigure   = &qualityProfileRuleResource{}
-	_ resource.ResourceWithImportState = &qualityProfileRuleResource{}
+	_ resource.Resource                   = &qualityProfileRuleResource{}
+	_ resource.ResourceWithConfigure      = &qualityProfileRuleResource{}
+	_ resource.ResourceWithImportState    = &qualityProfileRuleResource{}
+	_ resource.ResourceWithValidateConfig = &qualityProfileRuleResource{}
 )
 
 //go:embed quality_profile_rule_resource.md
 var qualityProfileRuleDescription string
+
+// cannotActivateRule starts the summary of a failed activation.
+const cannotActivateRule = "Cannot activate the rule "
 
 var (
 	ruleKeyPattern    = regexp.MustCompile(`^[^:\s/]+:\S+$`)
@@ -69,6 +74,13 @@ type qualityProfileRuleResourceModel struct {
 	Rule              types.String `tfsdk:"rule"`
 	Impacts           types.Map    `tfsdk:"impacts"`
 	Params            types.Map    `tfsdk:"params"`
+	Active            types.Bool   `tfsdk:"active"`
+}
+
+// inactive reports active = false. A null value, as in a state from before
+// the attribute, is active.
+func (m qualityProfileRuleResourceModel) inactive() bool {
+	return !m.Active.IsNull() && !m.Active.IsUnknown() && !m.Active.ValueBool()
 }
 
 func (m qualityProfileRuleResourceModel) importID() string {
@@ -106,6 +118,10 @@ func (r *qualityProfileRuleResource) Schema(_ context.Context, _ resource.Schema
 					mapvalidator.KeysAre(stringvalidator.OneOf(softwareQualities...)),
 					mapvalidator.ValueStringsAre(stringvalidator.OneOf(impactSeverities...)),
 				}},
+			"active": schema.BoolAttribute{Optional: true, Computed: true, Default: booldefault.StaticBool(true),
+				MarkdownDescription: "When `false`, the profile deactivates a rule that it gets from its parent " +
+					"profile. Then do not set `impacts` and `params`. The default is `true`. A change of `active` " +
+					"changes the rule in place."},
 			"params": schema.MapAttribute{Optional: true, ElementType: types.StringType,
 				MarkdownDescription: "Values of the parameters of the rule, by parameter key. The parameters that " +
 					"you do not set keep the value of the parent profile or the default value of the rule. The " +
@@ -139,11 +155,19 @@ func (r *qualityProfileRuleResource) Create(ctx context.Context, req resource.Cr
 		return
 	}
 	key, rule := plan.QualityProfileKey.ValueString(), plan.Rule.ValueString()
-	if err := r.client.ActivateQualityProfileRule(ctx, key, rule, planned); err != nil {
-		resp.Diagnostics.AddError("Cannot activate the rule "+rule, ruleErrorDetail(err))
+	plan.ID = types.StringValue(plan.importID())
+	if plan.inactive() {
+		resp.Diagnostics.Append(r.deactivate(ctx, plan, &resp.State)...)
 		return
 	}
-	plan.ID = types.StringValue(plan.importID())
+	deactivated, err := r.isDeactivatedInherited(ctx, key, rule)
+	if err == nil {
+		err = r.activate(ctx, key, rule, planned, deactivated)
+	}
+	if err != nil {
+		resp.Diagnostics.AddError(cannotActivateRule+rule, ruleErrorDetail(err))
+		return
+	}
 	// When the check fails, the rule can be active, so the state keeps it,
 	// and Terraform marks it as tainted.
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
@@ -157,25 +181,54 @@ func (r *qualityProfileRuleResource) Read(ctx context.Context, req resource.Read
 		return
 	}
 	key, rule := state.QualityProfileKey.ValueString(), state.Rule.ValueString()
-	active, err := r.findRule(ctx, key, rule)
+	state.ID = types.StringValue(state.importID())
+	var gone bool
+	var err error
+	if state.inactive() {
+		gone, err = r.readInactive(ctx, &state)
+	} else {
+		gone, err = r.readActive(ctx, &state)
+	}
 	switch {
-	case errors.Is(err, client.ErrNotFound):
-		resp.State.RemoveResource(ctx)
-		return
 	case err != nil:
 		resp.Diagnostics.AddError(readRuleSummary(key, rule), err.Error())
-		return
+	case gone:
+		resp.State.RemoveResource(ctx)
+	default:
+		resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 	}
+}
 
-	state.keepManaged(active.Values)
-	state.ID = types.StringValue(state.importID())
-	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
+// readActive reads a rule of the state with active = true. A rule that the
+// profile gets from its parent, and that someone deactivated outside of
+// Terraform, gets active = false, and the plan shows the change. It reports
+// gone for a rule that is not active and not inherited, also when the profile
+// was deleted.
+func (r *qualityProfileRuleResource) readActive(ctx context.Context, state *qualityProfileRuleResourceModel) (gone bool, err error) {
+	key, rule := state.QualityProfileKey.ValueString(), state.Rule.ValueString()
+	active, err := r.findRule(ctx, key, rule)
+	switch {
+	case err == nil:
+		state.keepManaged(active.Values)
+		state.Active = types.BoolValue(true)
+		return false, nil
+	case !errors.Is(err, client.ErrNotFound):
+		return false, err
+	}
+	gone, err = r.notInherited(ctx, key, rule)
+	if err == nil && !gone {
+		state.Active = types.BoolValue(false)
+		state.setValues(client.RuleValues{})
+	}
+	return gone, err
 }
 
 // Update sends the planned values. activate_rule keeps each value that it
 // does not get, so when the plan removes a parameter or an impact, Update
 // first resets the rule. The removed value then comes from the parent
-// profile, or is the default value of the rule.
+// profile, or is the default value of the rule. A change to active = false
+// deactivates the rule, and a change to active = true activates it again,
+// also without values.
 func (r *qualityProfileRuleResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
 	var plan, state qualityProfileRuleResourceModel
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
@@ -191,6 +244,20 @@ func (r *qualityProfileRuleResource) Update(ctx context.Context, req resource.Up
 		return
 	}
 	key, rule := state.QualityProfileKey.ValueString(), state.Rule.ValueString()
+	if plan.inactive() {
+		resp.Diagnostics.Append(r.deactivate(ctx, plan, &resp.State)...)
+		return
+	}
+	// The state can be out of date, for example with -refresh=false, so the
+	// server tells if the rule needs the activation in two steps.
+	deactivated, err := r.isDeactivatedInherited(ctx, key, rule)
+	if err != nil {
+		resp.Diagnostics.AddError(readRuleSummary(key, rule), err.Error())
+		return
+	}
+	if state.inactive() || deactivated {
+		current = client.RuleValues{}
+	}
 	reset := hasRemovedKey(current, planned)
 	if reset {
 		if err := r.client.ResetQualityProfileRule(ctx, key, rule); err != nil {
@@ -198,8 +265,9 @@ func (r *qualityProfileRuleResource) Update(ctx context.Context, req resource.Up
 			return
 		}
 	}
-	if !planned.IsEmpty() {
-		if err := r.client.ActivateQualityProfileRule(ctx, key, rule, planned); err != nil {
+	// A rule with active = false needs an activation also without values.
+	if !planned.IsEmpty() || state.inactive() || deactivated {
+		if err := r.activate(ctx, key, rule, planned, deactivated); err != nil {
 			detail := ruleErrorDetail(err)
 			if reset {
 				detail += "\n\nThe provider reset the rule before the change, so the rule now has the values of " +
@@ -216,9 +284,9 @@ func (r *qualityProfileRuleResource) Update(ctx context.Context, req resource.Up
 }
 
 // Delete deactivates a rule that the profile activates itself. A rule that
-// the profile gets from its parent gets the values of the parent again. The
-// inheritance is read now, because the parent of the profile can change after
-// the create.
+// the profile gets from its parent gets the values of the parent again, and a
+// rule with active = false is activated again with them. The inheritance is
+// read now, because the parent of the profile can change after the create.
 func (r *qualityProfileRuleResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
 	var state qualityProfileRuleResourceModel
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
@@ -226,9 +294,20 @@ func (r *qualityProfileRuleResource) Delete(ctx context.Context, req resource.De
 		return
 	}
 	key, rule := state.QualityProfileKey.ValueString(), state.Rule.ValueString()
+	if state.inactive() {
+		if err := r.activateInherited(ctx, key, rule); err != nil {
+			resp.Diagnostics.AddError(cannotActivateRule+rule+" in the quality profile "+key, ruleErrorDetail(err))
+		}
+		return
+	}
 	active, err := r.findRule(ctx, key, rule)
 	switch {
 	case errors.Is(err, client.ErrNotFound):
+		// Someone deactivated the inherited rule outside of Terraform after
+		// the refresh. The destroy still gives it the values of the parent.
+		if err := r.activateInherited(ctx, key, rule); err != nil {
+			resp.Diagnostics.AddError(cannotActivateRule+rule+" in the quality profile "+key, ruleErrorDetail(err))
+		}
 		return
 	case err != nil:
 		resp.Diagnostics.AddError(readRuleSummary(key, rule), err.Error())
@@ -255,13 +334,32 @@ func (r *qualityProfileRuleResource) ImportState(ctx context.Context, req resour
 			"Use <quality_profile_key>/<rule>, for example my-profile-key/java:S107.")
 		return
 	}
+	state := qualityProfileRuleResourceModel{
+		QualityProfileKey: types.StringValue(key),
+		Rule:              types.StringValue(rule),
+		Active:            types.BoolValue(true),
+	}
+	state.ID = types.StringValue(state.importID())
 	active, err := r.client.GetActiveRule(ctx, key, rule)
-	switch {
-	case errors.Is(err, client.ErrNotFound):
-		resp.Diagnostics.AddError("Cannot import the rule "+rule,
-			"The rule is not active in the quality profile "+key+", or the profile does not exist.")
+	if errors.Is(err, client.ErrNotFound) {
+		// An inactive rule that the parent activates is a deactivated
+		// inherited rule.
+		gone, err := r.notInherited(ctx, key, rule)
+		switch {
+		case err != nil:
+			resp.Diagnostics.AddError(readRuleSummary(key, rule), err.Error())
+		case gone:
+			resp.Diagnostics.AddError("Cannot import the rule "+rule,
+				"The rule is not active in the quality profile "+key+", and the profile does not get it from its "+
+					"parent. Or the profile does not exist.")
+		default:
+			state.Active = types.BoolValue(false)
+			state.setValues(client.RuleValues{})
+			resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
+		}
 		return
-	case err != nil:
+	}
+	if err != nil {
 		resp.Diagnostics.AddError(readRuleSummary(key, rule), err.Error())
 		return
 	}
@@ -270,13 +368,32 @@ func (r *qualityProfileRuleResource) ImportState(ctx context.Context, req resour
 		resp.Diagnostics.AddError("Cannot read the parent of the quality profile "+key, err.Error())
 		return
 	}
-	state := qualityProfileRuleResourceModel{
-		QualityProfileKey: types.StringValue(key),
-		Rule:              types.StringValue(rule),
-	}
 	state.setValues(changedValues(active.Values, base))
-	state.ID = types.StringValue(state.importID())
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
+}
+
+// activate activates the rule with the values. deactivated tells that the
+// profile gets the rule from its parent but does not activate it. With
+// values, the server would then make it the profile's own rule, and a destroy
+// would deactivate it. So activate first activates it without values, which
+// gives the rule of the parent, and then sends the values, which override it.
+// When the values fail, it deactivates the rule again, so that nothing
+// changes.
+func (r *qualityProfileRuleResource) activate(ctx context.Context, key, rule string, values client.RuleValues, deactivated bool) error {
+	if !deactivated {
+		return r.client.ActivateQualityProfileRule(ctx, key, rule, values)
+	}
+	if err := r.client.ActivateQualityProfileRule(ctx, key, rule, client.RuleValues{}); err != nil || values.IsEmpty() {
+		return err
+	}
+	err := r.client.ActivateQualityProfileRule(ctx, key, rule, values)
+	if err != nil {
+		if rollbackErr := r.client.DeactivateQualityProfileRule(ctx, key, rule); rollbackErr != nil {
+			return fmt.Errorf("%w\n\nThe provider could not deactivate the rule again, so it is now active with "+
+				"the values of the parent profile: %s", err, rollbackErr.Error())
+		}
+	}
+	return err
 }
 
 // inheritedValues returns the values that the rule has without a change in
@@ -286,14 +403,7 @@ func (r *qualityProfileRuleResource) inheritedValues(ctx context.Context, key, r
 	if active.Inherit == client.RuleInheritNone {
 		return active.Defaults, nil
 	}
-	parentKey, err := r.client.GetQualityProfileParentKey(ctx, key)
-	if err != nil {
-		return client.RuleValues{}, err
-	}
-	if parentKey == "" {
-		return active.Defaults, nil
-	}
-	parent, err := r.client.GetActiveRule(ctx, parentKey, rule)
+	parent, err := r.parentRule(ctx, key, rule)
 	switch {
 	case errors.Is(err, client.ErrNotFound):
 		return active.Defaults, nil
