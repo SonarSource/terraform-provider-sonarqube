@@ -23,7 +23,7 @@ import (
 )
 
 // KeyPrefix marks every item that a test makes: the organizations, and the
-// projects, groups, permission templates and quality gates in the shared
+// projects, groups, quality profiles and quality gates in the shared
 // organization. The sweepers in sweep.go find what an interrupted run leaves
 // behind by this prefix.
 const KeyPrefix = "tf-acc-test-"
@@ -58,8 +58,8 @@ func PreCheckAcceptance(t *testing.T) {
 	}
 }
 
-// paidPlans can change the defaults of an organization and make permission
-// templates. The free plans cannot.
+// paidPlans can change the defaults of an organization. The free plans
+// cannot.
 var paidPlans = []string{"team", "enterprise", "old_paid"}
 
 // PreCheckSharedOrganization stops a test that changes the organization of
@@ -99,7 +99,7 @@ func checkSharedOrganization(ctx context.Context, c *client.Client, organization
 	}
 	if !slices.Contains(paidPlans, plan) {
 		return fmt.Errorf("the organization %s of %s is on the plan %q. The tests need the Team or the "+
-			"Enterprise plan, which can change the defaults and make permission templates",
+			"Enterprise plan, which can change the defaults",
 			organization, EnvTestOrganization, plan)
 	}
 	login, err := c.CurrentUserLogin(ctx)

@@ -58,11 +58,6 @@ func sweepServer(t *testing.T) (*httptest.Server, func() []string) {
 		case strings.HasPrefix(r.URL.Path, "/users/groups/") && r.Method == http.MethodDelete:
 			deleted = append(deleted, "group "+strings.TrimPrefix(r.URL.Path, "/users/groups/"))
 			w.WriteHeader(http.StatusNoContent)
-		case r.URL.Path == "/api/permissions/search_templates":
-			fmt.Fprint(w, `{"permissionTemplates":[{"id":"t1","name":"tf-acc-test-1"},{"id":"t2","name":"Default template"},`+
-				`{"id":"t3","name":"tf-acc-test-default"}],"defaultTemplates":[{"templateId":"t3","qualifier":"TRK"}]}`)
-		case r.URL.Path == "/api/permissions/delete_template":
-			deleted = append(deleted, "template "+r.Form.Get("templateId"))
 		case r.URL.Path == "/api/qualityprofiles/search":
 			fmt.Fprint(w, `{"profiles":[{"key":"p1","name":"tf-acc-test-1"},{"key":"p2","name":"Sonar way core","language":"java","isBuiltIn":true},`+
 				`{"key":"p3","name":"customer profile"},{"key":"p4","name":"tf-acc-test-default","language":"java","isDefault":true,"parentKey":"p5"},`+
@@ -128,7 +123,7 @@ func TestSweepersDeleteOnlyWhatHasThePrefix(t *testing.T) {
 	got := deleted()
 	slices.Sort(got)
 	want := []string{"default profile p11", "enterprise e1", "gate q1", "group g1", "organization tf-acc-test-1",
-		"profile p1", "profile p4", "profile p5", "project tf-acc-test-1", "template t1", "token token-1"}
+		"profile p1", "profile p4", "profile p5", "project tf-acc-test-1", "token token-1"}
 	if !slices.Equal(got, want) {
 		t.Errorf("deleted %v, want %v", got, want)
 	}

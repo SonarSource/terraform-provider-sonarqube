@@ -29,8 +29,7 @@ type item struct {
 // make hold their own items, and their deletion deletes those items.
 type sweeper struct {
 	name string
-	// dependencies run first. A template can give a permission to a group,
-	// and a project can use a gate.
+	// dependencies run first. A project can use a gate.
 	dependencies []string
 	shared       bool
 	list         func(ctx context.Context, c *client.Client, organization string) ([]item, error)
@@ -105,32 +104,6 @@ var sweepers = []sweeper{
 		},
 	},
 	{
-		name:   "sonarqube_permission_template",
-		shared: true,
-		list: func(ctx context.Context, c *client.Client, organization string) ([]item, error) {
-			templates, err := c.ListPermissionTemplateNames(ctx, organization)
-			if err != nil {
-				return nil, err
-			}
-			defaultID, err := c.GetDefaultPermissionTemplateID(ctx, organization)
-			if err != nil {
-				return nil, err
-			}
-			var items []item
-			for _, template := range templates {
-				if template.ID == defaultID {
-					logKeptDefault("permission template", template.Name, organization)
-					continue
-				}
-				items = append(items, item{id: template.ID, name: template.Name})
-			}
-			return items, nil
-		},
-		delete: func(ctx context.Context, c *client.Client, organization string, it item) error {
-			return c.DeletePermissionTemplate(ctx, organization, it.id)
-		},
-	},
-	{
 		// A delete also deletes the descendants, so the delete of a child
 		// after its parent finds nothing, which is success. A default with
 		// the prefix gives its place to a built-in profile first. The server
@@ -177,9 +150,8 @@ var sweepers = []sweeper{
 		},
 	},
 	{
-		name:         "sonarqube_group",
-		dependencies: []string{"sonarqube_permission_template"},
-		shared:       true,
+		name:   "sonarqube_group",
+		shared: true,
 		list: func(ctx context.Context, c *client.Client, organization string) ([]item, error) {
 			groups, err := c.SearchGroups(ctx, organization, KeyPrefix)
 			items := make([]item, len(groups))

@@ -2,6 +2,19 @@
 
 ## 0.1.0-alpha.3 (Unreleased)
 
+BREAKING CHANGES:
+
+* **Removed Resource:** `sonarqube_permission_template`. A permission template applies only when SonarQube
+  creates a project. After that, the template has no link to the project.
+* **Removed Resource:** `sonarqube_cloud_organization_default_permission_template`.
+* Before you upgrade, run `terraform state rm` for each of these resources, then remove their blocks from your
+  configuration. If you remove the blocks and apply first, Terraform destroys the templates. With Terraform 1.7
+  or later, you can instead replace each block with a `removed` block with `lifecycle { destroy = false }` and
+  apply it before you upgrade.
+* If you already upgraded, `terraform plan` fails with `no schema available for <resource> while reading state`.
+  A `removed` block does not fix this. Run `terraform state rm` for each of these resources.
+  These steps do not change the templates or the default template in SonarQube.
+
 FEATURES:
 
 * **New Resource:** `sonarqube_cloud_organization_default_quality_profile`
