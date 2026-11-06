@@ -14,6 +14,10 @@ BREAKING CHANGES:
 * If you already upgraded, `terraform plan` fails with `no schema available for <resource> while reading state`.
   A `removed` block does not fix this. Run `terraform state rm` for each of these resources.
   These steps do not change the templates or the default template in SonarQube.
+* `sonarqube_cloud_scoped_organization_token`: a token without `organization_permissions` now requires
+  `project_keys`. Before, such a token had no projects. When you upgrade, add `project_keys` with the projects
+  of the token in the same change. The next apply links the token to them in place. The provider now also reads
+  the projects of such a token, and the next plan shows links that were made outside Terraform.
 
 FEATURES:
 
@@ -21,6 +25,11 @@ FEATURES:
 * **New Resource:** `sonarqube_quality_profile_rule`
 * **New Resource:** `sonarqube_project_quality_profile`
 * **New Resource:** `sonarqube_quality_profile_editor`
+
+ENHANCEMENTS:
+
+* `sonarqube_cloud_scoped_organization_token`: add `project_keys` to limit a token to specific projects. A change
+  updates the token in place, and the secret stays the same.
 
 ## 0.1.0-alpha.2 (November 2, 2026)
 

@@ -2,8 +2,11 @@ package client
 
 import (
 	"context"
+	"fmt"
 	"net/url"
+	"slices"
 	"strconv"
+	"strings"
 )
 
 // Project is a SonarQube Cloud project.
@@ -84,4 +87,59 @@ func (c *Client) SearchProjectKeys(ctx context.Context, organization, text strin
 		}
 		return keys, answer.Paging.Total, nil
 	})
+}
+
+// projectFilterChunk limits the values in one project list request, so that
+// the URL stays short.
+const projectFilterChunk = 50
+
+// FindProjectsByKey returns the projects of the organization that have one of
+// the keys. A key without a project is absent from the result.
+func (c *Client) FindProjectsByKey(ctx context.Context, organizationID string, keys []string) ([]Project, error) {
+	return c.findProjects(ctx, organizationID, "keys", keys)
+}
+
+// FindProjectsByID returns the projects of the organization that have one of
+// the UUIDs. A UUID without a project is absent from the result.
+func (c *Client) FindProjectsByID(ctx context.Context, organizationID string, ids []string) ([]Project, error) {
+	return c.findProjects(ctx, organizationID, "ids", ids)
+}
+
+// The list filters accept a list only as one comma-separated value. When the
+// parameter is repeated, the server uses only the last value.
+func (c *Client) findProjects(ctx context.Context, organizationID, filter string, values []string) ([]Project, error) {
+	var all []Project
+	for chunk := range slices.Chunk(values, projectFilterChunk) {
+		projects, err := collectPages("project", func(page int) ([]Project, int, error) {
+			return c.projectPage(ctx, organizationID, filter, strings.Join(chunk, ","), page)
+		})
+		if err != nil {
+			return nil, err
+		}
+		all = append(all, projects...)
+	}
+	return all, nil
+}
+
+func (c *Client) projectPage(ctx context.Context, organizationID, filter, value string, page int) ([]Project, int, error) {
+	const pageSize = 500
+	params := url.Values{filter: {value}, "organizationIds": {organizationID}, "pageIndex": {strconv.Itoa(page)}, "pageSize": {strconv.Itoa(pageSize)}}
+	var result struct {
+		Projects []Project `json:"projects"`
+		Page     *struct {
+			Total *int `json:"total"`
+		} `json:"page"`
+	}
+	if err := c.apiGet(ctx, "/projects/projects", params, &result); err != nil {
+		return nil, 0, err
+	}
+	if result.Projects == nil || result.Page == nil || result.Page.Total == nil || *result.Page.Total < 0 {
+		return nil, 0, fmt.Errorf("the project list has no valid collection or page total")
+	}
+	for _, project := range result.Projects {
+		if project.ID == "" || project.Key == "" || project.OrganizationID != organizationID {
+			return nil, 0, fmt.Errorf("the project list contains a missing ID or key, or a different organization")
+		}
+	}
+	return result.Projects, *result.Page.Total, nil
 }

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"testing"
 )
 
@@ -146,5 +147,90 @@ func TestDeleteOrganizationTokenRejectsIncompleteList(t *testing.T) {
 	err := newTestClient(srv).DeleteOrganizationToken(t.Context(), "org", "id")
 	if err == nil || errors.Is(err, ErrNotFound) {
 		t.Fatalf("incomplete list must produce an error, got %v", err)
+	}
+}
+
+func TestCreateTokenResourceLink(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var request TokenResourceLink
+		if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+			t.Error(err)
+		}
+		if r.Method != http.MethodPost || r.URL.Path != tokenResourceLinksPath || request != (TokenResourceLink{OrganizationTokenID: "token", ResourceType: "project", ResourceID: "project-uuid"}) {
+			t.Errorf("unexpected request: %s %s %+v", r.Method, r.URL.Path, request)
+		}
+		w.WriteHeader(http.StatusCreated)
+		fmt.Fprint(w, `{"id":"link","organizationTokenId":"token","resourceType":"project","resourceId":"project-uuid"}`)
+	}))
+	defer srv.Close()
+	link, err := newTestClient(srv).CreateTokenResourceLink(t.Context(), "token", "project", "project-uuid")
+	if err != nil || link.ID != "link" {
+		t.Fatalf("link=%+v, err=%v", link, err)
+	}
+}
+
+func TestListTokenResourceLinks(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		status    int
+		body      string
+		wantLinks int
+		wantError bool
+	}{
+		{"links", 200, `{"tokenResourceLinks":[{"id":"l1","organizationTokenId":"token","resourceType":"project","resourceId":"p1"}],"page":{"total":1}}`, 1, false},
+		{"empty", 200, `{"tokenResourceLinks":[],"page":{"total":0}}`, 0, false},
+		{"missing token", 404, `{"message":"Token not found"}`, 0, true},
+		{"missing collection", 200, `{"page":{"total":0}}`, 0, true},
+		{"missing total", 200, `{"tokenResourceLinks":[],"page":{}}`, 0, true},
+		{"other token", 200, `{"tokenResourceLinks":[{"id":"l1","organizationTokenId":"other","resourceId":"p1"}],"page":{"total":1}}`, 0, true},
+		{"missing link ID", 200, `{"tokenResourceLinks":[{"organizationTokenId":"token","resourceId":"p1"}],"page":{"total":1}}`, 0, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Query().Get("organizationTokenId") != "token" || r.URL.Query().Get("pageSize") != "500" {
+					t.Errorf("unexpected query: %s", r.URL.RawQuery)
+				}
+				w.WriteHeader(tc.status)
+				fmt.Fprint(w, tc.body)
+			}))
+			defer srv.Close()
+			links, err := newTestClient(srv).ListTokenResourceLinks(t.Context(), "token")
+			if (err != nil) != tc.wantError || errors.Is(err, ErrNotFound) != (tc.status == http.StatusNotFound) {
+				t.Fatalf("err=%v", err)
+			}
+			if len(links) != tc.wantLinks {
+				t.Fatalf("links=%v", links)
+			}
+		})
+	}
+}
+
+func TestListTokenResourceLinksAcrossPages(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		page := r.URL.Query().Get("pageIndex")
+		fmt.Fprintf(w, `{"tokenResourceLinks":[{"id":"l%s","organizationTokenId":"token","resourceType":"project","resourceId":"p%s"}],"page":{"total":2}}`, page, page)
+	}))
+	defer srv.Close()
+	links, err := newTestClient(srv).ListTokenResourceLinks(t.Context(), "token")
+	if err != nil || len(links) != 2 || links[1].ID != "l2" {
+		t.Fatalf("links=%v, err=%v", links, err)
+	}
+}
+
+func TestDeleteTokenResourceLink(t *testing.T) {
+	for _, status := range []int{http.StatusNoContent, http.StatusNotFound, http.StatusForbidden} {
+		t.Run(strconv.Itoa(status), func(t *testing.T) {
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method != http.MethodDelete || r.URL.Path != tokenResourceLinksPath+"/link" {
+					t.Errorf("unexpected request: %s %s", r.Method, r.URL.Path)
+				}
+				w.WriteHeader(status)
+			}))
+			defer srv.Close()
+			err := newTestClient(srv).DeleteTokenResourceLink(t.Context(), "link")
+			if (err != nil) != (status == http.StatusForbidden) {
+				t.Fatalf("err=%v", err)
+			}
+		})
 	}
 }

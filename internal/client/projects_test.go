@@ -4,7 +4,9 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
+	"sync"
 	"testing"
 )
 
@@ -189,5 +191,62 @@ func TestSearchProjectKeysReadsEveryPage(t *testing.T) {
 	}
 	if strings.Join(keys, ",") != "tf-acc-test-1,my-org_tf-acc-test-2" || strings.Join(pages, ",") != "1,2" {
 		t.Errorf("keys=%v, pages=%v", keys, pages)
+	}
+}
+
+func TestFindProjects(t *testing.T) {
+	t.Parallel()
+
+	var mu sync.Mutex
+	var filters []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		query := r.URL.Query()
+		if r.URL.Path != "/projects/projects" || query.Get("organizationIds") != "org" || len(query["ids"]) > 1 {
+			t.Errorf("unexpected request: %s?%s", r.URL.Path, r.URL.RawQuery)
+		}
+		mu.Lock()
+		filters = append(filters, query.Get("ids"))
+		mu.Unlock()
+		var projects []string
+		for _, id := range strings.Split(query.Get("ids"), ",") {
+			if id != "missing" {
+				projects = append(projects, `{"id":"`+id+`","key":"key-`+id+`","organizationId":"org"}`)
+			}
+		}
+		w.Write([]byte(`{"projects":[` + strings.Join(projects, ",") + `],"page":{"total":` + strconv.Itoa(len(projects)) + `}}`))
+	}))
+	defer srv.Close()
+
+	ids := []string{"missing"}
+	for i := range projectFilterChunk {
+		ids = append(ids, "p"+strconv.Itoa(i))
+	}
+	projects, err := newTestClient(srv).FindProjectsByID(t.Context(), "org", ids)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(projects) != projectFilterChunk || len(filters) != 2 || !strings.HasPrefix(filters[0], "missing,p0,p1") {
+		t.Fatalf("projects=%d, filters=%v", len(projects), filters)
+	}
+}
+
+func TestFindProjectsRefusesInvalidAnswers(t *testing.T) {
+	t.Parallel()
+
+	for name, body := range map[string]string{
+		"missing page":       `{"projects":[]}`,
+		"missing collection": `{"page":{"total":0}}`,
+		"negative total":     `{"projects":[],"page":{"total":-1}}`,
+		"other organization": `{"projects":[{"id":"p","key":"k","organizationId":"other"}],"page":{"total":1}}`,
+		"missing key":        `{"projects":[{"id":"p","organizationId":"org"}],"page":{"total":1}}`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.Write([]byte(body)) }))
+			defer srv.Close()
+			if _, err := newTestClient(srv).FindProjectsByKey(t.Context(), "org", []string{"k"}); err == nil {
+				t.Fatal("invalid answer was accepted")
+			}
+		})
 	}
 }

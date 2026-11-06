@@ -2,8 +2,10 @@ This resource creates a scoped organization token on SonarQube Cloud. The
 organization must have a plan that supports these tokens. The provider must
 use a token whose user can administer the organization.
 
-Each change to a configurable attribute replaces the token. Destroy revokes
-it. The provider checks that the token is absent after revocation.
+A change to `project_keys` updates the token in place, and the secret stays
+the same. Each change to another configurable attribute replaces the token.
+Destroy revokes it. The provider checks that the token is absent after
+revocation.
 
 The secret example also requires the GitHub provider and access to the
 organization. Terraform marks `token` as sensitive, but stores its value in
@@ -17,8 +19,23 @@ are `admin`, `scan`, and `provisioning`. Project permissions are `user`,
 
 If both sets have values, `organization_permissions` must include
 `provisioning`. The provider then enables automatic project permission grants.
-A token with only project permissions needs separate project assignments
-before it can access those projects. This resource does not manage assignments.
+
+## Projects
+
+A token with only project permissions gets them only on the projects in
+`project_keys`. Set at least one project key. `project_keys` is not permitted
+on a token with organization permissions, and the provider does not read or
+change the project links of such a token.
+
+Before the provider creates the token, it makes sure that each project exists.
+If a project does not exist, `apply` stops and no token is created. If the
+provider cannot link the token to a project, it revokes the new token.
+
+When someone changes the projects of the token outside Terraform, the next
+plan shows the difference. When someone deletes a project, the token keeps a
+link to it, but the provider removes the key from the state and shows a
+warning. Remove the key from the configuration, or the next apply stops
+because the project does not exist.
 
 ## Expiration and rotation
 
