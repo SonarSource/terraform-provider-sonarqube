@@ -40,22 +40,26 @@ func tokenSet(roles ...string) types.Set {
 
 func TestTokenConfiguration(t *testing.T) {
 	for _, tc := range []struct {
-		name         string
-		org, project types.Set
-		expires      types.String
-		invalid      bool
+		name               string
+		org, project, keys types.Set
+		expires            types.String
+		invalid            bool
 	}{
-		{"organization", tokenSet("scan"), types.SetNull(types.StringType), types.StringNull(), false},
-		{"project", types.SetNull(types.StringType), tokenSet("scan"), types.StringNull(), false},
-		{"both", tokenSet("provisioning"), tokenSet("scan"), types.StringNull(), false},
-		{"missing provisioning", tokenSet("admin"), tokenSet("scan"), types.StringNull(), true},
-		{"none", tokenSet(), tokenSet(), types.StringNull(), true},
-		{"unknown", types.SetUnknown(types.StringType), tokenSet(), types.StringUnknown(), false},
-		{"bad timestamp", tokenSet("scan"), tokenSet(), types.StringValue("tomorrow"), true},
+		{"organization", tokenSet("scan"), types.SetNull(types.StringType), noKeys, types.StringNull(), false},
+		{"project", types.SetNull(types.StringType), tokenSet("scan"), tokenSet("my-project"), types.StringNull(), false},
+		{"project without keys", types.SetNull(types.StringType), tokenSet("scan"), noKeys, types.StringNull(), true},
+		{"project with unknown keys", types.SetNull(types.StringType), tokenSet("scan"), types.SetUnknown(types.StringType), types.StringNull(), false},
+		{"organization with keys", tokenSet("scan"), types.SetNull(types.StringType), tokenSet("my-project"), types.StringNull(), true},
+		{"both", tokenSet("provisioning"), tokenSet("scan"), noKeys, types.StringNull(), false},
+		{"both with keys", tokenSet("provisioning"), tokenSet("scan"), tokenSet("my-project"), types.StringNull(), true},
+		{"missing provisioning", tokenSet("admin"), tokenSet("scan"), noKeys, types.StringNull(), true},
+		{"none", tokenSet(), tokenSet(), noKeys, types.StringNull(), true},
+		{"unknown", types.SetUnknown(types.StringType), tokenSet(), noKeys, types.StringUnknown(), false},
+		{"bad timestamp", tokenSet("scan"), tokenSet(), noKeys, types.StringValue("tomorrow"), true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			var diagnostics diag.Diagnostics
-			validateTokenConfiguration(t.Context(), scopedOrganizationTokenModel{OrganizationPermissions: tc.org, ProjectPermissions: tc.project, ExpiresAt: tc.expires}, &diagnostics)
+			validateTokenConfiguration(t.Context(), scopedOrganizationTokenModel{OrganizationPermissions: tc.org, ProjectPermissions: tc.project, ProjectKeys: tc.keys, ExpiresAt: tc.expires}, &diagnostics)
 			if diagnostics.HasError() != tc.invalid {
 				t.Fatalf("diagnostics=%v", diagnostics)
 			}
@@ -86,7 +90,7 @@ func TestTokenExpiration(t *testing.T) {
 func TestTokenExpiredPlanReplacesSecret(t *testing.T) {
 	s := tokenSchema(t)
 	state := providertest.EmptyState(t, s)
-	model := scopedOrganizationTokenModel{ID: types.StringValue(theBindingID), Token: types.StringValue("test-secret"), ExpiresAt: types.StringValue("2000-01-01T00:00:00Z"), OrganizationPermissions: tokenSet("scan"), ProjectPermissions: types.SetNull(types.StringType)}
+	model := scopedOrganizationTokenModel{ID: types.StringValue(theBindingID), Token: types.StringValue("test-secret"), ExpiresAt: types.StringValue("2000-01-01T00:00:00Z"), OrganizationPermissions: tokenSet("scan"), ProjectPermissions: types.SetNull(types.StringType), ProjectKeys: noKeys}
 	if diags := state.Set(t.Context(), &model); diags.HasError() {
 		t.Fatal(diags)
 	}
@@ -133,7 +137,7 @@ func TestTokenReadPreservesSecretAndHandlesAbsence(t *testing.T) {
 			if tc.imported {
 				secret = types.StringNull()
 			}
-			model := scopedOrganizationTokenModel{ID: types.StringValue(theBindingID), Organization: types.StringValue("my-org"), Token: secret, OrganizationPermissions: types.SetNull(types.StringType), ProjectPermissions: tokenSet()}
+			model := scopedOrganizationTokenModel{ID: types.StringValue(theBindingID), Organization: types.StringValue("my-org"), Token: secret, OrganizationPermissions: types.SetNull(types.StringType), ProjectPermissions: tokenSet(), ProjectKeys: noKeys}
 			if ds := state.Set(t.Context(), &model); ds.HasError() {
 				t.Fatal(ds)
 			}
@@ -199,14 +203,13 @@ func TestTokenCreateScopes(t *testing.T) {
 		autoGrant    bool
 	}{
 		{"organization", tokenSet("scan"), types.SetNull(types.StringType), 1, false},
-		{"projects", types.SetNull(types.StringType), tokenSet("scan"), 1, false},
 		{"provisioned projects", tokenSet("provisioning"), tokenSet("scan"), 2, true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			srv := tokenTestServer(t, tokenCreateHandler(t, tc.assignments, tc.autoGrant))
 			s := tokenSchema(t)
 			plan := tfsdk.Plan{Schema: s}
-			model := scopedOrganizationTokenModel{Organization: types.StringValue("my-org"), Name: types.StringValue("test"), OrganizationPermissions: tc.org, ProjectPermissions: tc.project}
+			model := scopedOrganizationTokenModel{Organization: types.StringValue("my-org"), Name: types.StringValue("test"), OrganizationPermissions: tc.org, ProjectPermissions: tc.project, ProjectKeys: noKeys}
 			if diagnostics := plan.Set(t.Context(), &model); diagnostics.HasError() {
 				t.Fatal(diagnostics)
 			}
@@ -225,14 +228,20 @@ func TestTokenCreateScopes(t *testing.T) {
 	}
 }
 
+var noKeys = types.SetNull(types.StringType)
+
 func tokenTestServer(t *testing.T, handler http.HandlerFunc) *httptest.Server {
 	t.Helper()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/organizations/organizations" {
+		switch {
+		case r.URL.Path == "/organizations/organizations":
 			fmt.Fprint(w, `[{"key":"my-org","uuidV4":"org"}]`)
-			return
+		case r.URL.Path == "/authentication/token-resource-links":
+			// Read lists the links of every token. These tests use tokens without links.
+			fmt.Fprint(w, `{"tokenResourceLinks":[],"page":{"total":0}}`)
+		default:
+			handler(w, r)
 		}
-		handler(w, r)
 	}))
 	t.Cleanup(srv.Close)
 	return srv
@@ -332,7 +341,7 @@ func TestTokenReadRemovesTokenOfMissingOrganization(t *testing.T) {
 	t.Cleanup(srv.Close)
 	s := tokenSchema(t)
 	state := providertest.EmptyState(t, s)
-	model := scopedOrganizationTokenModel{ID: types.StringValue(theBindingID), Organization: types.StringValue("my-org"), Token: types.StringValue("test-secret"), OrganizationPermissions: tokenSet("scan"), ProjectPermissions: types.SetNull(types.StringType)}
+	model := scopedOrganizationTokenModel{ID: types.StringValue(theBindingID), Organization: types.StringValue("my-org"), Token: types.StringValue("test-secret"), OrganizationPermissions: tokenSet("scan"), ProjectPermissions: types.SetNull(types.StringType), ProjectKeys: noKeys}
 	if ds := state.Set(t.Context(), &model); ds.HasError() {
 		t.Fatal(ds)
 	}
