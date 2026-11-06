@@ -50,6 +50,7 @@ type scopedOrganizationTokenModel struct {
 	ExpiresAt               types.String `tfsdk:"expires_at"`
 	OrganizationPermissions types.Set    `tfsdk:"organization_permissions"`
 	ProjectPermissions      types.Set    `tfsdk:"project_permissions"`
+	ProjectKeys             types.Set    `tfsdk:"project_keys"`
 	CreatedAt               types.String `tfsdk:"created_at"`
 	Token                   types.String `tfsdk:"token"`
 }
@@ -64,6 +65,8 @@ func (r *scopedOrganizationTokenResource) Metadata(_ context.Context, req resour
 
 func (r *scopedOrganizationTokenResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	replace := []planmodifier.String{stringplanmodifier.RequiresReplace()}
+	// A change of project_keys updates the token in place and keeps these values.
+	keep := []planmodifier.String{stringplanmodifier.UseStateForUnknown()}
 	permissions := func(description string, roles ...string) schema.SetAttribute {
 		return schema.SetAttribute{Optional: true, ElementType: types.StringType, MarkdownDescription: description,
 			Validators:    []validator.Set{setvalidator.ValueStringsAre(stringvalidator.OneOf(roles...))},
@@ -76,9 +79,12 @@ func (r *scopedOrganizationTokenResource) Schema(_ context.Context, _ resource.S
 		"expires_at":               schema.StringAttribute{Optional: true, MarkdownDescription: "RFC 3339 expiration time. Omit for no expiration. A change replaces the token.", PlanModifiers: replace},
 		"organization_permissions": permissions("Organization permissions: `admin`, `scan`, and `provisioning`. A change replaces the token.", "admin", "scan", "provisioning"),
 		"project_permissions":      permissions("Project permissions: `user`, `admin`, and `scan`. A change replaces the token.", "user", "admin", "scan"),
-		"id":                       schema.StringAttribute{Computed: true, MarkdownDescription: "Token definition UUID."},
-		"created_at":               schema.StringAttribute{Computed: true, MarkdownDescription: "Creation time in UTC with microsecond precision."},
-		"token":                    schema.StringAttribute{Computed: true, Sensitive: true, MarkdownDescription: "Secret returned once at creation. Refresh keeps the value in state. Null after import; import cannot recover it."},
+		"project_keys": schema.SetAttribute{Optional: true, ElementType: types.StringType,
+			MarkdownDescription: "Keys of the projects where the token gets its `project_permissions`. Required when `organization_permissions` is not set, and not permitted when it is set. A change updates the token in place, and the secret stays the same.",
+			Validators:          []validator.Set{setvalidator.SizeAtLeast(1), setvalidator.ValueStringsAre(validate.ProjectKey()...)}},
+		"id":         schema.StringAttribute{Computed: true, MarkdownDescription: "Token definition UUID.", PlanModifiers: keep},
+		"created_at": schema.StringAttribute{Computed: true, MarkdownDescription: "Creation time in UTC with microsecond precision.", PlanModifiers: keep},
+		"token":      schema.StringAttribute{Computed: true, Sensitive: true, MarkdownDescription: "Secret returned once at creation. Refresh keeps the value in state. Null after import; import cannot recover it.", PlanModifiers: keep},
 	}}
 }
 
@@ -106,10 +112,10 @@ func (s tokenScopes) autoGrant() bool { return len(s.organization) > 0 && len(s.
 func (s tokenScopes) assignments() []client.TokenRoleAssignment {
 	assignments := []client.TokenRoleAssignment{}
 	if len(s.organization) > 0 {
-		assignments = append(assignments, client.TokenRoleAssignment{ResourceType: "organization", Roles: s.organization})
+		assignments = append(assignments, client.TokenRoleAssignment{ResourceType: client.TokenResourceOrganization, Roles: s.organization})
 	}
 	if len(s.project) > 0 {
-		assignments = append(assignments, client.TokenRoleAssignment{ResourceType: "project", Roles: s.project})
+		assignments = append(assignments, client.TokenRoleAssignment{ResourceType: client.TokenResourceProject, Roles: s.project})
 	}
 	return assignments
 }
@@ -119,9 +125,9 @@ func tokenScopesOf(assignments []client.TokenRoleAssignment) (tokenScopes, bool)
 	var scopes tokenScopes
 	for _, assignment := range assignments {
 		switch assignment.ResourceType {
-		case "organization":
+		case client.TokenResourceOrganization:
 			scopes.organization = append(scopes.organization, assignment.Roles...)
-		case "project":
+		case client.TokenResourceProject:
 			scopes.project = append(scopes.project, assignment.Roles...)
 		default:
 			return tokenScopes{}, false
@@ -137,8 +143,8 @@ func validateTokenConfiguration(ctx context.Context, model scopedOrganizationTok
 			diagnostics.AddAttributeError(path.Root("expires_at"), "Invalid token expiration", "Use an RFC 3339 timestamp, such as 2030-01-01T00:00:00Z.")
 		}
 	}
-	org, orgKnown := tokenRoles(ctx, model.OrganizationPermissions, diagnostics)
-	project, projectKnown := tokenRoles(ctx, model.ProjectPermissions, diagnostics)
+	org, orgKnown := knownStrings(ctx, model.OrganizationPermissions, diagnostics)
+	project, projectKnown := knownStrings(ctx, model.ProjectPermissions, diagnostics)
 	if !orgKnown || !projectKnown {
 		return tokenScopes{}, false
 	}
@@ -149,10 +155,18 @@ func validateTokenConfiguration(ctx context.Context, model scopedOrganizationTok
 	if scopes.autoGrant() && !slices.Contains(org, "provisioning") {
 		diagnostics.AddAttributeError(path.Root("project_permissions"), "Invalid token permissions", "Project permissions on an organization-wide token require the provisioning organization permission.")
 	}
+	// The server accepts links on an organization-wide token, so the provider refuses them.
+	if len(org) == 0 && len(project) > 0 && model.ProjectKeys.IsNull() {
+		diagnostics.AddAttributeError(path.Root("project_keys"), "Missing project keys", "A token without organization permissions gets its project permissions only on the projects in project_keys. Set project_keys.")
+	}
+	if len(org) > 0 && !model.ProjectKeys.IsNull() && !model.ProjectKeys.IsUnknown() {
+		diagnostics.AddAttributeError(path.Root("project_keys"), "Invalid project keys", "An organization-wide token cannot have project_keys. Remove project_keys, or remove organization_permissions.")
+	}
 	return scopes, true
 }
 
-func tokenRoles(ctx context.Context, value types.Set, diagnostics *diag.Diagnostics) ([]string, bool) {
+// knownStrings returns the values of a string set, and false when the set or a value is unknown.
+func knownStrings(ctx context.Context, value types.Set, diagnostics *diag.Diagnostics) ([]string, bool) {
 	if value.IsUnknown() {
 		return nil, false
 	}
@@ -211,7 +225,8 @@ func (r *scopedOrganizationTokenResource) Create(ctx context.Context, req resour
 		resp.Diagnostics.AddError("Unknown token permissions", "Token permissions must be known before creation.")
 		return
 	}
-	org, ok := lookupOrganization(ctx, r.client, plan.Organization.ValueString(), path.Root("organization"), &resp.Diagnostics)
+	// Find every project before the first write, so that a missing project creates no token.
+	org, projects, ok := r.plannedProjects(ctx, plan, &resp.Diagnostics)
 	if !ok {
 		return
 	}
@@ -230,6 +245,10 @@ func (r *scopedOrganizationTokenResource) Create(ctx context.Context, req resour
 	plan.ID = types.StringValue(result.ID)
 	plan.Token = types.StringValue(result.Token)
 	plan.CreatedAt = tokenCreationTime(result.CreatedAt)
+	if err := r.applyLinkChanges(ctx, result.ID, projects, nil); err != nil {
+		r.revokeUnlinkedToken(ctx, org.UUIDV4, plan, err, resp)
+		return
+	}
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 	if result.Token == "" || result.CreatedAt == "" {
 		resp.Diagnostics.AddError("Incomplete token creation response", "The API returned no secret or creation time. Revoke and recreate the token. The returned ID was recorded for cleanup.")
@@ -268,8 +287,14 @@ func (r *scopedOrganizationTokenResource) Read(ctx context.Context, req resource
 		resp.Diagnostics.AddError("Unsupported automatic project grants", "The token's automatic project grants do not match its permission sets. This resource requires automatic grants only when both organization and project permissions are set. Recreate the token with this resource to use that behavior.")
 		return
 	}
-	state.OrganizationPermissions = tokenRoleState(ctx, scopes.organization, state.OrganizationPermissions, &resp.Diagnostics)
-	state.ProjectPermissions = tokenRoleState(ctx, scopes.project, state.ProjectPermissions, &resp.Diagnostics)
+	state.OrganizationPermissions = stringSetState(ctx, scopes.organization, state.OrganizationPermissions, &resp.Diagnostics)
+	state.ProjectPermissions = stringSetState(ctx, scopes.project, state.ProjectPermissions, &resp.Diagnostics)
+	keys, found := r.readProjectKeys(ctx, org.UUIDV4, state, len(scopes.organization) > 0, &resp.Diagnostics)
+	if !found {
+		resp.State.RemoveResource(ctx)
+		return
+	}
+	state.ProjectKeys = keys
 	if !resp.Diagnostics.HasError() {
 		resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 	}
@@ -295,7 +320,7 @@ func equivalentTokenExpiration(prior types.String, value *string) types.String {
 	return types.StringPointerValue(value)
 }
 
-func tokenRoleState(ctx context.Context, roles []string, prior types.Set, diagnostics *diag.Diagnostics) types.Set {
+func stringSetState(ctx context.Context, roles []string, prior types.Set, diagnostics *diag.Diagnostics) types.Set {
 	if len(roles) == 0 && prior.IsNull() {
 		return types.SetNull(types.StringType)
 	}
@@ -307,8 +332,42 @@ func tokenRoleState(ctx context.Context, roles []string, prior types.Set, diagno
 	return result
 }
 
-func (r *scopedOrganizationTokenResource) Update(_ context.Context, _ resource.UpdateRequest, resp *resource.UpdateResponse) {
-	resp.Diagnostics.AddError("Token replacement required", "Token settings cannot be updated. Report this unexpected update plan to the provider maintainers.")
+// Update changes only project_keys. Each other attribute replaces the token.
+func (r *scopedOrganizationTokenResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
+	var plan, state scopedOrganizationTokenModel
+	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
+	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	plan.ID, plan.Token, plan.CreatedAt = state.ID, state.Token, state.CreatedAt
+	// The resource does not manage the links of an organization-wide token. An
+	// unknown project_keys that becomes null at apply plans an update of it.
+	if len(plan.OrganizationPermissions.Elements()) > 0 {
+		resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
+		return
+	}
+	_, projects, ok := r.plannedProjects(ctx, plan, &resp.Diagnostics)
+	if !ok {
+		return
+	}
+	links, err := r.client.ListTokenResourceLinks(ctx, state.ID.ValueString())
+	if errors.Is(err, client.ErrNotFound) {
+		resp.Diagnostics.AddError("Token not found", "The token was revoked after the last refresh. Run plan again, so that Terraform creates a new token.")
+		return
+	}
+	if err != nil {
+		resp.Diagnostics.AddError(cannotReadTokenProjects, err.Error())
+		return
+	}
+	add, remove := linkChanges(projects, partitionLinks(links))
+	if err := r.applyLinkChanges(ctx, state.ID.ValueString(), add, remove); err != nil {
+		// The prior state stays, so that the next plan shows the change again.
+		resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
+		resp.Diagnostics.AddError("Cannot update the token projects", err.Error()+". Run apply again to complete the change.")
+		return
+	}
+	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
 func (r *scopedOrganizationTokenResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {

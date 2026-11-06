@@ -175,12 +175,19 @@ removes the setting from state.
 | Function | Endpoint | Surface | Public or internal |
 | --- | --- | --- | --- |
 | `GetProject` | `GET {api_url}/projects/projects?keys=&organizationIds=` | Web API v2 | [Public](https://api-docs.sonarsource.com/sonarqube-cloud/default/public-projectsexternal-0-0-1#/Projects/getProjects) |
+| `FindProjectsByKey`, `FindProjectsByID` | `GET {api_url}/projects/projects?keys=&organizationIds=&pageIndex=&pageSize=`, or with `ids=` | Web API v2 | [Public](https://api-docs.sonarsource.com/sonarqube-cloud/default/public-projectsexternal-0-0-1#/Projects/getProjects) |
 | `CreateProject` | `POST {url}/api/projects/create` | Web API v1 | [Public](https://sonarcloud.io/web_api/api/projects/create) |
 | `DeleteProject` | `POST {url}/api/projects/delete` | Web API v1 | [Public](https://sonarcloud.io/web_api/api/projects/delete) |
 | `SearchProjectKeys` | `GET {url}/api/projects/search?organization=&q=&p=&ps=` | Web API v1 | [Public](https://sonarcloud.io/web_api/api/projects/search) |
 
 `GetProject` first reads the organization to get its UUID, because the list call
 filters by UUID. A project that is missing answers 200 with an empty list.
+
+`keys` and `ids` accept a list only as one comma-separated value. When the
+parameter is repeated, the server uses only the last value. The client sends
+at most 50 values, and at most 4,000 encoded bytes of values, in one request.
+A project key can have 400 characters, and gateways commonly refuse a request
+line of more than 8 KB.
 
 Project creation uses the plain project API and does not bind a repository.
 
@@ -411,6 +418,9 @@ organization gives 403 `Enterprise MISRA rules require a MISRA entitlement`.
 | `CreateOrganizationToken` | `POST {api_url}/authentication/token-definitions` | Web API v2 | [Public](https://api-docs.sonarsource.com/sonarqube-cloud/default/public-externalauthentication-0-0) |
 | `ListOrganizationTokens`, `FindOrganizationToken` | `GET {api_url}/authentication/token-definitions?organizationId=&pageIndex=&pageSize=` | Web API v2 | [Public](https://api-docs.sonarsource.com/sonarqube-cloud/default/public-externalauthentication-0-0) |
 | `DeleteOrganizationToken` | `DELETE {api_url}/authentication/token-definitions/{id}` | Web API v2 | [Public](https://api-docs.sonarsource.com/sonarqube-cloud/default/public-externalauthentication-0-0) |
+| `CreateTokenResourceLink` | `POST {api_url}/authentication/token-resource-links` | Web API v2 | [Public](https://api-docs.sonarsource.com/sonarqube-cloud/default/public-externalauthentication-0-0) |
+| `ListTokenResourceLinks` | `GET {api_url}/authentication/token-resource-links?organizationTokenId=&pageIndex=&pageSize=` | Web API v2 | [Public](https://api-docs.sonarsource.com/sonarqube-cloud/default/public-externalauthentication-0-0) |
+| `DeleteTokenResourceLink` | `DELETE {api_url}/authentication/token-resource-links/{id}` | Web API v2 | [Public](https://api-docs.sonarsource.com/sonarqube-cloud/default/public-externalauthentication-0-0) |
 
 Read uses the public list endpoint, with the organization UUID and pagination.
 The endpoint that reads one token definition by ID is internal and is not used.
@@ -424,6 +434,23 @@ absent.
 Expired tokens can remain in the list and reserve their names. The resource
 keeps them in state and plans replacement. These API behavior assumptions have
 unit test coverage; the acceptance test checks the live lifecycle.
+
+A token resource link gives a token its project permissions on one project.
+`resourceId` is the project `id` that `FindProjectsByKey` returns. The
+projects API docs call it the main branch UUID. The server refuses the legacy
+ID. Links to other resource types give a warning, and the resource keeps them. The list page size is at most 500.
+
+The server does not check that a token has only project permissions, and it
+accepts links on an organization-wide token. The resource does this check,
+and it does not read or change the links of an organization-wide token. A
+repeated `POST` returns the existing link. A `DELETE` of a link that is gone
+answers 204. A `POST` with an unknown project UUID answers 404. The resource
+finds each project before it creates the token, so that a missing project
+creates no token.
+
+When a project is deleted, its link stays in the list. The resource removes
+the key of such a link from the state and shows a warning. Revocation of a
+token removes its links, and then the list answers 404 `Token not found`.
 
 ## Enterprises (`enterprises.go`)
 
