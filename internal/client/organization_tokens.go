@@ -11,6 +11,12 @@ import (
 
 const organizationTokensPath = "/authentication/token-definitions"
 
+// The resource types of token role assignments and token resource links.
+const (
+	TokenResourceOrganization = "organization"
+	TokenResourceProject      = "project"
+)
+
 type TokenRoleAssignment struct {
 	ResourceType string   `json:"resourceType"`
 	Roles        []string `json:"roles"`
@@ -100,4 +106,63 @@ func (c *Client) DeleteOrganizationToken(ctx context.Context, organizationID, id
 		return fmt.Errorf("cannot confirm token deletion: %w", err)
 	}
 	return fmt.Errorf("the token still exists after deletion; check organization administration permissions")
+}
+
+const tokenResourceLinksPath = "/authentication/token-resource-links"
+
+// TokenResourceLink gives a token its project permissions on one project.
+type TokenResourceLink struct {
+	ID                  string `json:"id"`
+	OrganizationTokenID string `json:"organizationTokenId"`
+	ResourceType        string `json:"resourceType"`
+	ResourceID          string `json:"resourceId"`
+}
+
+// CreateTokenResourceLink returns the existing link when the token already
+// has a link to the resource. The server does not check that the token has
+// project permissions.
+func (c *Client) CreateTokenResourceLink(ctx context.Context, tokenID, resourceType, resourceID string) (*TokenResourceLink, error) {
+	request := TokenResourceLink{OrganizationTokenID: tokenID, ResourceType: resourceType, ResourceID: resourceID}
+	var result TokenResourceLink
+	if err := c.apiPost(ctx, tokenResourceLinksPath, request, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// ListTokenResourceLinks returns ErrNotFound when the token does not exist.
+// The links of a deleted project stay in the list.
+func (c *Client) ListTokenResourceLinks(ctx context.Context, tokenID string) ([]TokenResourceLink, error) {
+	const pageSize = 500
+	return collectPages("token resource link", func(page int) ([]TokenResourceLink, int, error) {
+		params := url.Values{"organizationTokenId": {tokenID}, "pageIndex": {strconv.Itoa(page)}, "pageSize": {strconv.Itoa(pageSize)}}
+		var result struct {
+			Links []TokenResourceLink `json:"tokenResourceLinks"`
+			Page  *struct {
+				Total *int `json:"total"`
+			} `json:"page"`
+		}
+		if err := c.apiGet(ctx, tokenResourceLinksPath, params, &result); err != nil {
+			return nil, 0, err
+		}
+		if result.Links == nil || result.Page == nil || result.Page.Total == nil || *result.Page.Total < 0 {
+			return nil, 0, fmt.Errorf("the token resource link list has no valid collection or page total")
+		}
+		for _, link := range result.Links {
+			if link.ID == "" || link.ResourceID == "" || link.OrganizationTokenID != tokenID {
+				return nil, 0, fmt.Errorf("the token resource link list contains a missing ID or a different token")
+			}
+		}
+		return result.Links, *result.Page.Total, nil
+	})
+}
+
+// DeleteTokenResourceLink accepts a link that is already gone. The server
+// answers 204 for it.
+func (c *Client) DeleteTokenResourceLink(ctx context.Context, id string) error {
+	err := c.apiSend(ctx, http.MethodDelete, tokenResourceLinksPath+"/"+url.PathEscape(id), nil, nil, nil)
+	if errors.Is(err, ErrNotFound) {
+		return nil
+	}
+	return err
 }
