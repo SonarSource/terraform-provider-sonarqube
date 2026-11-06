@@ -22,6 +22,7 @@ const (
 // project to the repository. The destroy deletes the organization, which is
 // the only thing that removes the two bindings, so the test can run again.
 func TestAccProjectBindingResource(t *testing.T) {
+	acctest.SkipWithSOT(t, acctest.SOTRefused)
 	organization := fmt.Sprintf("%s%d", acctest.KeyPrefix, rand.Uint32())
 	installationID := os.Getenv(acctest.EnvTestInstallationID)
 	repository := os.Getenv(acctest.EnvTestRepository)

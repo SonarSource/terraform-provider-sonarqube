@@ -15,6 +15,7 @@ import (
 // data source that gives an empty result instead would hide a wrong key in
 // the configuration.
 func TestAccDataSourcesMissingObject(t *testing.T) {
+	acctest.SkipWithSOT(t, acctest.SOTRefused)
 	organization := os.Getenv(acctest.EnvTestOrganization)
 
 	resource.Test(t, resource.TestCase{

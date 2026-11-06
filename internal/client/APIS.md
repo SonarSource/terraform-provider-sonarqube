@@ -11,17 +11,46 @@ answers at the instance host and takes the token as the basic-auth user name.
 
 An endpoint is "Public" only when SonarSource's own docs link one as public.
 
+The SOT column tells if the endpoint accepts a scoped organization token (a
+token that starts with `sqco_`) of the organization, with the organization
+permissions `admin`, `scan` and `provisioning`:
+
+* `Yes`: a call with such a token worked. `Yes, admin` means that a token
+  without the `admin` permission is refused. `Yes, not provisioning only`
+  means that a token with only `provisioning` gets an empty answer.
+* `Public projects only`: the endpoint accepts the token, but its answer does
+  not contain private projects. `Own organization only`: the answer contains
+  only the organization of the token. A resource that needs more than this
+  does not work with the token.
+* `No (status)`: the endpoint refused the token with this status. `No` alone
+  means that the endpoint gives the token nothing useful, for example an
+  empty list. `No (no user)`: the endpoint answers 200, but without a user,
+  because the token has no user.
+* `Not checked`: no call checked it. Each resource that uses such an endpoint
+  already fails at an earlier call.
+
+The Web API v1 flag `supportsScopedOrganizationTokens` of
+`/api/webservices/list` is not reliable: `api/qualityprofiles/search` accepts
+the token without the flag. Web API v2 does not document it. Thus, the column
+comes from calls on a development instance (November 2026). Check it again
+when SonarQube Cloud adds support for these tokens.
+
+Web API v2 `projects/projects` does not show private projects to a scoped
+organization token, also when the request names the project key. Web API v1
+`api/projects/search` shows them, but not to a token with only
+`provisioning`.
+
 ## Permissions (`permissions.go`)
 
-| Function | Endpoint | Surface | Public or internal |
-| --- | --- | --- | --- |
-| `CurrentUserLogin` | `GET {url}/api/users/current` | Web API v1 | Internal |
-| `GetPermissions` | `GET {url}/api/permissions/groups?organization=&projectKey=&q=&p=&ps=` | Web API v1 | Internal |
-| `GetPermissions` | `GET {url}/api/permissions/users?organization=&projectKey=&q=&p=&ps=` | Web API v1 | Internal |
-| `AddPermission` | `POST {url}/api/permissions/add_group` | Web API v1 | [Public](https://sonarcloud.io/web_api/api/permissions/add_group) |
-| `RemovePermission` | `POST {url}/api/permissions/remove_group` | Web API v1 | [Public](https://sonarcloud.io/web_api/api/permissions/remove_group) |
-| `AddPermission` | `POST {url}/api/permissions/add_user` | Web API v1 | [Public](https://sonarcloud.io/web_api/api/permissions/add_user) |
-| `RemovePermission` | `POST {url}/api/permissions/remove_user` | Web API v1 | [Public](https://sonarcloud.io/web_api/api/permissions/remove_user) |
+| Function | Endpoint | Surface | Public or internal | SOT |
+| --- | --- | --- | --- | --- |
+| `CurrentUserLogin` | `GET {url}/api/users/current` | Web API v1 | Internal | No (no user) |
+| `GetPermissions` | `GET {url}/api/permissions/groups?organization=&projectKey=&q=&p=&ps=` | Web API v1 | Internal | No (401) |
+| `GetPermissions` | `GET {url}/api/permissions/users?organization=&projectKey=&q=&p=&ps=` | Web API v1 | Internal | No (401) |
+| `AddPermission` | `POST {url}/api/permissions/add_group` | Web API v1 | [Public](https://sonarcloud.io/web_api/api/permissions/add_group) | Not checked |
+| `RemovePermission` | `POST {url}/api/permissions/remove_group` | Web API v1 | [Public](https://sonarcloud.io/web_api/api/permissions/remove_group) | Not checked |
+| `AddPermission` | `POST {url}/api/permissions/add_user` | Web API v1 | [Public](https://sonarcloud.io/web_api/api/permissions/add_user) | Not checked |
+| `RemovePermission` | `POST {url}/api/permissions/remove_user` | Web API v1 | [Public](https://sonarcloud.io/web_api/api/permissions/remove_user) | Not checked |
 
 The read endpoints list the groups or the organization members, also the ones
 without permissions. `q` keeps the names and logins that hold the value (for
@@ -40,13 +69,13 @@ project visibility with `GetProject` before it sends these grants.
 
 ## Groups (`groups.go`)
 
-| Function | Endpoint | Surface | Public or internal |
-| --- | --- | --- | --- |
-| `CreateGroup` | `POST {api_url}/users/groups` | Web API v2 | [Public](https://api-docs.sonarsource.com/sonarqube-cloud/default/public-externalusers-0-0#/groups/createGroup) |
-| `GetGroup` | `GET {api_url}/users/groups?organizationIds=&ids=` | Web API v2 | [Public](https://api-docs.sonarsource.com/sonarqube-cloud/default/public-externalusers-0-0#/groups/searchGroups) |
-| `FindGroupByName`, `SearchGroups` | `GET {api_url}/users/groups?organizationIds=&q=&pageIndex=&pageSize=` | Web API v2 | [Public](https://api-docs.sonarsource.com/sonarqube-cloud/default/public-externalusers-0-0#/groups/searchGroups) |
-| `UpdateGroup` | `PATCH {api_url}/users/groups/{id}` | Web API v2 | [Public](https://api-docs.sonarsource.com/sonarqube-cloud/default/public-externalusers-0-0#/groups/patchGroup) |
-| `DeleteGroup` | `DELETE {api_url}/users/groups/{id}` | Web API v2 | [Public](https://api-docs.sonarsource.com/sonarqube-cloud/default/public-externalusers-0-0#/groups/deleteGroup) |
+| Function | Endpoint | Surface | Public or internal | SOT |
+| --- | --- | --- | --- | --- |
+| `CreateGroup` | `POST {api_url}/users/groups` | Web API v2 | [Public](https://api-docs.sonarsource.com/sonarqube-cloud/default/public-externalusers-0-0#/groups/createGroup) | No (403) |
+| `GetGroup` | `GET {api_url}/users/groups?organizationIds=&ids=` | Web API v2 | [Public](https://api-docs.sonarsource.com/sonarqube-cloud/default/public-externalusers-0-0#/groups/searchGroups) | No (403) |
+| `FindGroupByName`, `SearchGroups` | `GET {api_url}/users/groups?organizationIds=&q=&pageIndex=&pageSize=` | Web API v2 | [Public](https://api-docs.sonarsource.com/sonarqube-cloud/default/public-externalusers-0-0#/groups/searchGroups) | No (403) |
+| `UpdateGroup` | `PATCH {api_url}/users/groups/{id}` | Web API v2 | [Public](https://api-docs.sonarsource.com/sonarqube-cloud/default/public-externalusers-0-0#/groups/patchGroup) | Not checked |
+| `DeleteGroup` | `DELETE {api_url}/users/groups/{id}` | Web API v2 | [Public](https://api-docs.sonarsource.com/sonarqube-cloud/default/public-externalusers-0-0#/groups/deleteGroup) | Not checked |
 
 Each call except update and delete reads the organization first
 (`GetOrganization`), because the group API takes the UUID of the organization
@@ -72,11 +101,11 @@ again for about six seconds before it takes the answer.
 
 ## Group members (`group_members.go`)
 
-| Function | Endpoint | Surface | Public or internal |
-| --- | --- | --- | --- |
-| `AddGroupMember` | `POST {url}/api/user_groups/add_user` | Web API v1 | [Public](https://sonarcloud.io/web_api/api/user_groups/add_user) |
-| `RemoveGroupMember` | `POST {url}/api/user_groups/remove_user` | Web API v1 | [Public](https://sonarcloud.io/web_api/api/user_groups/remove_user) |
-| `IsGroupMember` | `GET {url}/api/user_groups/users?organization=&name=&selected=selected&q=&p=&ps=` | Web API v1 | [Public](https://sonarcloud.io/web_api/api/user_groups/users) |
+| Function | Endpoint | Surface | Public or internal | SOT |
+| --- | --- | --- | --- | --- |
+| `AddGroupMember` | `POST {url}/api/user_groups/add_user` | Web API v1 | [Public](https://sonarcloud.io/web_api/api/user_groups/add_user) | Not checked |
+| `RemoveGroupMember` | `POST {url}/api/user_groups/remove_user` | Web API v1 | [Public](https://sonarcloud.io/web_api/api/user_groups/remove_user) | Not checked |
+| `IsGroupMember` | `GET {url}/api/user_groups/users?organization=&name=&selected=selected&q=&p=&ps=` | Web API v1 | [Public](https://sonarcloud.io/web_api/api/user_groups/users) | No (401) |
 
 The calls name the group by `organization` and `name`, which are case
 sensitive, like `login`. A 404 names the missing part: `No organization with
@@ -102,15 +131,15 @@ root role, so the client does not use them.
 
 ## Organizations (`organizations.go`)
 
-| Function | Endpoint | Surface | Public or internal |
-| --- | --- | --- | --- |
-| `GetOrganization` | `GET {api_url}/organizations/organizations?organizationKey=` | Web API v2 | [Public](https://api-docs.sonarsource.com/sonarqube-cloud/default/public-sonarcloud-organizations-organizations-external-1-0-2#/organizations/list-organizations) |
-| `CreateOrganization` | `POST {url}/api/organizations/create` | Web API v1 | Internal |
-| `UpdateOrganization` | `POST {url}/api/organizations/update` | Web API v1 | Internal |
-| `UpdateOrganizationKey` | `POST {url}/api/organizations/update_key` | Web API v1 | Internal |
-| `DeleteOrganization` | `POST {url}/api/organizations/delete` | Web API v1 | Internal |
-| `GetCurrentPlan` | `GET {api_url}/billing/current-plan?organizationId=` | Web API v2 | Internal |
-| `ListMemberOrganizationKeys` | `GET {url}/api/organizations/search?member=true&p=&ps=` | Web API v1 | [Public](https://sonarcloud.io/web_api/api/organizations/search) |
+| Function | Endpoint | Surface | Public or internal | SOT |
+| --- | --- | --- | --- | --- |
+| `GetOrganization` | `GET {api_url}/organizations/organizations?organizationKey=` | Web API v2 | [Public](https://api-docs.sonarsource.com/sonarqube-cloud/default/public-sonarcloud-organizations-organizations-external-1-0-2#/organizations/list-organizations) | Yes |
+| `CreateOrganization` | `POST {url}/api/organizations/create` | Web API v1 | Internal | No (401) |
+| `UpdateOrganization` | `POST {url}/api/organizations/update` | Web API v1 | Internal | No (401) |
+| `UpdateOrganizationKey` | `POST {url}/api/organizations/update_key` | Web API v1 | Internal | No (401) |
+| `DeleteOrganization` | `POST {url}/api/organizations/delete` | Web API v1 | Internal | No (401) |
+| `GetCurrentPlan` | `GET {api_url}/billing/current-plan?organizationId=` | Web API v2 | Internal | Yes |
+| `ListMemberOrganizationKeys` | `GET {url}/api/organizations/search?member=true&p=&ps=` | Web API v1 | [Public](https://sonarcloud.io/web_api/api/organizations/search) | Own organization only |
 
 Web API v2 has no create, update, rename or delete for an organization today,
 so every write goes through the internal v1 surface.
@@ -130,12 +159,12 @@ in lower case. The webapp reads the plan in the same way.
 
 ## DevOps platform bindings (`organization_bindings.go`)
 
-| Function | Endpoint | Surface | Public or internal |
-| --- | --- | --- | --- |
-| `CreateOrganizationBinding` | `POST {api_url}/dop-translation/organization-bindings` | Web API v2 | Internal |
-| `GetOrganizationBinding` | `GET {api_url}/dop-translation/organization-bindings/{id}` | Web API v2 | Internal |
-| `FindOrganizationBinding` | `GET {api_url}/dop-translation/organization-bindings?organizationId=` | Web API v2 | Internal |
-| `UpdateOrganizationBinding` | `PATCH {api_url}/dop-translation/organization-bindings/{id}` | Web API v2 | Internal |
+| Function | Endpoint | Surface | Public or internal | SOT |
+| --- | --- | --- | --- | --- |
+| `CreateOrganizationBinding` | `POST {api_url}/dop-translation/organization-bindings` | Web API v2 | Internal | No (400 `AuthenticationType.SOT`) |
+| `GetOrganizationBinding` | `GET {api_url}/dop-translation/organization-bindings/{id}` | Web API v2 | Internal | No (400 `AuthenticationType.SOT`) |
+| `FindOrganizationBinding` | `GET {api_url}/dop-translation/organization-bindings?organizationId=` | Web API v2 | Internal | No (400 `AuthenticationType.SOT`) |
+| `UpdateOrganizationBinding` | `PATCH {api_url}/dop-translation/organization-bindings/{id}` | Web API v2 | Internal | No (400 `AuthenticationType.SOT`) |
 
 There is no delete. A binding goes away only when its organization is
 deleted, which removes the records that these endpoints write.
@@ -149,9 +178,9 @@ application installation that is bound to no organization.
 
 ## DevOps platform applications (`dop_applications.go`)
 
-| Function | Endpoint | Surface | Public or internal |
-| --- | --- | --- | --- |
-| `ListDopApplications` | `GET {api_url}/dop-translation/dop-applications?devOpsPlatform=` | Web API v2 | Internal |
+| Function | Endpoint | Surface | Public or internal | SOT |
+| --- | --- | --- | --- | --- |
+| `ListDopApplications` | `GET {api_url}/dop-translation/dop-applications?devOpsPlatform=` | Web API v2 | Internal | No (400 `AuthenticationType.SOT`) |
 
 A binding to github.com accepts an installation of one of these applications
 only, because the server looks an installation up in its own records instead
@@ -159,10 +188,10 @@ of asking GitHub.
 
 ## Organization quality gate settings (`quality_gate_settings.go`)
 
-| Function | Endpoint | Surface | Public or internal |
-| --- | --- | --- | --- |
-| `GetOrganizationQualityGateSettings` | `GET {api_url}/quality-gates/settings?resourceId=&resourceType=ORGANIZATION` | Web API v2 | [Public](https://api-docs.sonarsource.com/sonarqube-cloud/default/public-qualitygates-1-0-0#/Quality%20Gate%20Settings) |
-| `UpdateOrganizationQualityGateSettings` | `PATCH {api_url}/quality-gates/settings/{id}` | Web API v2 | [Public](https://api-docs.sonarsource.com/sonarqube-cloud/default/public-qualitygates-1-0-0#/Quality%20Gate%20Settings) |
+| Function | Endpoint | Surface | Public or internal | SOT |
+| --- | --- | --- | --- | --- |
+| `GetOrganizationQualityGateSettings` | `GET {api_url}/quality-gates/settings?resourceId=&resourceType=ORGANIZATION` | Web API v2 | [Public](https://api-docs.sonarsource.com/sonarqube-cloud/default/public-qualitygates-1-0-0#/Quality%20Gate%20Settings) | Yes, `admin` |
+| `UpdateOrganizationQualityGateSettings` | `PATCH {api_url}/quality-gates/settings/{id}` | Web API v2 | [Public](https://api-docs.sonarsource.com/sonarqube-cloud/default/public-qualitygates-1-0-0#/Quality%20Gate%20Settings) | Not checked |
 
 The read names the organization by its UUID (`uuidV4`). The patch writes
 `ignoreSmallChanges`, and the server also writes the value to all projects of
@@ -172,13 +201,13 @@ removes the setting from state.
 
 ## Projects (`projects.go`)
 
-| Function | Endpoint | Surface | Public or internal |
-| --- | --- | --- | --- |
-| `GetProject` | `GET {api_url}/projects/projects?keys=&organizationIds=` | Web API v2 | [Public](https://api-docs.sonarsource.com/sonarqube-cloud/default/public-projectsexternal-0-0-1#/Projects/getProjects) |
-| `FindProjectsByKey`, `FindProjectsByID` | `GET {api_url}/projects/projects?keys=&organizationIds=&pageIndex=&pageSize=`, or with `ids=` | Web API v2 | [Public](https://api-docs.sonarsource.com/sonarqube-cloud/default/public-projectsexternal-0-0-1#/Projects/getProjects) |
-| `CreateProject` | `POST {url}/api/projects/create` | Web API v1 | [Public](https://sonarcloud.io/web_api/api/projects/create) |
-| `DeleteProject` | `POST {url}/api/projects/delete` | Web API v1 | [Public](https://sonarcloud.io/web_api/api/projects/delete) |
-| `SearchProjectKeys` | `GET {url}/api/projects/search?organization=&q=&p=&ps=` | Web API v1 | [Public](https://sonarcloud.io/web_api/api/projects/search) |
+| Function | Endpoint | Surface | Public or internal | SOT |
+| --- | --- | --- | --- | --- |
+| `GetProject` | `GET {api_url}/projects/projects?keys=&organizationIds=` | Web API v2 | [Public](https://api-docs.sonarsource.com/sonarqube-cloud/default/public-projectsexternal-0-0-1#/Projects/getProjects) | Public projects only |
+| `FindProjectsByKey`, `FindProjectsByID` | `GET {api_url}/projects/projects?keys=&organizationIds=&pageIndex=&pageSize=`, or with `ids=` | Web API v2 | [Public](https://api-docs.sonarsource.com/sonarqube-cloud/default/public-projectsexternal-0-0-1#/Projects/getProjects) | Public projects only |
+| `CreateProject` | `POST {url}/api/projects/create` | Web API v1 | [Public](https://sonarcloud.io/web_api/api/projects/create) | Yes |
+| `DeleteProject` | `POST {url}/api/projects/delete` | Web API v1 | [Public](https://sonarcloud.io/web_api/api/projects/delete) | No (401) |
+| `SearchProjectKeys` | `GET {url}/api/projects/search?organization=&q=&p=&ps=` | Web API v1 | [Public](https://sonarcloud.io/web_api/api/projects/search) | Yes, not `provisioning` only |
 
 `GetProject` first reads the organization to get its UUID, because the list call
 filters by UUID. A project that is missing answers 200 with an empty list.
@@ -197,11 +226,11 @@ UUID, which the bindings API refuses.
 
 ## Project bindings (`project_bindings.go`)
 
-| Function | Endpoint | Surface | Public or internal |
-| --- | --- | --- | --- |
-| `CreateProjectBinding` | `POST {api_url}/dop-translation/project-bindings` | Web API v2 | Internal |
-| `FindProjectBinding` | `GET {api_url}/dop-translation/project-bindings?projectId=` | Web API v2 | Internal |
-| `UpdateProjectBinding` | `PATCH {api_url}/dop-translation/project-bindings/{id}` | Web API v2 | Internal |
+| Function | Endpoint | Surface | Public or internal | SOT |
+| --- | --- | --- | --- | --- |
+| `CreateProjectBinding` | `POST {api_url}/dop-translation/project-bindings` | Web API v2 | Internal | No (400 `AuthenticationType.SOT`) |
+| `FindProjectBinding` | `GET {api_url}/dop-translation/project-bindings?projectId=` | Web API v2 | Internal | No (400 `AuthenticationType.SOT`) |
+| `UpdateProjectBinding` | `PATCH {api_url}/dop-translation/project-bindings/{id}` | Web API v2 | Internal | No (400 `AuthenticationType.SOT`) |
 
 There is no delete. A binding goes away only when its project is deleted.
 
@@ -220,22 +249,22 @@ repository was not tested.
 
 ## Quality gates (`quality_gates.go`)
 
-| Function | Endpoint | Surface | Public or internal |
-| --- | --- | --- | --- |
-| `ListQualityGates` | `GET {api_url}/quality-gates/quality-gates?organizationId=&pageIndex=&pageSize=` | Web API v2 | [Public](https://api-docs.sonarsource.com/sonarqube-cloud/default/public-qualitygates-1-0-0) |
-| `GetQualityGate` | `GET {api_url}/quality-gates/quality-gates/{id}` | Web API v2 | [Public](https://api-docs.sonarsource.com/sonarqube-cloud/default/public-qualitygates-1-0-0) |
-| `CreateQualityGate` | `POST {api_url}/quality-gates/quality-gates` | Web API v2 | [Public](https://api-docs.sonarsource.com/sonarqube-cloud/default/public-qualitygates-1-0-0) |
-| `UpdateQualityGate` | `PATCH {api_url}/quality-gates/quality-gates/{id}` | Web API v2 | [Public](https://api-docs.sonarsource.com/sonarqube-cloud/default/public-qualitygates-1-0-0) |
-| `DeleteQualityGate` | `DELETE {api_url}/quality-gates/quality-gates/{id}` | Web API v2 | [Public](https://api-docs.sonarsource.com/sonarqube-cloud/default/public-qualitygates-1-0-0) |
-| `SetDefaultQualityGate` | `PATCH {api_url}/quality-gates/quality-gates/defaults/{organizationId}` | Web API v2 | [Public](https://api-docs.sonarsource.com/sonarqube-cloud/default/public-qualitygates-1-0-0) |
-| `ListQualityGateConditions` | `GET {api_url}/quality-gates/conditions?qualityGateId=` | Web API v2 | [Public](https://api-docs.sonarsource.com/sonarqube-cloud/default/public-qualitygates-1-0-0) |
-| `CreateQualityGateCondition` | `POST {api_url}/quality-gates/conditions` | Web API v2 | [Public](https://api-docs.sonarsource.com/sonarqube-cloud/default/public-qualitygates-1-0-0) |
-| `UpdateQualityGateCondition` | `PATCH {api_url}/quality-gates/conditions/{id}` | Web API v2 | [Public](https://api-docs.sonarsource.com/sonarqube-cloud/default/public-qualitygates-1-0-0) |
-| `DeleteQualityGateCondition` | `DELETE {api_url}/quality-gates/conditions/{id}` | Web API v2 | [Public](https://api-docs.sonarsource.com/sonarqube-cloud/default/public-qualitygates-1-0-0) |
-| `FindQualityGateProjectAssociation` | `GET {api_url}/quality-gates/project-associations?projectIds=&organizationId=` | Web API v2 | [Public](https://api-docs.sonarsource.com/sonarqube-cloud/default/public-qualitygates-1-0-0) |
-| `CreateQualityGateProjectAssociation` | `POST {api_url}/quality-gates/project-associations` | Web API v2 | [Public](https://api-docs.sonarsource.com/sonarqube-cloud/default/public-qualitygates-1-0-0) |
-| `DeleteQualityGateProjectAssociation` | `DELETE {api_url}/quality-gates/project-associations/{id}` | Web API v2 | [Public](https://api-docs.sonarsource.com/sonarqube-cloud/default/public-qualitygates-1-0-0) |
-| `ListMetrics` | `GET {url}/api/metrics/search?p=&ps=` | Web API v1 | [Public](https://sonarcloud.io/web_api/api/metrics/search) |
+| Function | Endpoint | Surface | Public or internal | SOT |
+| --- | --- | --- | --- | --- |
+| `ListQualityGates` | `GET {api_url}/quality-gates/quality-gates?organizationId=&pageIndex=&pageSize=` | Web API v2 | [Public](https://api-docs.sonarsource.com/sonarqube-cloud/default/public-qualitygates-1-0-0) | Yes |
+| `GetQualityGate` | `GET {api_url}/quality-gates/quality-gates/{id}` | Web API v2 | [Public](https://api-docs.sonarsource.com/sonarqube-cloud/default/public-qualitygates-1-0-0) | Yes |
+| `CreateQualityGate` | `POST {api_url}/quality-gates/quality-gates` | Web API v2 | [Public](https://api-docs.sonarsource.com/sonarqube-cloud/default/public-qualitygates-1-0-0) | No (403) |
+| `UpdateQualityGate` | `PATCH {api_url}/quality-gates/quality-gates/{id}` | Web API v2 | [Public](https://api-docs.sonarsource.com/sonarqube-cloud/default/public-qualitygates-1-0-0) | Not checked |
+| `DeleteQualityGate` | `DELETE {api_url}/quality-gates/quality-gates/{id}` | Web API v2 | [Public](https://api-docs.sonarsource.com/sonarqube-cloud/default/public-qualitygates-1-0-0) | Not checked |
+| `SetDefaultQualityGate` | `PATCH {api_url}/quality-gates/quality-gates/defaults/{organizationId}` | Web API v2 | [Public](https://api-docs.sonarsource.com/sonarqube-cloud/default/public-qualitygates-1-0-0) | No (403) |
+| `ListQualityGateConditions` | `GET {api_url}/quality-gates/conditions?qualityGateId=` | Web API v2 | [Public](https://api-docs.sonarsource.com/sonarqube-cloud/default/public-qualitygates-1-0-0) | Yes |
+| `CreateQualityGateCondition` | `POST {api_url}/quality-gates/conditions` | Web API v2 | [Public](https://api-docs.sonarsource.com/sonarqube-cloud/default/public-qualitygates-1-0-0) | Not checked |
+| `UpdateQualityGateCondition` | `PATCH {api_url}/quality-gates/conditions/{id}` | Web API v2 | [Public](https://api-docs.sonarsource.com/sonarqube-cloud/default/public-qualitygates-1-0-0) | Not checked |
+| `DeleteQualityGateCondition` | `DELETE {api_url}/quality-gates/conditions/{id}` | Web API v2 | [Public](https://api-docs.sonarsource.com/sonarqube-cloud/default/public-qualitygates-1-0-0) | Not checked |
+| `FindQualityGateProjectAssociation` | `GET {api_url}/quality-gates/project-associations?projectIds=&organizationId=` | Web API v2 | [Public](https://api-docs.sonarsource.com/sonarqube-cloud/default/public-qualitygates-1-0-0) | Yes |
+| `CreateQualityGateProjectAssociation` | `POST {api_url}/quality-gates/project-associations` | Web API v2 | [Public](https://api-docs.sonarsource.com/sonarqube-cloud/default/public-qualitygates-1-0-0) | Not checked |
+| `DeleteQualityGateProjectAssociation` | `DELETE {api_url}/quality-gates/project-associations/{id}` | Web API v2 | [Public](https://api-docs.sonarsource.com/sonarqube-cloud/default/public-qualitygates-1-0-0) | Not checked |
+| `ListMetrics` | `GET {url}/api/metrics/search?p=&ps=` | Web API v1 | [Public](https://sonarcloud.io/web_api/api/metrics/search) | Yes |
 
 The metrics web service maps a Terraform metric key to the condition API's
 `legacyMetricId`. It also maps identifiers back to keys during refresh.
@@ -255,19 +284,19 @@ gate. That web service is marked deprecated, so the provider does not use it.
 
 ## Quality profiles (`quality_profiles.go`)
 
-| Function | Endpoint | Surface | Public or internal |
-| --- | --- | --- | --- |
-| `CreateQualityProfile` | `POST {url}/api/qualityprofiles/create` | Web API v1 | [Public](https://sonarcloud.io/web_api/api/qualityprofiles/create) |
-| `ChangeQualityProfileParent` | `POST {url}/api/qualityprofiles/change_parent` | Web API v1 | [Public](https://sonarcloud.io/web_api/api/qualityprofiles/change_parent) |
-| `RenameQualityProfile` | `POST {url}/api/qualityprofiles/rename` | Web API v1 | [Public](https://sonarcloud.io/web_api/api/qualityprofiles/rename) |
-| `DeleteQualityProfile` | `POST {url}/api/qualityprofiles/delete` | Web API v1 | [Public](https://sonarcloud.io/web_api/api/qualityprofiles/delete) |
-| `ListQualityProfiles`, `GetQualityProfile`, `FindQualityProfileByName` | `GET {url}/api/qualityprofiles/search?organization=&language=&qualityProfile=` | Web API v1 | [Public](https://sonarcloud.io/web_api/api/qualityprofiles/search) |
-| `GetQualityProfileParentKey` | `GET {url}/api/qualityprofiles/inheritance?key=` | Web API v1 | [Public](https://sonarcloud.io/web_api/api/qualityprofiles/inheritance) |
-| `GetDefaultQualityProfile` | `GET {url}/api/qualityprofiles/search?organization=&language=&defaults=true` | Web API v1 | [Public](https://sonarcloud.io/web_api/api/qualityprofiles/search) |
-| `SetDefaultQualityProfile` | `POST {url}/api/qualityprofiles/set_default` | Web API v1 | [Public](https://sonarcloud.io/web_api/api/qualityprofiles/set_default) |
-| `AddQualityProfileProject` | `POST {url}/api/qualityprofiles/add_project` | Web API v1 | [Public](https://sonarcloud.io/web_api/api/qualityprofiles/add_project) |
-| `RemoveQualityProfileProject` | `POST {url}/api/qualityprofiles/remove_project` | Web API v1 | [Public](https://sonarcloud.io/web_api/api/qualityprofiles/remove_project) |
-| `GetProjectQualityProfile` | `GET {url}/api/qualityprofiles/search?organization=&project=&language=` | Web API v1 | [Public](https://sonarcloud.io/web_api/api/qualityprofiles/search) |
+| Function | Endpoint | Surface | Public or internal | SOT |
+| --- | --- | --- | --- | --- |
+| `CreateQualityProfile` | `POST {url}/api/qualityprofiles/create` | Web API v1 | [Public](https://sonarcloud.io/web_api/api/qualityprofiles/create) | No (401) |
+| `ChangeQualityProfileParent` | `POST {url}/api/qualityprofiles/change_parent` | Web API v1 | [Public](https://sonarcloud.io/web_api/api/qualityprofiles/change_parent) | Not checked |
+| `RenameQualityProfile` | `POST {url}/api/qualityprofiles/rename` | Web API v1 | [Public](https://sonarcloud.io/web_api/api/qualityprofiles/rename) | Not checked |
+| `DeleteQualityProfile` | `POST {url}/api/qualityprofiles/delete` | Web API v1 | [Public](https://sonarcloud.io/web_api/api/qualityprofiles/delete) | No (401) |
+| `ListQualityProfiles`, `GetQualityProfile`, `FindQualityProfileByName` | `GET {url}/api/qualityprofiles/search?organization=&language=&qualityProfile=` | Web API v1 | [Public](https://sonarcloud.io/web_api/api/qualityprofiles/search) | Yes |
+| `GetQualityProfileParentKey` | `GET {url}/api/qualityprofiles/inheritance?key=` | Web API v1 | [Public](https://sonarcloud.io/web_api/api/qualityprofiles/inheritance) | Yes |
+| `GetDefaultQualityProfile` | `GET {url}/api/qualityprofiles/search?organization=&language=&defaults=true` | Web API v1 | [Public](https://sonarcloud.io/web_api/api/qualityprofiles/search) | Yes |
+| `SetDefaultQualityProfile` | `POST {url}/api/qualityprofiles/set_default` | Web API v1 | [Public](https://sonarcloud.io/web_api/api/qualityprofiles/set_default) | No (401) |
+| `AddQualityProfileProject` | `POST {url}/api/qualityprofiles/add_project` | Web API v1 | [Public](https://sonarcloud.io/web_api/api/qualityprofiles/add_project) | No (401) |
+| `RemoveQualityProfileProject` | `POST {url}/api/qualityprofiles/remove_project` | Web API v1 | [Public](https://sonarcloud.io/web_api/api/qualityprofiles/remove_project) | No (401) |
+| `GetProjectQualityProfile` | `GET {url}/api/qualityprofiles/search?organization=&project=&language=` | Web API v1 | [Public](https://sonarcloud.io/web_api/api/qualityprofiles/search) | Yes |
 
 The write actions take the profile key as `key`. `change_parent` and
 `delete` also take `qualityProfile`, but that is the profile name, not its
@@ -320,11 +349,11 @@ drift and not as a deleted assignment. With `project`, `search` needs
 
 ## Quality profile editors (`quality_profile_editors.go`)
 
-| Function | Endpoint | Surface | Public or internal |
-| --- | --- | --- | --- |
-| `AddQualityProfileEditor` | `POST {url}/api/qualityprofiles/add_group`, `POST {url}/api/qualityprofiles/add_user` | Web API v1 | Internal |
-| `RemoveQualityProfileEditor` | `POST {url}/api/qualityprofiles/remove_group`, `POST {url}/api/qualityprofiles/remove_user` | Web API v1 | Internal |
-| `HasQualityProfileEditor` | `GET {url}/api/qualityprofiles/search_groups`, `GET {url}/api/qualityprofiles/search_users` | Web API v1 | Internal |
+| Function | Endpoint | Surface | Public or internal | SOT |
+| --- | --- | --- | --- | --- |
+| `AddQualityProfileEditor` | `POST {url}/api/qualityprofiles/add_group`, `POST {url}/api/qualityprofiles/add_user` | Web API v1 | Internal | Not checked |
+| `RemoveQualityProfileEditor` | `POST {url}/api/qualityprofiles/remove_group`, `POST {url}/api/qualityprofiles/remove_user` | Web API v1 | Internal | Not checked |
+| `HasQualityProfileEditor` | `GET {url}/api/qualityprofiles/search_groups`, `GET {url}/api/qualityprofiles/search_users` | Web API v1 | Internal | Not checked |
 
 No public endpoint and no Web API v2 endpoint lets a group or a user edit a
 profile. The SonarQube Cloud web application uses these internal web
@@ -354,11 +383,11 @@ user who is not a member of the organization any more with 400, and
 
 ## Quality profile rules (`quality_profile_rules.go`)
 
-| Function | Endpoint | Surface | Public or internal |
-| --- | --- | --- | --- |
-| `ActivateQualityProfileRule`, `ResetQualityProfileRule` | `POST {url}/api/qualityprofiles/activate_rule` | Web API v1 | [Public](https://sonarcloud.io/web_api/api/qualityprofiles/activate_rule) |
-| `DeactivateQualityProfileRule` | `POST {url}/api/qualityprofiles/deactivate_rule` | Web API v1 | [Public](https://sonarcloud.io/web_api/api/qualityprofiles/deactivate_rule) |
-| `GetActiveRule` | `GET {url}/api/rules/search?qprofile=&activation=true&rule_key=&f=actives,params,impacts` | Web API v1 | [Public](https://sonarcloud.io/web_api/api/rules/search) |
+| Function | Endpoint | Surface | Public or internal | SOT |
+| --- | --- | --- | --- | --- |
+| `ActivateQualityProfileRule`, `ResetQualityProfileRule` | `POST {url}/api/qualityprofiles/activate_rule` | Web API v1 | [Public](https://sonarcloud.io/web_api/api/qualityprofiles/activate_rule) | No (401) |
+| `DeactivateQualityProfileRule` | `POST {url}/api/qualityprofiles/deactivate_rule` | Web API v1 | [Public](https://sonarcloud.io/web_api/api/qualityprofiles/deactivate_rule) | Not checked |
+| `GetActiveRule` | `GET {url}/api/rules/search?qprofile=&activation=true&rule_key=&f=actives,params,impacts` | Web API v1 | [Public](https://sonarcloud.io/web_api/api/rules/search) | Yes |
 
 No Web API v2 endpoint manages the rules of a quality profile.
 
@@ -413,14 +442,14 @@ organization gives 403 `Enterprise MISRA rules require a MISRA entitlement`.
 
 ## Organization tokens (`organization_tokens.go`)
 
-| Function | Endpoint | Surface | Public or internal |
-| --- | --- | --- | --- |
-| `CreateOrganizationToken` | `POST {api_url}/authentication/token-definitions` | Web API v2 | [Public](https://api-docs.sonarsource.com/sonarqube-cloud/default/public-externalauthentication-0-0) |
-| `ListOrganizationTokens`, `FindOrganizationToken` | `GET {api_url}/authentication/token-definitions?organizationId=&pageIndex=&pageSize=` | Web API v2 | [Public](https://api-docs.sonarsource.com/sonarqube-cloud/default/public-externalauthentication-0-0) |
-| `DeleteOrganizationToken` | `DELETE {api_url}/authentication/token-definitions/{id}` | Web API v2 | [Public](https://api-docs.sonarsource.com/sonarqube-cloud/default/public-externalauthentication-0-0) |
-| `CreateTokenResourceLink` | `POST {api_url}/authentication/token-resource-links` | Web API v2 | [Public](https://api-docs.sonarsource.com/sonarqube-cloud/default/public-externalauthentication-0-0) |
-| `ListTokenResourceLinks` | `GET {api_url}/authentication/token-resource-links?organizationTokenId=&pageIndex=&pageSize=` | Web API v2 | [Public](https://api-docs.sonarsource.com/sonarqube-cloud/default/public-externalauthentication-0-0) |
-| `DeleteTokenResourceLink` | `DELETE {api_url}/authentication/token-resource-links/{id}` | Web API v2 | [Public](https://api-docs.sonarsource.com/sonarqube-cloud/default/public-externalauthentication-0-0) |
+| Function | Endpoint | Surface | Public or internal | SOT |
+| --- | --- | --- | --- | --- |
+| `CreateOrganizationToken` | `POST {api_url}/authentication/token-definitions` | Web API v2 | [Public](https://api-docs.sonarsource.com/sonarqube-cloud/default/public-externalauthentication-0-0) | Yes, `admin` |
+| `ListOrganizationTokens`, `FindOrganizationToken` | `GET {api_url}/authentication/token-definitions?organizationId=&pageIndex=&pageSize=` | Web API v2 | [Public](https://api-docs.sonarsource.com/sonarqube-cloud/default/public-externalauthentication-0-0) | Yes, `admin` |
+| `DeleteOrganizationToken` | `DELETE {api_url}/authentication/token-definitions/{id}` | Web API v2 | [Public](https://api-docs.sonarsource.com/sonarqube-cloud/default/public-externalauthentication-0-0) | Yes, `admin` |
+| `CreateTokenResourceLink` | `POST {api_url}/authentication/token-resource-links` | Web API v2 | [Public](https://api-docs.sonarsource.com/sonarqube-cloud/default/public-externalauthentication-0-0) | Yes, `admin` |
+| `ListTokenResourceLinks` | `GET {api_url}/authentication/token-resource-links?organizationTokenId=&pageIndex=&pageSize=` | Web API v2 | [Public](https://api-docs.sonarsource.com/sonarqube-cloud/default/public-externalauthentication-0-0) | Yes, `admin` |
+| `DeleteTokenResourceLink` | `DELETE {api_url}/authentication/token-resource-links/{id}` | Web API v2 | [Public](https://api-docs.sonarsource.com/sonarqube-cloud/default/public-externalauthentication-0-0) | Yes, `admin` |
 
 Read uses the public list endpoint, with the organization UUID and pagination.
 The endpoint that reads one token definition by ID is internal and is not used.
@@ -454,14 +483,14 @@ token removes its links, and then the list answers 404 `Token not found`.
 
 ## Enterprises (`enterprises.go`)
 
-| Function | Endpoint | Surface | Public or internal |
-| --- | --- | --- | --- |
-| `CreateEnterprise` | `POST {api_url}/enterprises/enterprises` | Web API v2 | [Public](https://api-docs.sonarsource.com/sonarqube-cloud/default/public-sonarcloud-organizations-enterprises-external-1-2-0) |
-| `GetEnterprise` | `GET {api_url}/enterprises/enterprises/{id}` | Web API v2 | [Public](https://api-docs.sonarsource.com/sonarqube-cloud/default/public-sonarcloud-organizations-enterprises-external-1-2-0) |
-| `GetEnterpriseByKey` | `GET {api_url}/enterprises/enterprises?enterpriseKey=` | Web API v2 | [Public](https://api-docs.sonarsource.com/sonarqube-cloud/default/public-sonarcloud-organizations-enterprises-external-1-2-0) |
-| `ListEnterprises` | `GET {api_url}/enterprises/enterprises` | Web API v2 | [Public](https://api-docs.sonarsource.com/sonarqube-cloud/default/public-sonarcloud-organizations-enterprises-external-1-2-0) |
-| `UpdateEnterprise` | `PATCH {api_url}/enterprises/enterprises/{id}` | Web API v2 | [Public](https://api-docs.sonarsource.com/sonarqube-cloud/default/public-sonarcloud-organizations-enterprises-external-1-2-0) |
-| `DeleteEnterprise` | `DELETE {api_url}/enterprises/enterprises/{id}`, then `GET {api_url}/enterprises/enterprises/{id}` | Web API v2 | [Public](https://api-docs.sonarsource.com/sonarqube-cloud/default/public-sonarcloud-organizations-enterprises-external-1-2-0) |
+| Function | Endpoint | Surface | Public or internal | SOT |
+| --- | --- | --- | --- | --- |
+| `CreateEnterprise` | `POST {api_url}/enterprises/enterprises` | Web API v2 | [Public](https://api-docs.sonarsource.com/sonarqube-cloud/default/public-sonarcloud-organizations-enterprises-external-1-2-0) | No |
+| `GetEnterprise` | `GET {api_url}/enterprises/enterprises/{id}` | Web API v2 | [Public](https://api-docs.sonarsource.com/sonarqube-cloud/default/public-sonarcloud-organizations-enterprises-external-1-2-0) | No |
+| `GetEnterpriseByKey` | `GET {api_url}/enterprises/enterprises?enterpriseKey=` | Web API v2 | [Public](https://api-docs.sonarsource.com/sonarqube-cloud/default/public-sonarcloud-organizations-enterprises-external-1-2-0) | No |
+| `ListEnterprises` | `GET {api_url}/enterprises/enterprises` | Web API v2 | [Public](https://api-docs.sonarsource.com/sonarqube-cloud/default/public-sonarcloud-organizations-enterprises-external-1-2-0) | No |
+| `UpdateEnterprise` | `PATCH {api_url}/enterprises/enterprises/{id}` | Web API v2 | [Public](https://api-docs.sonarsource.com/sonarqube-cloud/default/public-sonarcloud-organizations-enterprises-external-1-2-0) | No |
+| `DeleteEnterprise` | `DELETE {api_url}/enterprises/enterprises/{id}`, then `GET {api_url}/enterprises/enterprises/{id}` | Web API v2 | [Public](https://api-docs.sonarsource.com/sonarqube-cloud/default/public-sonarcloud-organizations-enterprises-external-1-2-0) | No |
 
 The API needs a user token. With a scoped organization token, the list is
 empty, and the other calls give 403 or 404.
@@ -486,12 +515,12 @@ without enterprise features.
 
 ## Enterprise organizations (`enterprise_organizations.go`)
 
-| Function | Endpoint | Surface | Public or internal |
-| --- | --- | --- | --- |
-| `ListEnterpriseOrganizationsOfEnterprise` | `GET {api_url}/enterprises/enterprise-organizations?enterpriseId=` | Web API v2 | [Public](https://api-docs.sonarsource.com/sonarqube-cloud/default/public-sonarcloud-organizations-enterprises-external-1-2-0) |
-| `ListEnterpriseOrganizationsOfOrganization` | `GET {api_url}/enterprises/enterprise-organizations?organizationId=` | Web API v2 | [Public](https://api-docs.sonarsource.com/sonarqube-cloud/default/public-sonarcloud-organizations-enterprises-external-1-2-0) |
-| `AttachEnterpriseOrganization` | `POST {api_url}/enterprises/enterprise-organizations` | Web API v2 | [Public](https://api-docs.sonarsource.com/sonarqube-cloud/default/public-sonarcloud-organizations-enterprises-external-1-2-0) |
-| `DetachEnterpriseOrganization` | `DELETE {api_url}/enterprises/enterprise-organizations/{id}` | Web API v2 | [Public](https://api-docs.sonarsource.com/sonarqube-cloud/default/public-sonarcloud-organizations-enterprises-external-1-2-0) |
+| Function | Endpoint | Surface | Public or internal | SOT |
+| --- | --- | --- | --- | --- |
+| `ListEnterpriseOrganizationsOfEnterprise` | `GET {api_url}/enterprises/enterprise-organizations?enterpriseId=` | Web API v2 | [Public](https://api-docs.sonarsource.com/sonarqube-cloud/default/public-sonarcloud-organizations-enterprises-external-1-2-0) | No |
+| `ListEnterpriseOrganizationsOfOrganization` | `GET {api_url}/enterprises/enterprise-organizations?organizationId=` | Web API v2 | [Public](https://api-docs.sonarsource.com/sonarqube-cloud/default/public-sonarcloud-organizations-enterprises-external-1-2-0) | No |
+| `AttachEnterpriseOrganization` | `POST {api_url}/enterprises/enterprise-organizations` | Web API v2 | [Public](https://api-docs.sonarsource.com/sonarqube-cloud/default/public-sonarcloud-organizations-enterprises-external-1-2-0) | No |
+| `DetachEnterpriseOrganization` | `DELETE {api_url}/enterprises/enterprise-organizations/{id}` | Web API v2 | [Public](https://api-docs.sonarsource.com/sonarqube-cloud/default/public-sonarcloud-organizations-enterprises-external-1-2-0) | No |
 
 The lists have no pages. `organizationId` accepts the legacy ID or the UUID,
 in the filter and in the body of `POST`. An unknown organization, an

@@ -30,6 +30,8 @@ ENHANCEMENTS:
 
 * `sonarqube_cloud_scoped_organization_token`: add `project_keys` to limit a token to specific projects. A change
   updates the token in place, and the secret stays the same.
+* Provider: when an API refuses a scoped organization token, the error tells that the token is a possible cause.
+  The provider docs list the resources and data sources that support these tokens.
 
 ## 0.1.0-alpha.2 (November 2, 2026)
 

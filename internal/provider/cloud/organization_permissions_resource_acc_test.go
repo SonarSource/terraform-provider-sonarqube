@@ -17,6 +17,7 @@ import (
 )
 
 func TestAccOrganizationPermissionsGroupResource(t *testing.T) {
+	acctest.SkipWithSOT(t, acctest.SOTRefused)
 	organization := os.Getenv(acctest.EnvTestOrganization)
 	name := fmt.Sprintf("%spermissions-%d", acctest.KeyPrefix, rand.Uint32())
 	address := "sonarqube_cloud_organization_permissions.test"
@@ -76,6 +77,7 @@ resource "sonarqube_cloud_organization_permissions" "test" {
 }
 
 func TestAccOrganizationPermissionsUserResource(t *testing.T) {
+	acctest.SkipWithSOT(t, acctest.SOTNoUser)
 	acctest.PreCheckAcceptance(t)
 	acctest.PreCheckDestructive(t)
 	organization := os.Getenv(acctest.EnvTestOrganization)

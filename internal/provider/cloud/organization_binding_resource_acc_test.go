@@ -24,6 +24,7 @@ import (
 // empty, that an import gives a state that answers the configuration, and
 // what the plan does with an attribute that cannot change.
 func TestAccOrganizationBindingResource(t *testing.T) {
+	acctest.SkipWithSOT(t, acctest.SOTRefused)
 	key := fmt.Sprintf("%s%d", acctest.KeyPrefix, rand.Uint32())
 	installationID := os.Getenv(acctest.EnvTestInstallationID)
 

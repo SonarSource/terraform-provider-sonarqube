@@ -2,10 +2,13 @@ package client
 
 import (
 	"errors"
+	"fmt"
 	"io"
 	"net"
 	"net/http"
+	"net/http/httptest"
 	"net/url"
+	"strings"
 	"syscall"
 	"testing"
 )
@@ -51,6 +54,39 @@ func TestIsTransient(t *testing.T) {
 			t.Parallel()
 			if got := isTransient(test.err); got != test.want {
 				t.Errorf("isTransient(%v) = %v, want %v", test.err, got, test.want)
+			}
+		})
+	}
+}
+
+func TestScopedTokenHint(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		token  string
+		status int
+		body   string
+		hint   bool
+	}{
+		{"v1 refusal", "sqco_test", 401, ``, true},
+		{"v2 refusal", "sqco_test", 403, `{"message":"Forbidden"}`, true},
+		{"dop translation", "sqco_test", 400, `{"message":"No enum constant io.example.AuthenticationType.SOT"}`, true},
+		{"other bad request", "sqco_test", 400, `{"message":"Invalid key"}`, false},
+		{"not found", "sqco_test", 404, ``, false},
+		{"user token", "squ_test", 403, ``, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.WriteHeader(tc.status)
+				fmt.Fprint(w, tc.body)
+			}))
+			defer srv.Close()
+			c := New(Config{URL: srv.URL, APIURL: srv.URL, Token: tc.token, Product: ProductCloud, HTTPClient: srv.Client()})
+			err := c.apiGet(t.Context(), "/organizations/organizations", nil, nil)
+			if err == nil || strings.Contains(err.Error(), sotHint) != tc.hint {
+				t.Fatalf("err=%v", err)
+			}
+			if strings.Contains(err.Error(), tc.token) {
+				t.Fatal("the error shows the token")
 			}
 		})
 	}

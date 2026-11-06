@@ -35,6 +35,7 @@ type ruleConfig struct {
 }
 
 func TestAccQualityProfileRuleResource(t *testing.T) {
+	acctest.SkipWithSOT(t, acctest.SOTRefused)
 	acctest.PreCheckAcceptance(t)
 	organization := acctest.PreCheckSharedOrganization(t)
 	p := qualityProfileRules{t: t, organization: organization,

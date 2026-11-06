@@ -19,6 +19,7 @@ import (
 // custom profile, which needs the Team or the Enterprise plan, so the test
 // uses the organization of SONARQUBE_TEST_ORGANIZATION.
 func TestAccQualityProfileRuleResourceInactive(t *testing.T) {
+	acctest.SkipWithSOT(t, acctest.SOTRefused)
 	acctest.PreCheckAcceptance(t)
 	organization := acctest.PreCheckSharedOrganization(t)
 	p := qualityProfileRules{t: t, organization: organization,

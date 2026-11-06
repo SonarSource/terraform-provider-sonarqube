@@ -67,6 +67,26 @@ type APIError struct {
 	StatusCode int
 	Messages   []string
 	Body       string
+	// ScopedToken tells that the request used a scoped organization token.
+	ScopedToken bool
+}
+
+// ScopedTokenPrefix starts the value of each scoped organization token.
+const ScopedTokenPrefix = "sqco_"
+
+// sotHint explains a refusal that a scoped organization token can cause. Many
+// endpoints do not accept these tokens: Web API v1 answers 401, Web API v2
+// answers 403, and the DevOps platform API answers 400 with this enum message.
+const sotHint = "The provider uses a scoped organization token. Possibly this endpoint does not accept scoped organization tokens, or the token does not have the necessary permission or is revoked. The provider docs list the resources that support these tokens."
+
+// refusedScopedToken tells if the response is a refusal that the scoped
+// organization token possibly causes.
+func (e *APIError) refusedScopedToken() bool {
+	if !e.ScopedToken {
+		return false
+	}
+	return e.StatusCode == 401 || e.StatusCode == 403 ||
+		(e.StatusCode == 400 && hasMessageContaining(e.Messages, "AuthenticationType.SOT"))
 }
 
 // Error returns the status and the messages of the response.
@@ -75,10 +95,19 @@ func (e *APIError) Error() string {
 	if detail == "" {
 		detail = e.Body
 	}
+	var message string
 	if detail == "" {
-		return fmt.Sprintf("unexpected status %d from the API", e.StatusCode)
+		message = fmt.Sprintf("unexpected status %d from the API", e.StatusCode)
+	} else {
+		message = fmt.Sprintf("status %d: %s", e.StatusCode, detail)
 	}
-	return fmt.Sprintf("status %d: %s", e.StatusCode, detail)
+	if e.refusedScopedToken() {
+		if !strings.HasSuffix(message, ".") {
+			message += "."
+		}
+		message += " " + sotHint
+	}
+	return message
 }
 
 // Is makes errors.Is(err, ErrNotFound) true for a 404.

@@ -23,6 +23,7 @@ const (
 )
 
 func TestAccQualityProfileResource(t *testing.T) {
+	acctest.SkipWithSOT(t, acctest.SOTRefused)
 	acctest.PreCheckAcceptance(t)
 	organization := acctest.PreCheckSharedOrganization(t)
 	base := fmt.Sprintf("%sprofile-%d", acctest.KeyPrefix, rand.Uint32())

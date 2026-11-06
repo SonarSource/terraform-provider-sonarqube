@@ -26,6 +26,7 @@ const (
 // compares the condition identifiers with the API, so it shows that an apply
 // changes only the conditions that the configuration changes.
 func TestAccQualityGateResource(t *testing.T) {
+	acctest.SkipWithSOT(t, acctest.SOTRefused)
 	organization := fmt.Sprintf("%s%d", acctest.KeyPrefix, rand.Uint32())
 	gateName := acctest.KeyPrefix + "gate"
 	// The first step records these. The later steps compare with them.
@@ -233,6 +234,7 @@ data "sonarqube_cloud_quality_gate" "test" {
 // Only the last step makes a gate: the check of the metric key comes after
 // the create. The failed apply taints the gate, and the destroy deletes it.
 func TestAccQualityGateResourceInvalidConditions(t *testing.T) {
+	acctest.SkipWithSOT(t, acctest.SOTRefused)
 	gateName := fmt.Sprintf("%sinvalid-gate-%d", acctest.KeyPrefix, rand.Uint32())
 	organization := os.Getenv(acctest.EnvTestOrganization)
 	config := func(conditions string) string {

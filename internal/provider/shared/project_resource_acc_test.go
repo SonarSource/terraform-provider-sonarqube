@@ -18,6 +18,7 @@ import (
 const projectAddress = "sonarqube_project.test"
 
 func TestAccProjectResource(t *testing.T) {
+	acctest.SkipWithSOT(t, acctest.SOTPrivateProjects)
 	key := fmt.Sprintf("%s%d", acctest.KeyPrefix, rand.Uint32())
 	newKey := key + "-new"
 	organization := os.Getenv(acctest.EnvTestOrganization)

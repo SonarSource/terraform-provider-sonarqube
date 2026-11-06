@@ -22,4 +22,35 @@ expires each year.
 An alpha version is a pre-release. Terraform selects it only when the
 constraint gives the exact version.
 
+## Authenticate with a Scoped Organization Token
+
+You can set a scoped organization token (a token that starts with `sqco_`) as
+`token`. Then the configuration does not depend on the account of one user.
+Many SonarQube Cloud APIs do not accept these tokens yet, so the provider
+supports only a small set of resources and data sources with them.
+
+| Resource or data source | With a scoped organization token |
+| --- | --- |
+| `sonarqube_cloud_organization` data source | Supported |
+| `sonarqube_cloud_quality_gate` data source | Supported |
+| `sonarqube_quality_profile` data source | Supported |
+| `sonarqube_cloud_scoped_organization_token` | Supported. The token must have the `admin` organization permission. `project_keys` works only with public projects. |
+| All other resources and data sources | Not supported |
+
+Give the token the organization permissions `admin`, `scan` and
+`provisioning`. The data sources also work with `scan` or `provisioning` only.
+
+Limits:
+
+* A scoped organization token belongs to one organization. It cannot create,
+  change or delete an organization.
+* The projects API does not show private projects to a scoped organization
+  token. A resource cannot find a private project, so do not manage projects
+  with such a token.
+* The token has no user. Resources that change groups, permissions, quality
+  gates or quality profiles need a user token.
+
+When an API refuses a scoped organization token, the error tells that the
+token is a possible cause. Use a user token for that resource.
+
 {{ .SchemaMarkdown | trimspace }}

@@ -11,6 +11,7 @@ import (
 )
 
 func TestAccOrganizationQualityGateSettingsResource(t *testing.T) {
+	acctest.SkipWithSOT(t, acctest.SOTRefused)
 	key := fmt.Sprintf("%s%d", acctest.KeyPrefix, rand.Uint32())
 	config := func(ignore bool) string {
 		return fmt.Sprintf(`
