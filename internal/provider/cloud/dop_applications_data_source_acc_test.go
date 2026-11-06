@@ -12,6 +12,7 @@ import (
 // The data source only reads, so a token is all it needs. It does not write,
 // so it may run against any instance.
 func TestAccDopApplicationsDataSource(t *testing.T) {
+	acctest.SkipWithSOT(t, acctest.SOTRefused)
 	const address = "data.sonarqube_cloud_dop_applications.test"
 
 	resource.Test(t, resource.TestCase{

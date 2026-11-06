@@ -111,6 +111,14 @@ tests, and fails when a test skips, except the ones that `ALLOWED_SKIP` in the
     go test ./internal/provider/cloud -run '^TestAccEnterpriseResource$' -count=1 -v
   ```
 
+Set `SONARQUBE_TEST_SOT_TOKEN` to run the acceptance tests with a scoped
+organization token. Make the token for `SONARQUBE_TEST_ORGANIZATION`, with
+the organization permissions `admin`, `scan` and `provisioning`. The provider
+under test then authenticates with this token. The checks, the prechecks and
+the sweepers keep the user token of `SONARQUBE_TOKEN`. The tests that a scoped
+organization token cannot run call `acctest.SkipWithSOT`, so they skip, and
+`make testacc` accepts these skips.
+
 Each test gives the prefix `acctest.KeyPrefix` (`tf-acc-test-`) to what it
 makes. When a run stops before its cleanup, the sweepers in
 `internal/acctest/sweep.go` delete what starts with the prefix: the

@@ -15,6 +15,7 @@ import (
 // The test makes and deletes a real organization, so it needs a live instance
 // and a token. resource.Test skips it when TF_ACC is unset.
 func TestAccOrganizationResource(t *testing.T) {
+	acctest.SkipWithSOT(t, acctest.SOTRefused)
 	key := fmt.Sprintf("%s%d", acctest.KeyPrefix, rand.Uint32())
 	renamedKey := key + "-renamed"
 

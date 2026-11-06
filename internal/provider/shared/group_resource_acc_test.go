@@ -17,6 +17,7 @@ import (
 )
 
 func TestAccGroupResource(t *testing.T) {
+	acctest.SkipWithSOT(t, acctest.SOTRefused)
 	organization := os.Getenv(acctest.EnvTestOrganization)
 	name := fmt.Sprintf("%sgroup-%d", acctest.KeyPrefix, rand.Uint32())
 	renamed := name + "-renamed"

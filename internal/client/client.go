@@ -317,7 +317,9 @@ func (c *Client) do(req *http.Request, out any) error {
 	}
 
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
-		return newAPIError(resp.StatusCode, body)
+		apiErr := newAPIError(resp.StatusCode, body)
+		apiErr.ScopedToken = strings.HasPrefix(c.token, ScopedTokenPrefix)
+		return apiErr
 	}
 
 	if out == nil || len(body) == 0 {

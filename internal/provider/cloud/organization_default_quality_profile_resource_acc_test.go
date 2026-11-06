@@ -33,6 +33,7 @@ const (
 // in parallel with another test: do not call t.Parallel, and keep -p 1 in the
 // Makefile.
 func TestAccOrganizationDefaultQualityProfileResource(t *testing.T) {
+	acctest.SkipWithSOT(t, acctest.SOTRefused)
 	// The configuration of each step needs the profile, so the profile is made
 	// before resource.Test, which would skip the test without TF_ACC.
 	acctest.PreCheckAcceptance(t)

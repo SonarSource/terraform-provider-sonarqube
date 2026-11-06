@@ -28,6 +28,7 @@ resource "sonarqube_group" "test" {
 }
 
 func TestAccProjectPermissionsGroupResource(t *testing.T) {
+	acctest.SkipWithSOT(t, acctest.SOTRefused)
 	organization := os.Getenv(acctest.EnvTestOrganization)
 	suffix := rand.Uint32()
 	projectKey := fmt.Sprintf("%spermissions-%d", acctest.KeyPrefix, suffix)
@@ -88,6 +89,7 @@ func TestAccProjectPermissionsGroupResource(t *testing.T) {
 }
 
 func TestAccProjectPermissionsUserResource(t *testing.T) {
+	acctest.SkipWithSOT(t, acctest.SOTNoUser)
 	acctest.PreCheckAcceptance(t)
 	organization := acctest.PreCheckSharedOrganization(t)
 	api := acctest.Client()

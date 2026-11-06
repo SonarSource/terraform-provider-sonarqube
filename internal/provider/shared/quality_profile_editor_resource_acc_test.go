@@ -31,6 +31,7 @@ type qualityProfileEditors struct {
 // SONARQUBE_TEST_ORGANIZATION. The user editor is the token user, who is a
 // member of that organization.
 func TestAccQualityProfileEditorResource(t *testing.T) {
+	acctest.SkipWithSOT(t, acctest.SOTNoUser)
 	acctest.PreCheckAcceptance(t)
 	organization := acctest.PreCheckSharedOrganization(t)
 	login, err := acctest.Client().CurrentUserLogin(t.Context())

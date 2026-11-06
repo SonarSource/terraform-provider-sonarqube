@@ -15,6 +15,7 @@ import (
 )
 
 func TestAccGroupMemberResource(t *testing.T) {
+	acctest.SkipWithSOT(t, acctest.SOTNoUser)
 	acctest.PreCheckAcceptance(t)
 	organization := acctest.PreCheckSharedOrganization(t)
 	login, err := acctest.Client().CurrentUserLogin(t.Context())

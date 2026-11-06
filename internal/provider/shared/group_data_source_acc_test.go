@@ -15,6 +15,7 @@ import (
 )
 
 func TestAccGroupDataSourceReadsBuiltInGroup(t *testing.T) {
+	acctest.SkipWithSOT(t, acctest.SOTRefused)
 	organization := os.Getenv(acctest.EnvTestOrganization)
 	config := fmt.Sprintf(`data "sonarqube_group" "members" {
   organization = %q
@@ -33,6 +34,7 @@ func TestAccGroupDataSourceReadsBuiltInGroup(t *testing.T) {
 }
 
 func TestAccGroupDataSourceMissingGroup(t *testing.T) {
+	acctest.SkipWithSOT(t, acctest.SOTRefused)
 	organization := os.Getenv(acctest.EnvTestOrganization)
 	config := fmt.Sprintf(`data "sonarqube_group" "missing" {
   organization = %q
@@ -49,6 +51,7 @@ func TestAccGroupDataSourceMissingGroup(t *testing.T) {
 }
 
 func TestAccGroupDataSourceReadsGroupOfTest(t *testing.T) {
+	acctest.SkipWithSOT(t, acctest.SOTRefused)
 	organization := os.Getenv(acctest.EnvTestOrganization)
 	name := fmt.Sprintf("%sdata-group-%d", acctest.KeyPrefix, rand.Uint32())
 	group := fmt.Sprintf(`resource "sonarqube_group" "test" {

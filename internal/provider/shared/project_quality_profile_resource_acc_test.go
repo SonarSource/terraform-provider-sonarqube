@@ -29,6 +29,7 @@ type projectQualityProfiles struct {
 // which need the Team or the Enterprise plan, so it uses the organization of
 // SONARQUBE_TEST_ORGANIZATION.
 func TestAccProjectQualityProfileResource(t *testing.T) {
+	acctest.SkipWithSOT(t, acctest.SOTRefused)
 	acctest.PreCheckAcceptance(t)
 	organization := acctest.PreCheckSharedOrganization(t)
 	p := projectQualityProfiles{t: t, organization: organization,

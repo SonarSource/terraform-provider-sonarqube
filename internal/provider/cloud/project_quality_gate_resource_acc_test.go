@@ -28,6 +28,7 @@ const projectQualityGateAddress = "sonarqube_cloud_project_quality_gate.test"
 // the project. Its check reads from the API that the project uses the default
 // gate again. The final destroy deletes the project too, so it cannot show this.
 func TestAccProjectQualityGateResource(t *testing.T) {
+	acctest.SkipWithSOT(t, acctest.SOTRefused)
 	organization := os.Getenv(acctest.EnvTestOrganization)
 	suffix := rand.Uint32()
 	projectKey := fmt.Sprintf("%s%d", acctest.KeyPrefix, suffix)

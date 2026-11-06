@@ -31,6 +31,47 @@ const KeyPrefix = "tf-acc-test-"
 // EnvTestOrganization names an organization that the token can read.
 const EnvTestOrganization = "SONARQUBE_TEST_ORGANIZATION"
 
+// EnvTestSOTToken names an optional scoped organization token of the shared
+// organization. When it is set, the provider under test authenticates with
+// it, and Client keeps the user token of SONARQUBE_TOKEN for the checks.
+const EnvTestSOTToken = "SONARQUBE_TEST_SOT_TOKEN"
+
+// sotToken is the value of EnvTestSOTToken, and userToken is the user token
+// of SONARQUBE_TOKEN when the run starts.
+var sotToken, userToken string
+
+// The provider reads its token from the environment, so the SOT replaces the
+// user token there before a test starts. Without a user token, the
+// environment stays as it is: PreCheckToken stops the test, and Client and
+// the sweepers never get the SOT.
+func init() {
+	sotToken = os.Getenv(EnvTestSOTToken)
+	userToken = os.Getenv(provider.EnvToken)
+	if sotToken != "" && userToken != "" {
+		os.Setenv(provider.EnvToken, sotToken)
+	}
+}
+
+// SOT tells if the provider under test uses a scoped organization token.
+func SOT() bool { return sotToken != "" }
+
+// Reasons for SkipWithSOT.
+const (
+	SOTRefused         = "the API of this resource refuses a scoped organization token (see the SOT column of internal/client/APIS.md)"
+	SOTNoUser          = "the test needs the login of a user, and a scoped organization token has no user"
+	SOTPrivateProjects = "the projects API does not show private projects to a scoped organization token"
+)
+
+// SkipWithSOT skips a test that a scoped organization token cannot run.
+// `make testacc` accepts a skip whose reason starts with
+// "SONARQUBE_TEST_SOT_TOKEN is set", so keep that text.
+func SkipWithSOT(t *testing.T, reason string) {
+	t.Helper()
+	if SOT() {
+		t.Skipf("%s is set, and %s", EnvTestSOTToken, reason)
+	}
+}
+
 // The provider runs inside the test process.
 var ProtoV6ProviderFactories = map[string]func() (tfprotov6.ProviderServer, error){
 	"sonarqube": providerserver.NewProtocol6WithError(provider.New("test")()),
@@ -124,10 +165,14 @@ func checkSharedOrganization(ctx context.Context, c *client.Client, organization
 // provider configures it. A test uses it to change or read the instance
 // outside of Terraform.
 func Client() *client.Client {
+	token := os.Getenv(provider.EnvToken)
+	if SOT() {
+		token = userToken
+	}
 	return client.New(client.Config{
 		URL:     cmp.Or(os.Getenv(provider.EnvURL), client.CloudURL),
 		APIURL:  os.Getenv(provider.EnvAPIURL),
-		Token:   os.Getenv(provider.EnvToken),
+		Token:   token,
 		Product: client.ProductCloud,
 	})
 }
@@ -136,6 +181,9 @@ func Client() *client.Client {
 func PreCheckToken(t *testing.T) {
 	t.Helper()
 
+	if SOT() && userToken == "" {
+		t.Fatalf("%s is set, so %s must hold a user token for the checks", EnvTestSOTToken, provider.EnvToken)
+	}
 	if os.Getenv(provider.EnvToken) == "" {
 		t.Skipf("%s is not set, so the acceptance test cannot reach an instance", provider.EnvToken)
 	}

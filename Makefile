@@ -17,7 +17,9 @@ ALLOWED_SKIP := TestAccOrganizationPermissionsUserResource TestAccEnterpriseReso
 # lists must be set. The timeout applies to each package, not to the whole run.
 testacc:
 	set -o pipefail; TF_ACC=1 go test -v -count=1 -p 1 -timeout 40m -run '^TestAcc' ./internal/provider/... 2>&1 | tee $(ACCEPTANCE_LOG)
-	@skipped=$$(grep -oE -- '--- SKIP: [^ ]+' $(ACCEPTANCE_LOG) | cut -d' ' -f3 | grep -vxF $(addprefix -e ,$(ALLOWED_SKIP)) || true); \
+	@# A test that a scoped organization token cannot run skips on purpose. The
+	@# line before its SKIP line has the reason of acctest.SkipWithSOT.
+	@skipped=$$(awk '/^ *--- SKIP: / && prev !~ /SONARQUBE_TEST_SOT_TOKEN is set/ { print $$3 } { prev = $$0 }' $(ACCEPTANCE_LOG) | grep -vxF $(addprefix -e ,$(ALLOWED_SKIP)) || true); \
 	if [[ -n "$${skipped}" ]]; then \
 		echo "These acceptance tests skipped:"; \
 		echo "$${skipped}"; \

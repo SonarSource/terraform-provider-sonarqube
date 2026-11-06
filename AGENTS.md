@@ -213,6 +213,13 @@ link to its docs page) or internal. Whenever a change to `internal/client`
 adds, removes, or changes an endpoint — including adding a new domain for a
 new resource or data source — update `APIS.md` in the same change.
 
+The `SOT` column tells if the endpoint accepts a scoped organization token.
+`APIS.md` explains the values. Fill it in from a call on a development
+instance, not from the API docs. For a new resource, run its acceptance test
+with `SONARQUBE_TEST_SOT_TOKEN` (see [CONTRIBUTING.md](CONTRIBUTING.md)). If
+the token cannot run it, start the test with `acctest.SkipWithSOT`, and update
+the scoped organization token section of the provider docs.
+
 ## Documentation
 
 Update these instructions when commands, package boundaries, or development

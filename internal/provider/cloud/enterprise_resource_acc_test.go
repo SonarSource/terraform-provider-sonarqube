@@ -26,6 +26,7 @@ const (
 // skips when the variable is not set. It also tests
 // sonarqube_cloud_enterprise_organization, so that one license is sufficient.
 func TestAccEnterpriseResource(t *testing.T) {
+	acctest.SkipWithSOT(t, acctest.SOTRefused)
 	license := acctest.PreCheckEnterprise(t)
 	suffix := rand.Uint32()
 	organization := fmt.Sprintf("%s%d", acctest.KeyPrefix, suffix)

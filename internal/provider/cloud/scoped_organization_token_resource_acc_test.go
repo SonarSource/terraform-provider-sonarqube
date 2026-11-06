@@ -142,6 +142,7 @@ resource "sonarqube_cloud_scoped_organization_token" "test" {
 }
 
 func TestAccScopedOrganizationTokenProjects(t *testing.T) {
+	acctest.SkipWithSOT(t, acctest.SOTPrivateProjects)
 	if os.Getenv(resource.EnvTfAcc) == "" {
 		t.Skipf("%s is not set", resource.EnvTfAcc)
 	}
