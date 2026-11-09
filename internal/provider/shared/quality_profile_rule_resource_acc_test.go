@@ -238,13 +238,22 @@ func (p qualityProfileRules) changeOutside(rule string, params map[string]string
 	if err := acctest.Client().ActivateQualityProfileRule(p.t.Context(), key, rule, client.RuleValues{Params: params}); err != nil {
 		p.t.Fatal(err)
 	}
-	err = acctest.WaitFor(func() (bool, error) {
+	p.waitForSteadyRule(key, rule, func(active *client.ActiveRule) bool { return hasAll(active.Values.Params, params) })
+}
+
+// waitForSteadyRule waits until the search shows the rule with ok on 10 calls
+// in sequence. After a change, the search index can show the new state and
+// then the old state again for some seconds, and the plan of the next step
+// reads the rule only once.
+func (p qualityProfileRules) waitForSteadyRule(key, rule string, ok func(*client.ActiveRule) bool) {
+	p.t.Helper()
+	err := acctest.WaitForSteady(func() (bool, error) {
 		active, err := acctest.Client().GetActiveRule(p.t.Context(), key, rule)
 		if errors.Is(err, client.ErrNotFound) {
 			return false, nil
 		}
-		return err == nil && hasAll(active.Values.Params, params), err
-	})
+		return err == nil && ok(active), err
+	}, 10)
 	if err != nil {
 		p.t.Fatal(err)
 	}

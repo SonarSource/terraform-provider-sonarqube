@@ -100,7 +100,5 @@ func (p qualityProfileRules) activateOutside(rule string) {
 	if err := acctest.Client().ActivateQualityProfileRule(p.t.Context(), key, rule, client.RuleValues{}); err != nil {
 		p.t.Fatalf("cannot activate the rule outside of Terraform: %v", err)
 	}
-	if err := p.hasRule(rule, client.RuleInheritInherited, nil, nil)(nil); err != nil {
-		p.t.Fatal(err)
-	}
+	p.waitForSteadyRule(key, rule, func(active *client.ActiveRule) bool { return active.Inherit == client.RuleInheritInherited })
 }
