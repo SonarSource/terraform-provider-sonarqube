@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.1.0-alpha.3 (Unreleased)
+## 0.1.0-alpha.3 (November 9, 2026)
 
 BREAKING CHANGES:
 
