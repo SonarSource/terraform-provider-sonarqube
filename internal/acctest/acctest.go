@@ -348,6 +348,62 @@ func PreCheckEnterprise(t *testing.T) string {
 	return license
 }
 
+// The variables of the tests that bind to GitLab Self-Managed.
+// scripts/gitlab-self-managed/start.sh starts an instance and writes them.
+const (
+	// EnvTestGitLabURL is the web address of the GitLab Self-Managed
+	// instance. SonarQube Cloud must reach it at a public HTTPS address.
+	EnvTestGitLabURL = "SONARQUBE_TEST_GITLAB_URL"
+	// EnvTestGitLabGroup is the path of a top-level group that the owner of
+	// the tokens owns.
+	EnvTestGitLabGroup = "SONARQUBE_TEST_GITLAB_GROUP"
+	// EnvTestGitLabToken and EnvTestGitLabSecondToken are two personal access
+	// tokens with the api scope. The test changes the binding from the first
+	// to the second.
+	EnvTestGitLabToken       = "SONARQUBE_TEST_GITLAB_TOKEN"
+	EnvTestGitLabSecondToken = "SONARQUBE_TEST_GITLAB_SECOND_TOKEN"
+	// EnvTestEnterpriseKey is the key of an enterprise that the token user
+	// administers. The server stores a GitLab configuration only for an
+	// organization with the Enterprise plan, and an organization that a test
+	// makes is on the Free plan until the test attaches it to this
+	// enterprise.
+	EnvTestEnterpriseKey = "SONARQUBE_TEST_ENTERPRISE_KEY"
+)
+
+// GitLabSelfManaged holds the values of the GitLab Self-Managed variables.
+type GitLabSelfManaged struct {
+	URL, Group, Token, SecondToken, EnterpriseKey string
+}
+
+// PreCheckGitLabSelfManaged stops a test that has no GitLab Self-Managed
+// instance or no enterprise, and returns the values.
+func PreCheckGitLabSelfManaged(t *testing.T) GitLabSelfManaged {
+	t.Helper()
+
+	PreCheckDestructive(t)
+
+	values := GitLabSelfManaged{
+		URL:           os.Getenv(EnvTestGitLabURL),
+		Group:         os.Getenv(EnvTestGitLabGroup),
+		Token:         os.Getenv(EnvTestGitLabToken),
+		SecondToken:   os.Getenv(EnvTestGitLabSecondToken),
+		EnterpriseKey: os.Getenv(EnvTestEnterpriseKey),
+	}
+	for name, value := range map[string]string{
+		EnvTestGitLabURL:         values.URL,
+		EnvTestGitLabGroup:       values.Group,
+		EnvTestGitLabToken:       values.Token,
+		EnvTestGitLabSecondToken: values.SecondToken,
+		EnvTestEnterpriseKey:     values.EnterpriseKey,
+	} {
+		if value == "" {
+			t.Skipf("%s is not set. Run scripts/gitlab-self-managed/start.sh to start a GitLab "+
+				"Self-Managed instance, and set the key of an enterprise.", name)
+		}
+	}
+	return values
+}
+
 // EnvTestRepository names a public GitHub repository that the installation of
 // EnvTestInstallationID can see. The repository must be public, because the
 // project that the test makes is public, and the server refuses to bind a

@@ -159,6 +159,42 @@ To run one acceptance test:
 TF_ACC=1 go test ./internal/provider/cloud -run '^TestAccQualityGateResource$' -count=1 -v
 ```
 
+### GitLab Self-Managed
+
+The tests whose names start with `TestAccGitLabSelfManaged` bind to a GitLab
+Self-Managed instance. `make testacc` leaves them out, and `make
+testacc-gitlab` runs only them. `make testacc-gitlab` fails when one of them
+skips, or when none of them runs. They need the variables of `make testacc`
+and these:
+
+* `SONARQUBE_TEST_ENTERPRISE_KEY`: the key of an enterprise that the token
+  user administers. The server stores a GitLab configuration only for an
+  organization with the Enterprise plan. The test attaches its organization to
+  this enterprise. Keep one more organization in the enterprise, because the
+  detach of the last organization deletes the enterprise.
+* `SONARQUBE_TEST_GITLAB_URL`, `SONARQUBE_TEST_GITLAB_GROUP`,
+  `SONARQUBE_TEST_GITLAB_TOKEN` and `SONARQUBE_TEST_GITLAB_SECOND_TOKEN`: the
+  web address of the instance, the path of a top-level group, and two personal
+  access tokens with the `api` scope of an owner of the group. SonarQube Cloud
+  must reach the instance at a public HTTPS address.
+
+`make gitlab-start` starts a temporary GitLab CE instance in Docker behind an
+ngrok tunnel, makes the group and the tokens, and writes these four variables
+to `.gitlab-self-managed.env`. `make testacc-gitlab` reads that file. It needs
+an ngrok auth token in `NGROK_AUTHTOKEN`, or in the configuration of the ngrok
+agent. The first start takes some minutes. `make gitlab-stop` removes the
+instance and the file.
+
+```bash
+make gitlab-start
+SONARQUBE_TEST_ENTERPRISE_KEY=<enterprise-key> make testacc-gitlab
+make gitlab-stop
+```
+
+The `gitlab-self-managed` job of the acceptance tests workflow does the same
+on a Warp runner, after the other tests. It needs the repository variable
+`SONARQUBE_TEST_ENTERPRISE_KEY` and the repository secret `NGROK_AUTHTOKEN`.
+
 ## Documentation
 
 `tfplugindocs` generates the Terraform Registry pages in `docs/`. Do not edit

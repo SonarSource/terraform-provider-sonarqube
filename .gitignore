@@ -16,3 +16,6 @@ acceptance-tests.log
 terraform.rc
 crash.log
 crash.*.log
+
+# Variables that scripts/gitlab-self-managed/start.sh writes.
+.gitlab-self-managed.env

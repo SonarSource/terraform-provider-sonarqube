@@ -9,11 +9,19 @@ import (
 // bindingsPath is the collection of organization bindings in Web API v2.
 const bindingsPath = "/dop-translation/organization-bindings"
 
-// PlatformGitHub is the only DevOps platform that this provider binds to.
+// PlatformGitHub and PlatformGitLab are the DevOps platforms that this
+// provider binds to. It binds to GitLab Self-Managed only, not to gitlab.com.
 //
-// The API also takes azure, bitbucket and gitlab. None of them is tested
-// against a live instance, so none of them is offered.
-const PlatformGitHub = "github"
+// The API also takes azure and bitbucket. Neither is tested against a live
+// instance, so neither is offered.
+const (
+	PlatformGitHub = "github"
+	PlatformGitLab = "gitlab"
+)
+
+// FlavorGitLabSelfManaged is the dopFlavor of a binding to GitLab
+// Self-Managed. A binding to gitlab.com has no flavor.
+const FlavorGitLabSelfManaged = "GITLAB_SELF_MANAGED"
 
 // OrganizationBinding ties an organization of SonarQube Cloud to an
 // organization on a DevOps platform.
@@ -26,10 +34,41 @@ type OrganizationBinding struct {
 	InstallationID        string `json:"installationId"`
 	DevOpsPlatformURL     string `json:"devOpsPlatformUrl"`
 	RepoAutoImportEnabled *bool  `json:"repoAutoImportEnabled,omitempty"`
-	// DopFlavor names a variant of GitHub Enterprise. This provider never
-	// writes it, but a read reports it, so that a binding made elsewhere
-	// stays legible.
+	// DopFlavor names a variant of a platform, such as a GitHub Enterprise
+	// variant or FlavorGitLabSelfManaged.
 	DopFlavor string `json:"dopFlavor,omitempty"`
+	// DevOpsPlatformOrganizationID is the numeric identifier of the GitLab
+	// group. The bind call takes the path of the group in the same field,
+	// and a read reports the number.
+	DevOpsPlatformOrganizationID string `json:"devOpsPlatformOrganizationId,omitempty"`
+	// TenantID is the web address of the GitLab Self-Managed instance.
+	TenantID string `json:"tenantId,omitempty"`
+}
+
+// CreateGitLabSelfManagedBindingRequest is the body of a bind call to GitLab
+// Self-Managed. The organization must have a GitLabConfiguration first: the
+// server reaches the instance through it.
+//
+// The server stores the token in the binding, and no read returns it.
+type CreateGitLabSelfManagedBindingRequest struct {
+	OrganizationID string `json:"organizationId"`
+	DevOpsPlatform string `json:"devOpsPlatform"`
+	DopFlavor      string `json:"dopFlavor"`
+	AccessToken    string `json:"accessToken"`
+	// Group is the path of the top-level group, such as my-group.
+	Group string `json:"devOpsPlatformOrganizationId"`
+}
+
+// PatchGitLabSelfManagedBindingRequest is the body of a change call to a
+// binding to GitLab Self-Managed. A field that holds nothing stays out.
+//
+// The server checks a new token against GitLab. TenantID, the web address of
+// a new instance, must come with DevOpsPlatformURL, the address of the group
+// on that instance.
+type PatchGitLabSelfManagedBindingRequest struct {
+	AccessToken       string `json:"accessToken,omitempty"`
+	TenantID          string `json:"tenantId,omitempty"`
+	DevOpsPlatformURL string `json:"devOpsPlatformUrl,omitempty"`
 }
 
 // CreateBindingRequest is the body of a bind call.
@@ -120,6 +159,27 @@ func (c *Client) FindOrganizationBinding(ctx context.Context, organizationID str
 func (c *Client) UpdateOrganizationBinding(ctx context.Context, id string, req PatchBindingRequest) (*OrganizationBinding, error) {
 	var out OrganizationBinding
 	if err := c.apiPatch(ctx, bindingsPath+"/"+url.PathEscape(id), req, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// CreateGitLabSelfManagedBinding binds an organization to a group on a GitLab
+// Self-Managed instance. It uses the same endpoint as
+// CreateOrganizationBinding, with other fields.
+func (c *Client) CreateGitLabSelfManagedBinding(ctx context.Context, req CreateGitLabSelfManagedBindingRequest) (*OrganizationBinding, error) {
+	var out OrganizationBinding
+	if err := c.apiPost(ctx, bindingsPath, req, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// UpdateGitLabSelfManagedBinding changes the token or the instance of a
+// binding to GitLab Self-Managed. The endpoint takes a JSON merge patch.
+func (c *Client) UpdateGitLabSelfManagedBinding(ctx context.Context, id string, req PatchGitLabSelfManagedBindingRequest) (*OrganizationBinding, error) {
+	var out OrganizationBinding
+	if err := c.apiMergePatch(ctx, bindingsPath+"/"+url.PathEscape(id), req, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil

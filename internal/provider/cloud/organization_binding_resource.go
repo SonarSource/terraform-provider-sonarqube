@@ -105,7 +105,7 @@ func (r *organizationBindingResource) Schema(_ context.Context, _ resource.Schem
 					"for a binding to GitHub Enterprise only. To replace the resource does not " +
 					"help, because a binding cannot be deleted.",
 				Validators:    []validator.String{stringvalidator.LengthAtLeast(1)},
-				PlanModifiers: []planmodifier.String{immutableInstallationIDPlanModifier{}},
+				PlanModifiers: []planmodifier.String{immutableInstallationID},
 			},
 			"repo_auto_import_enabled": schema.BoolAttribute{
 				Optional: true,

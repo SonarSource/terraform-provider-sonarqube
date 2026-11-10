@@ -69,6 +69,9 @@ type APIError struct {
 	Body       string
 	// ScopedToken tells that the request used a scoped organization token.
 	ScopedToken bool
+	// RelatedField names the field of the request that the server refused.
+	// Only some endpoints send it, such as the GitLab configurations.
+	RelatedField string
 }
 
 // ScopedTokenPrefix starts the value of each scoped organization token.
@@ -125,9 +128,11 @@ func newAPIError(status int, body []byte) *APIError {
 		Errors []struct {
 			Msg string `json:"msg"`
 		} `json:"errors"`
-		Message string `json:"message"`
+		Message      string `json:"message"`
+		RelatedField string `json:"relatedField"`
 	}
 	if err := json.Unmarshal(body, &envelope); err == nil {
+		apiErr.RelatedField = envelope.RelatedField
 		for _, e := range envelope.Errors {
 			apiErr.Messages = append(apiErr.Messages, e.Msg)
 		}

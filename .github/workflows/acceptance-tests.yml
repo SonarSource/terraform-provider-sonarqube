@@ -30,8 +30,6 @@ concurrency:
 
 jobs:
   acceptance-tests:
-    # For guidance on runner selection, visit:
-    # https://xtranet-sonarsource.atlassian.net/wiki/spaces/Platform/pages/3694231566/GitHub+Actions+Runner+-+GitHub
     runs-on: sonar-s
     name: Acceptance tests
     timeout-minutes: 45
@@ -93,9 +91,88 @@ jobs:
           SONARQUBE_TEST_GITHUB_REPOSITORY: ${{ fromJSON(steps.secrets.outputs.vault).SONARQUBE_TEST_GITHUB_REPOSITORY }}
         run: make testacc
 
+  # The tests of GitLab Self-Managed need a GitLab instance that SonarQube
+  # Cloud reaches at a public HTTPS address. This job starts GitLab CE in
+  # Docker behind an ngrok tunnel, which the sonar-* runners cannot do, so it
+  # runs on a Warp runner. It runs after the other job, because the sweeper of
+  # that job deletes the organizations of the tests, and the two jobs share
+  # the staging instance.
+  gitlab-self-managed:
+    runs-on: warp-custom-ubuntu-24-04
+    name: Acceptance tests of GitLab Self-Managed
+    needs: acceptance-tests
+    if: ${{ !cancelled() }}
+    # The first start of GitLab takes some minutes.
+    timeout-minutes: 45
+    permissions:
+      id-token: write
+      contents: read
+    env:
+      SONARQUBE_URL: https://${{ vars.SONARQUBE_STAGING_HOST }}
+      SONARQUBE_TEST_ALLOWED_HOSTS: ${{ vars.SONARQUBE_STAGING_HOST }}
+      # The key of the staging enterprise is not secret, but this public
+      # repository holds no real identifiers.
+      SONARQUBE_TEST_ENTERPRISE_KEY: ${{ vars.SONARQUBE_TEST_ENTERPRISE_KEY }}
+    steps:
+      - name: Check the repository settings
+        env:
+          STAGING_HOST: ${{ vars.SONARQUBE_STAGING_HOST }}
+          NGROK_AUTHTOKEN: ${{ secrets.NGROK_AUTHTOKEN }}
+        run: |
+          missing=()
+          [[ -n "${STAGING_HOST}" ]] || missing+=("variable SONARQUBE_STAGING_HOST")
+          [[ -n "${SONARQUBE_TEST_ENTERPRISE_KEY}" ]] || missing+=("variable SONARQUBE_TEST_ENTERPRISE_KEY")
+          [[ -n "${NGROK_AUTHTOKEN}" ]] || missing+=("secret NGROK_AUTHTOKEN")
+          if (( ${#missing[@]} > 0 )); then
+            echo "These repository settings are not set: ${missing[*]}."
+            exit 1
+          fi
+
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Go
+        uses: ./.github/actions/setup-go
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        with:
+          terraform_wrapper: false
+
+      # The Docker Hub login avoids the limit of anonymous pulls. The GitLab
+      # image is large.
+      - name: Fetch the Vault secrets
+        id: secrets
+        uses: SonarSource/vault-action-wrapper@v3
+        with:
+          secrets: |
+            development/team/sonarcloud/kv/data/terraform-provider-acc-dopex token | SONARQUBE_TOKEN;
+            development/kv/data/docker/sonardocker login | DOCKER_USERNAME;
+            development/kv/data/docker/sonardocker access_token_ro | DOCKER_PASSWORD;
+
+      - name: Log in to Docker Hub
+        env:
+          DOCKER_USERNAME: ${{ fromJSON(steps.secrets.outputs.vault).DOCKER_USERNAME }}
+          DOCKER_PASSWORD: ${{ fromJSON(steps.secrets.outputs.vault).DOCKER_PASSWORD }}
+        run: printf '%s' "${DOCKER_PASSWORD}" | docker login --username "${DOCKER_USERNAME}" --password-stdin
+
+      - name: Start GitLab Self-Managed
+        env:
+          NGROK_AUTHTOKEN: ${{ secrets.NGROK_AUTHTOKEN }}
+        run: make gitlab-start
+
+      - name: Run the acceptance tests of GitLab Self-Managed against SonarQube Cloud staging
+        env:
+          SONARQUBE_TOKEN: ${{ fromJSON(steps.secrets.outputs.vault).SONARQUBE_TOKEN }}
+        run: make testacc-gitlab
+
+      - name: Stop GitLab Self-Managed
+        if: always()
+        run: make gitlab-stop
+
   notify_failure:
     name: Notify Failure
-    needs: acceptance-tests
+    needs: [acceptance-tests, gitlab-self-managed]
     # A manual run on a branch reports to whoever started it. Only a run on the
     # default branch alerts the squad. A nightly run is on the default branch,
     # so its failure alerts the squad too.
