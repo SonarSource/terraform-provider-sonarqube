@@ -247,15 +247,17 @@ func (p qualityProfileRules) changeOutside(rule string, params map[string]string
 // reads the rule only once.
 func (p qualityProfileRules) waitForSteadyRule(key, rule string, ok func(*client.ActiveRule) bool) {
 	p.t.Helper()
+	var last *client.ActiveRule
 	err := acctest.WaitForSteady(func() (bool, error) {
 		active, err := acctest.Client().GetActiveRule(p.t.Context(), key, rule)
 		if errors.Is(err, client.ErrNotFound) {
 			return false, nil
 		}
+		last = active
 		return err == nil && ok(active), err
 	}, 10)
 	if err != nil {
-		p.t.Fatal(err)
+		p.t.Fatalf("%v: the rule %s is %+v", err, rule, last)
 	}
 }
 
