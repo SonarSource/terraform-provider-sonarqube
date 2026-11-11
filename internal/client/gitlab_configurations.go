@@ -11,21 +11,16 @@ import (
 const gitlabConfigurationsPath = "/gitlab-configurations"
 
 // GitLabConfiguration names the GitLab Self-Managed instance of an
-// organization. A binding to GitLab Self-Managed needs one, and it reaches
-// GitLab only through it. An organization has at most one.
+// organization. A binding to GitLab Self-Managed needs one.
 type GitLabConfiguration struct {
 	ID string `json:"id"`
-	// OrganizationID is the organization in the form of a UUID. This API does
-	// not accept the internal identifier that the bindings API takes.
+	// OrganizationID is the UUID of the organization.
 	OrganizationID string `json:"organizationId"`
 	APIURL         string `json:"apiUrl"`
 	WebURL         string `json:"webUrl"`
 }
 
 // GitLabConfigurationRequest is the body of the create call.
-//
-// The server uses the token and the group only to check that it can reach the
-// group. It does not store them. The binding holds the token.
 type GitLabConfigurationRequest struct {
 	OrganizationID      string `json:"organizationId"`
 	APIURL              string `json:"apiUrl"`
@@ -34,23 +29,16 @@ type GitLabConfigurationRequest struct {
 	Group               string `json:"group"`
 }
 
-// GitLabConfigurationPatch is the body of the change call. A field that
-// holds nothing stays out of the request, and the server keeps its value.
+// GitLabConfigurationPatch is the body of the change call. An empty field
+// stays out of the request.
 type GitLabConfigurationPatch struct {
 	APIURL              string `json:"apiUrl,omitempty"`
 	WebURL              string `json:"webUrl,omitempty"`
 	PersonalAccessToken string `json:"personalAccessToken,omitempty"`
 }
 
-// CreateGitLabConfiguration stores the instance of an organization. The
-// server checks the connection to the group with the token first.
-//
-// A refusal is a 400 that names the field at fault in RelatedField: an
-// address that is not public, an instance that the server cannot reach, or a
-// token that GitLab refuses.
-//
-// The server refuses an organization without an Enterprise plan with a 403,
-// and an organization that already has a configuration with a 409.
+// CreateGitLabConfiguration stores the instance of an organization. A refusal
+// of a field names it in RelatedField.
 func (c *Client) CreateGitLabConfiguration(ctx context.Context, req GitLabConfigurationRequest) (*GitLabConfiguration, error) {
 	var out GitLabConfiguration
 	if err := c.apiPost(ctx, gitlabConfigurationsPath, req, &out); err != nil {
@@ -59,8 +47,8 @@ func (c *Client) CreateGitLabConfiguration(ctx context.Context, req GitLabConfig
 	return &out, nil
 }
 
-// FindGitLabConfiguration returns the configuration of one organization,
-// which is named by its UUID. An organization without one gives ErrNotFound.
+// FindGitLabConfiguration returns the configuration of an organization, named
+// by its UUID. An organization without one gives ErrNotFound.
 func (c *Client) FindGitLabConfiguration(ctx context.Context, organizationUUID string) (*GitLabConfiguration, error) {
 	params := url.Values{}
 	params.Set("organizationId", organizationUUID)
@@ -82,10 +70,8 @@ func (c *Client) FindGitLabConfiguration(ctx context.Context, organizationUUID s
 	}
 }
 
-// UpdateGitLabConfiguration changes the addresses of the instance. The server
-// checks the connection again with the token of the request.
-//
-// The endpoint accepts a JSON merge patch only. Plain JSON gives a 415.
+// UpdateGitLabConfiguration changes the addresses of a configuration. It takes
+// a JSON merge patch.
 func (c *Client) UpdateGitLabConfiguration(ctx context.Context, id string, req GitLabConfigurationPatch) (*GitLabConfiguration, error) {
 	var out GitLabConfiguration
 	if err := c.apiMergePatch(ctx, gitlabConfigurationsPath+"/"+url.PathEscape(id), req, &out); err != nil {

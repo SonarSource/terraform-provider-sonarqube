@@ -38,18 +38,14 @@ type OrganizationBinding struct {
 	// variant or FlavorGitLabSelfManaged.
 	DopFlavor string `json:"dopFlavor,omitempty"`
 	// DevOpsPlatformOrganizationID is the numeric identifier of the GitLab
-	// group. The bind call takes the path of the group in the same field,
-	// and a read reports the number.
+	// group. The bind call takes the path of the group in this field.
 	DevOpsPlatformOrganizationID string `json:"devOpsPlatformOrganizationId,omitempty"`
 	// TenantID is the web address of the GitLab Self-Managed instance.
 	TenantID string `json:"tenantId,omitempty"`
 }
 
 // CreateGitLabSelfManagedBindingRequest is the body of a bind call to GitLab
-// Self-Managed. The organization must have a GitLabConfiguration first: the
-// server reaches the instance through it.
-//
-// The server stores the token in the binding, and no read returns it.
+// Self-Managed. The organization must have a GitLabConfiguration first.
 type CreateGitLabSelfManagedBindingRequest struct {
 	OrganizationID string `json:"organizationId"`
 	DevOpsPlatform string `json:"devOpsPlatform"`
@@ -60,11 +56,9 @@ type CreateGitLabSelfManagedBindingRequest struct {
 }
 
 // PatchGitLabSelfManagedBindingRequest is the body of a change call to a
-// binding to GitLab Self-Managed. A field that holds nothing stays out.
-//
-// The server checks a new token against GitLab. TenantID, the web address of
-// a new instance, must come with DevOpsPlatformURL, the address of the group
-// on that instance.
+// binding to GitLab Self-Managed. An empty field stays out. TenantID, the web
+// address of a new instance, goes with DevOpsPlatformURL, the address of the
+// group on it.
 type PatchGitLabSelfManagedBindingRequest struct {
 	AccessToken       string `json:"accessToken,omitempty"`
 	TenantID          string `json:"tenantId,omitempty"`

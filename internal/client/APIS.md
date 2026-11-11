@@ -169,15 +169,6 @@ in lower case. The webapp reads the plan in the same way.
 There is no delete. A binding goes away only when its organization is
 deleted, which removes the records that these endpoints write.
 
-A binding to GitLab Self-Managed sends `devOpsPlatform` `gitlab`, `dopFlavor`
-`GITLAB_SELF_MANAGED`, `accessToken`, and the path of the group in
-`devOpsPlatformOrganizationId`. A read reports the numeric identifier of the
-group in that field, and the web address of the instance in `tenantId`. No
-read returns the token. The change call for GitLab takes a JSON merge patch.
-The organization must have a GitLab configuration first. These calls were
-made against a development instance on 2026-11-10, with a GitLab CE instance
-behind an ngrok tunnel.
-
 A search for an organization that is not bound answers 404 with an empty
 body, not 200 with an empty collection.
 
@@ -193,22 +184,7 @@ application installation that is bound to no organization.
 | `FindGitLabConfiguration` | `GET {api_url}/gitlab-configurations?organizationId=` | Web API v2 | Public | No (403) |
 | `UpdateGitLabConfiguration` | `PATCH {api_url}/gitlab-configurations/{id}` | Web API v2 | Public | No (403) |
 
-The OpenAPI definition of the service marks these operations public. The
-public API docs site did not answer when this table was written (November
-2026), so the table links no docs page. A scoped organization token with
-`admin`, `scan` and `provisioning` gets 403 on each call ("User is not a
-member of organization" for the search, "User does not have organization
-admin role" for the create and the change), while a user token gets past the
-check. These calls were made against a development instance on 2026-11-11.
-
-A configuration names the GitLab Self-Managed instance of an organization,
-and an organization has at most one. It takes the UUID of the organization,
-not the internal identifier that the bindings take. The server checks the
-connection to GitLab with `personalAccessToken` and `group`, and stores
-neither. A create for an organization without the Enterprise plan answers
-403, and a second create answers 409. A refusal of a field answers 400 with
-`relatedField`. The change call takes a JSON merge patch only, and plain JSON
-gets 415.
+An organization has at most one configuration.
 
 ## DevOps platform applications (`dop_applications.go`)
 
