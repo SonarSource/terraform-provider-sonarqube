@@ -96,39 +96,61 @@ func boolIfSet(v types.Bool) *bool {
 	return &b
 }
 
-// immutableInstallationIDPlanModifier refuses a changed installation, and
-// says why.
+// immutableWithinOrganization refuses a change of an attribute that the API
+// cannot change after a binding exists, and says why.
 //
-// The API changes an installation for a binding to GitHub Enterprise only.
 // A replacement does not help. A binding cannot be deleted, so the
-// organization stays bound and the server refuses the new binding.
+// organization stays bound and the server refuses the new binding. The
+// modifier therefore stops the plan: a failure during the plan is better than
+// a failure during the apply.
 //
-// This modifier therefore stops the plan. A failure during the plan is
-// better than a failure during the apply.
-type immutableInstallationIDPlanModifier struct{}
-
-func (m immutableInstallationIDPlanModifier) Description(_ context.Context) string {
-	return "The installation cannot change after the binding exists."
+// A different organization is a different binding, and organization_key asks
+// for a replacement. The new organization is bound to nothing, so the server
+// accepts its binding. Only a change below the same organization is refused.
+type immutableWithinOrganization struct {
+	// description is what the modifier tells the documentation.
+	description string
+	// same reports whether two values are the same for the server.
+	same func(prior, planned string) bool
+	// summary and detail are the error. detail takes the two values.
+	summary string
+	detail  func(prior, planned string) string
 }
 
-func (m immutableInstallationIDPlanModifier) MarkdownDescription(ctx context.Context) string {
+// immutableInstallationID guards the installation of a binding to GitHub. The
+// API changes an installation for a binding to GitHub Enterprise only.
+var immutableInstallationID = immutableWithinOrganization{
+	description: "The installation cannot change after the binding exists.",
+	same:        func(prior, planned string) bool { return prior == planned },
+	summary:     "The installation of a binding cannot change",
+	detail: func(prior, planned string) string {
+		return "The binding uses the installation " + prior + ", and the configuration asks for " +
+			planned + ".\n\n" +
+			"The API changes an installation for a binding to GitHub Enterprise only.\n\n" +
+			"To replace the resource does not help. A binding cannot be deleted, so the " +
+			"organization stays bound and the server refuses the new binding.\n\n" +
+			"To move an organization to a different installation, delete the organization and " +
+			"make it again."
+	},
+}
+
+func (m immutableWithinOrganization) Description(_ context.Context) string {
+	return m.description
+}
+
+func (m immutableWithinOrganization) MarkdownDescription(ctx context.Context) string {
 	return m.Description(ctx)
 }
 
-func (m immutableInstallationIDPlanModifier) PlanModifyString(ctx context.Context, req planmodifier.StringRequest, resp *planmodifier.StringResponse) {
+func (m immutableWithinOrganization) PlanModifyString(ctx context.Context, req planmodifier.StringRequest, resp *planmodifier.StringResponse) {
 	// A create has no prior state, and a destroy has no plan.
 	if req.StateValue.IsNull() || req.PlanValue.IsNull() || req.PlanValue.IsUnknown() {
 		return
 	}
-	if req.StateValue.Equal(req.PlanValue) {
+	if m.same(req.StateValue.ValueString(), req.PlanValue.ValueString()) {
 		return
 	}
 
-	// A different organization is a different binding, and organization_key
-	// asks for a replacement. The new organization is bound to nothing, so
-	// its own installation is not a change of this installation, and the
-	// server accepts the new bind. Only an installation that changes below
-	// the same organization is refused.
 	var plannedKey, priorKey types.String
 	resp.Diagnostics.Append(req.Plan.GetAttribute(ctx, path.Root("organization_key"), &plannedKey)...)
 	resp.Diagnostics.Append(req.State.GetAttribute(ctx, path.Root("organization_key"), &priorKey)...)
@@ -136,15 +158,6 @@ func (m immutableInstallationIDPlanModifier) PlanModifyString(ctx context.Contex
 		return
 	}
 
-	resp.Diagnostics.AddAttributeError(
-		req.Path,
-		"The installation of a binding cannot change",
-		"The binding uses the installation "+req.StateValue.ValueString()+
-			", and the configuration asks for "+req.PlanValue.ValueString()+".\n\n"+
-			"The API changes an installation for a binding to GitHub Enterprise only.\n\n"+
-			"To replace the resource does not help. A binding cannot be deleted, so the "+
-			"organization stays bound and the server refuses the new binding.\n\n"+
-			"To move an organization to a different installation, delete the organization and "+
-			"make it again.",
-	)
+	resp.Diagnostics.AddAttributeError(req.Path, m.summary,
+		m.detail(req.StateValue.ValueString(), req.PlanValue.ValueString()))
 }

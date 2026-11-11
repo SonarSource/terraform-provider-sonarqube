@@ -95,7 +95,7 @@ func TestImmutableInstallationIDPlanModifier(t *testing.T) {
 	})}
 
 	changed := &planmodifier.StringResponse{}
-	immutableInstallationIDPlanModifier{}.PlanModifyString(ctx, planmodifier.StringRequest{
+	immutableInstallationID.PlanModifyString(ctx, planmodifier.StringRequest{
 		Path:       path.Root("installation_id"),
 		Plan:       plan,
 		State:      state,
@@ -108,7 +108,7 @@ func TestImmutableInstallationIDPlanModifier(t *testing.T) {
 	}
 
 	unchanged := &planmodifier.StringResponse{}
-	immutableInstallationIDPlanModifier{}.PlanModifyString(ctx, planmodifier.StringRequest{
+	immutableInstallationID.PlanModifyString(ctx, planmodifier.StringRequest{
 		Path:       path.Root("installation_id"),
 		Plan:       plan,
 		State:      state,
@@ -124,7 +124,7 @@ func TestImmutableInstallationIDPlanModifier(t *testing.T) {
 	// for a replacement, the new organization is bound to nothing, and its
 	// own installation is therefore not a change of this installation.
 	moved := &planmodifier.StringResponse{}
-	immutableInstallationIDPlanModifier{}.PlanModifyString(ctx, planmodifier.StringRequest{
+	immutableInstallationID.PlanModifyString(ctx, planmodifier.StringRequest{
 		Path: path.Root("installation_id"),
 		Plan: tfsdk.Plan{Schema: s, Raw: bindingValue(t, s, map[string]any{
 			"organization_key": "new-org", "installation_id": "222",
@@ -142,7 +142,7 @@ func TestImmutableInstallationIDPlanModifier(t *testing.T) {
 
 	// A create has no prior state, and that is not a change.
 	created := &planmodifier.StringResponse{}
-	immutableInstallationIDPlanModifier{}.PlanModifyString(ctx, planmodifier.StringRequest{
+	immutableInstallationID.PlanModifyString(ctx, planmodifier.StringRequest{
 		Path:       path.Root("installation_id"),
 		Plan:       plan,
 		State:      state,

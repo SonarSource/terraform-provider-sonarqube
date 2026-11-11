@@ -163,6 +163,8 @@ in lower case. The webapp reads the plan in the same way.
 | `GetOrganizationBinding` | `GET {api_url}/dop-translation/organization-bindings/{id}` | Web API v2 | Internal | No (400 `AuthenticationType.SOT`) |
 | `FindOrganizationBinding` | `GET {api_url}/dop-translation/organization-bindings?organizationId=` | Web API v2 | Internal | No (400 `AuthenticationType.SOT`) |
 | `UpdateOrganizationBinding` | `PATCH {api_url}/dop-translation/organization-bindings/{id}` | Web API v2 | Internal | No (400 `AuthenticationType.SOT`) |
+| `CreateGitLabSelfManagedBinding` | `POST {api_url}/dop-translation/organization-bindings` | Web API v2 | Internal | No (400 `AuthenticationType.SOT`) |
+| `UpdateGitLabSelfManagedBinding` | `PATCH {api_url}/dop-translation/organization-bindings/{id}` | Web API v2 | Internal | No (400 `AuthenticationType.SOT`) |
 
 There is no delete. A binding goes away only when its organization is
 deleted, which removes the records that these endpoints write.
@@ -173,6 +175,16 @@ body, not 200 with an empty collection.
 Every endpoint of these two domains was read against a development instance on
 2026-09-24. A bind that succeeds was not tested: it needs a GitHub
 application installation that is bound to no organization.
+
+## GitLab configurations (`gitlab_configurations.go`)
+
+| Function | Endpoint | Surface | Public or internal | SOT |
+| --- | --- | --- | --- | --- |
+| `CreateGitLabConfiguration` | `POST {api_url}/gitlab-configurations` | Web API v2 | Public | No (403) |
+| `FindGitLabConfiguration` | `GET {api_url}/gitlab-configurations?organizationId=` | Web API v2 | Public | No (403) |
+| `UpdateGitLabConfiguration` | `PATCH {api_url}/gitlab-configurations/{id}` | Web API v2 | Public | No (403) |
+
+An organization has at most one configuration.
 
 ## DevOps platform applications (`dop_applications.go`)
 
