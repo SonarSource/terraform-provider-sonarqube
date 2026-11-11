@@ -141,6 +141,7 @@ func TestGitLabBindingResourceCreateReportsAFailedBindThatWasStored(t *testing.T
 	if !resp.Diagnostics.HasError() {
 		t.Fatal("a failed bind was reported as a success")
 	}
+	providertest.AssertDiagnosticsContain(t, resp.Diagnostics, "terraform import <address> my-org")
 	if len(instance.configurations) != 1 || len(instance.bindings) != 1 {
 		t.Errorf("got %d configurations and %d bindings, want 1 of each",
 			len(instance.configurations), len(instance.bindings))
@@ -355,8 +356,11 @@ func TestGitLabBindingResourceUpdateStoresAMissingConfiguration(t *testing.T) {
 	if len(instance.configurations) != 1 {
 		t.Errorf("got %d configurations, want 1", len(instance.configurations))
 	}
-	if got := instance.bindings[theBindingID].TenantID; got != theGitLabServer {
-		t.Errorf("the binding uses tenant %q, want %q", got, theGitLabServer)
+	// The state has no server_url, so the update sends the planned instance
+	// and lets the server check it.
+	patch := instance.bodies["PATCH "+bindingPath]
+	if patch["tenantId"] != theGitLabServer || patch["devOpsPlatformUrl"] != theGitLabServer+"/groups/my-group" {
+		t.Errorf("the binding patch = %v, want the planned tenant and group address", patch)
 	}
 }
 

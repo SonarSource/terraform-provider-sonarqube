@@ -223,10 +223,10 @@ func (r *organizationGitLabSelfManagedBindingResource) Create(ctx context.Contex
 		Group:          plan.Group.ValueString(),
 	})
 	if err != nil {
-		// The configuration stays. The next create takes it over, and a
-		// binding that the server stored although the call failed can be
-		// imported.
-		addGitLabError(&resp.Diagnostics, "Cannot bind the organization "+organizationKey, err)
+		// The configuration stays, and the next create takes it over.
+		addGitLabError(&resp.Diagnostics, "Cannot bind the organization "+organizationKey,
+			fmt.Errorf("%w\n\nIf the organization is already bound, for example after an earlier "+
+				"bind that failed, import the binding: terraform import <address> %s", err, organizationKey))
 		return
 	}
 
