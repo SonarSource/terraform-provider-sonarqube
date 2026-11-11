@@ -132,4 +132,7 @@ SONARQUBE_TEST_GITLAB_GROUP=${group}
 SONARQUBE_TEST_GITLAB_TOKEN=${first_token}
 SONARQUBE_TEST_GITLAB_SECOND_TOKEN=${second_token}
 EOF
-echo "GitLab is ready at ${url}. The test variables are in ${env_file}."
+# The image is the latest release, so a run says which one it used.
+version=$(curl --silent --max-time 10 --header "PRIVATE-TOKEN: ${first_token}" \
+  "${url}/api/v4/version" | jq -r '.version // "unknown"' 2>/dev/null || echo unknown)
+echo "GitLab ${version} is ready at ${url}. The test variables are in ${env_file}."
