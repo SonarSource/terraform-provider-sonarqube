@@ -28,7 +28,7 @@ network=tf-acc-gitlab
 gitlab=tf-acc-gitlab
 ngrok=tf-acc-gitlab-ngrok
 group=tf-acc-test-group
-gitlab_image=gitlab/gitlab-ce:19.3.1-ce.0
+gitlab_image=gitlab/gitlab-ce:latest
 ngrok_image=ngrok/ngrok:3-alpine
 local_port=8929
 
@@ -64,7 +64,9 @@ echo "Tunnel: ${url}"
 # The configuration goes in an environment variable, so that nothing is
 # mounted. Docker Desktop and Rancher Desktop do not share every host
 # directory with their virtual machine.
-docker run --detach --name "${gitlab}" --hostname gitlab --network "${network}" \
+# The image is the latest release. Docker does not pull a tag again when a copy
+# exists, so --pull always keeps a local copy from going stale.
+docker run --detach --pull always --name "${gitlab}" --hostname gitlab --network "${network}" \
   --shm-size 256m --publish "127.0.0.1:${local_port}:80" \
   --env GITLAB_OMNIBUS_CONFIG="external_url '${url}'
 letsencrypt['enable'] = false
