@@ -14,8 +14,7 @@ import (
 )
 
 // This file holds the parts of sonarqube_quality_profile_rule for
-// active = false. internal/client/APIS.md tells how the server deactivates
-// and activates again an inherited rule.
+// active = false.
 
 // ValidateConfig refuses values for a rule that the profile deactivates. An
 // unknown value can still become null, so only known values are refused.
