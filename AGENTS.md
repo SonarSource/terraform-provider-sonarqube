@@ -214,8 +214,9 @@ adds, removes, or changes an endpoint — including adding a new domain for a
 new resource or data source — update `APIS.md` in the same change.
 
 Keep the notes below a table short: at most one line that the code needs.
-Do not describe how the server behaves, such as status codes, error texts or
-what it stores. Put probe results in the ticket, not in the repository.
+Do not describe in detail how the server behaves. A status code or an error
+text that the client branches on goes in a comment next to that code. Put
+probe results in the ticket, not in the repository.
 
 The `SOT` column tells if the endpoint accepts a scoped organization token.
 `APIS.md` explains the values. Fill it in from a call on a development
