@@ -189,15 +189,17 @@ application installation that is bound to no organization.
 
 | Function | Endpoint | Surface | Public or internal | SOT |
 | --- | --- | --- | --- | --- |
-| `CreateGitLabConfiguration` | `POST {api_url}/gitlab-configurations` | Web API v2 | Public | Not checked |
-| `FindGitLabConfiguration` | `GET {api_url}/gitlab-configurations?organizationId=` | Web API v2 | Public | Not checked |
-| `UpdateGitLabConfiguration` | `PATCH {api_url}/gitlab-configurations/{id}` | Web API v2 | Public | Not checked |
+| `CreateGitLabConfiguration` | `POST {api_url}/gitlab-configurations` | Web API v2 | Public | No (403) |
+| `FindGitLabConfiguration` | `GET {api_url}/gitlab-configurations?organizationId=` | Web API v2 | Public | No (403) |
+| `UpdateGitLabConfiguration` | `PATCH {api_url}/gitlab-configurations/{id}` | Web API v2 | Public | No (403) |
 
 The OpenAPI definition of the service marks these operations public. The
 public API docs site did not answer when this table was written (November
-2026), so the table links no docs page. The SOT column is not checked,
-because the binding that needs the configuration refuses a scoped
-organization token anyway.
+2026), so the table links no docs page. A scoped organization token with
+`admin`, `scan` and `provisioning` gets 403 on each call ("User is not a
+member of organization" for the search, "User does not have organization
+admin role" for the create and the change), while a user token gets past the
+check. These calls were made against a development instance on 2026-11-11.
 
 A configuration names the GitLab Self-Managed instance of an organization,
 and an organization has at most one. It takes the UUID of the organization,
