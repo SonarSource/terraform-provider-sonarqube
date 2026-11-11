@@ -109,64 +109,41 @@ func TestGitLabBindingResourceCreateKeepsTheConfigurationAfterARefusedBind(t *te
 	}
 }
 
-// A bind refused because the organization is already bound to the planned
-// group takes that binding over, for example after a bind that timed out
-// but was stored. The planned token goes to the binding.
-func TestGitLabBindingResourceCreateTakesOverABindingOfTheGroup(t *testing.T) {
+// A bind refused because the organization is already bound reports the
+// error of the server. The provider does not touch the binding that exists:
+// the user imports it.
+func TestGitLabBindingResourceCreateLeavesAnExistingBinding(t *testing.T) {
 	t.Parallel()
 
 	instance := newFakeGitLabInstance()
 	instance.bound()
-	instance.refuseBind = true
-	resp := createGitLabBinding(t, instance)
-
-	if resp.Diagnostics.HasError() {
-		t.Fatalf("unexpected diagnostics: %v", resp.Diagnostics)
-	}
-	if got := instance.bodies["PATCH "+bindingPath]["accessToken"]; got != "test-token" {
-		t.Errorf("the binding got accessToken %v, want the planned token", got)
-	}
-}
-
-// A binding to another group is not taken over.
-func TestGitLabBindingResourceCreateRefusesABindingOfAnotherGroup(t *testing.T) {
-	t.Parallel()
-
-	instance := newFakeGitLabInstance()
-	instance.bound()
-	instance.bindings[theBindingID].DevOpsPlatformURL = theGitLabServer + "/groups/other-group"
 	instance.refuseBind = true
 	resp := createGitLabBinding(t, instance)
 
 	if !resp.Diagnostics.HasError() {
-		t.Fatal("a binding of another group was taken over")
+		t.Fatal("a refused bind was accepted")
 	}
 	if _, patched := instance.bodies["PATCH "+bindingPath]; patched {
-		t.Error("the binding of another group got the token")
+		t.Error("the existing binding got the token")
 	}
 }
 
-// A bind that fails after the server stored the binding keeps the
-// configuration, because the binding cannot reach GitLab without it, and the
-// create goes on with the stored binding.
-func TestGitLabBindingResourceCreateKeepsAStoredBinding(t *testing.T) {
+// A bind that fails after the server stored the binding reports the error and
+// keeps the configuration, which the binding needs. The user imports the
+// binding.
+func TestGitLabBindingResourceCreateReportsAFailedBindThatWasStored(t *testing.T) {
 	t.Parallel()
 
 	instance := newFakeGitLabInstance()
 	instance.failBindAfterStore = true
 	resp := createGitLabBinding(t, instance)
 
-	if resp.Diagnostics.HasError() {
-		t.Fatalf("unexpected diagnostics: %v", resp.Diagnostics)
+	if !resp.Diagnostics.HasError() {
+		t.Fatal("a failed bind was reported as a success")
 	}
-	if len(instance.configurations) != 1 {
-		t.Errorf("got %d configurations, want 1", len(instance.configurations))
-	}
-	if got := providertest.ReadModel[organizationGitLabSelfManagedBindingModel](t, resp.State).ID.ValueString(); got != theBindingID {
-		t.Errorf("id = %q, want %q", got, theBindingID)
-	}
-	if got := instance.bodies["PATCH "+bindingPath]["accessToken"]; got != "test-token" {
-		t.Errorf("the stored binding got accessToken %v, want the planned token", got)
+	if len(instance.configurations) != 1 || len(instance.bindings) != 1 {
+		t.Errorf("got %d configurations and %d bindings, want 1 of each",
+			len(instance.configurations), len(instance.bindings))
 	}
 }
 
@@ -378,8 +355,8 @@ func TestGitLabBindingResourceUpdateStoresAMissingConfiguration(t *testing.T) {
 	if len(instance.configurations) != 1 {
 		t.Errorf("got %d configurations, want 1", len(instance.configurations))
 	}
-	if _, patched := instance.bodies["PATCH /dop-translation/organization-bindings/"+theBindingID]; patched {
-		t.Error("the binding moved, although only the configuration was missing")
+	if got := instance.bindings[theBindingID].TenantID; got != theGitLabServer {
+		t.Errorf("the binding uses tenant %q, want %q", got, theGitLabServer)
 	}
 }
 
@@ -611,28 +588,6 @@ func TestGitLabBindingResourceReadReportsAFailure(t *testing.T) {
 		if !resp.Diagnostics.HasError() {
 			t.Errorf("a failed %s was not reported", call)
 		}
-	}
-}
-
-// A binding of the planned group on another instance is a different binding,
-// and the create does not take it over.
-func TestGitLabBindingResourceCreateRefusesABindingOnAnotherInstance(t *testing.T) {
-	t.Parallel()
-
-	const other = "https://other.example.com"
-	instance := newFakeGitLabInstance()
-	instance.bound()
-	delete(instance.configurations, theConfigurationID)
-	instance.bindings[theBindingID].TenantID = other
-	instance.bindings[theBindingID].DevOpsPlatformURL = other + "/groups/my-group"
-	instance.refuseBind = true
-	resp := createGitLabBinding(t, instance)
-
-	if !resp.Diagnostics.HasError() {
-		t.Fatal("a binding on another instance was taken over")
-	}
-	if _, patched := instance.bodies["PATCH "+bindingPath]; patched {
-		t.Error("the binding on another instance got the token")
 	}
 }
 

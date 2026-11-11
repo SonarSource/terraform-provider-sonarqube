@@ -223,13 +223,11 @@ func (r *organizationGitLabSelfManagedBindingResource) Create(ctx context.Contex
 		Group:          plan.Group.ValueString(),
 	})
 	if err != nil {
-		// A configuration that stays without a binding does no harm: the
-		// next create takes it over.
-		binding = r.takeOverBinding(ctx, org, plan, &resp.Diagnostics)
-		if binding == nil {
-			addGitLabError(&resp.Diagnostics, "Cannot bind the organization "+organizationKey, err)
-			return
-		}
+		// The configuration stays. The next create takes it over, and a
+		// binding that the server stored although the call failed can be
+		// imported.
+		addGitLabError(&resp.Diagnostics, "Cannot bind the organization "+organizationKey, err)
+		return
 	}
 
 	// The binding exists from here on, and nothing can delete it. Record it
@@ -252,38 +250,6 @@ func (r *organizationGitLabSelfManagedBindingResource) Create(ctx context.Contex
 		return
 	}
 	resp.Diagnostics.Append(resp.State.Set(ctx, gitlabStateFromAPI(plan, configuration, stored))...)
-}
-
-// takeOverBinding returns a binding of the organization to the planned group
-// on the planned instance that already exists, or nil. A binding to another
-// instance is a different binding, and a move is an update that the user
-// plans, not part of a create.
-//
-// A bind can fail after the server stored the binding, for example with a
-// timeout, and the next apply then gets "already bound". A binding that was
-// made outside Terraform gives the same answer. The planned token goes to the
-// binding that is taken over, so the token in the state is the one that the
-// binding uses, and the server checks it.
-func (r *organizationGitLabSelfManagedBindingResource) takeOverBinding(
-	ctx context.Context,
-	org *client.Organization,
-	plan organizationGitLabSelfManagedBindingModel,
-	diagnostics *diag.Diagnostics,
-) *client.OrganizationBinding {
-	existing, err := r.client.FindOrganizationBinding(ctx, org.ID)
-	if err != nil || existing.DopFlavor != client.FlavorGitLabSelfManaged ||
-		existing.TenantID != plan.ServerURL.ValueString() ||
-		!strings.EqualFold(groupFromBinding(types.StringNull(), existing).ValueString(), plan.Group.ValueString()) {
-		return nil
-	}
-
-	binding, err := r.client.UpdateGitLabSelfManagedBinding(ctx, existing.ID,
-		client.PatchGitLabSelfManagedBindingRequest{AccessToken: plan.AccessToken.ValueString()})
-	if err != nil {
-		addGitLabError(diagnostics, "Cannot give the token to the existing binding "+existing.ID, err)
-		return nil
-	}
-	return binding
 }
 
 // syncConfiguration makes the GitLab configuration of the organization match
@@ -422,7 +388,7 @@ func (r *organizationGitLabSelfManagedBindingResource) Update(ctx context.Contex
 	if !plan.AccessToken.Equal(state.AccessToken) {
 		patch.AccessToken = plan.AccessToken.ValueString()
 	}
-	if plan.ServerURL.ValueString() != binding.TenantID {
+	if !plan.ServerURL.Equal(state.ServerURL) {
 		patch.TenantID = plan.ServerURL.ValueString()
 		patch.DevOpsPlatformURL = plan.ServerURL.ValueString() + "/groups/" + state.Group.ValueString()
 	}
