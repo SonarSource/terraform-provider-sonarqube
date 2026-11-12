@@ -5,14 +5,12 @@ import (
 	"errors"
 	"strings"
 
-	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
-	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 
 	"github.com/SonarSource/terraform-provider-sonarqube/internal/client"
 	"github.com/SonarSource/terraform-provider-sonarqube/internal/provider/configure"
@@ -45,9 +43,11 @@ func (r *projectBindingResource) Schema(_ context.Context, _ resource.SchemaRequ
 	// it stays, it keeps the repository, and the server refuses the new bind.
 	replace := []planmodifier.String{stringplanmodifier.RequiresReplace()}
 	resp.Schema = schema.Schema{
-		Description: "Binds a SonarQube Cloud project to a GitHub repository. The organization " +
-			"of the project must be bound to GitHub, and the GitHub application installation of " +
-			"the organization must be able to see the repository.\n\n" +
+		Description: "Binds a SonarQube Cloud project to a repository on the DevOps platform " +
+			"that its organization is bound to: GitHub or GitLab Self-Managed. On GitHub, the " +
+			"GitHub application installation of the organization must be able to see the " +
+			"repository. On GitLab, the token of the organization binding must be able to read " +
+			"it.\n\n" +
 			"A project that is already bound to the same repository is adopted, not bound " +
 			"again. A project that is bound to a different repository gives an error: import " +
 			"that binding instead.\n\n" +
@@ -89,18 +89,16 @@ func (r *projectBindingResource) Schema(_ context.Context, _ resource.SchemaRequ
 			},
 			"repository": schema.StringAttribute{
 				Required: true,
-				Description: "GitHub repository to bind, as `owner/name`. The comparison ignores " +
-					"case. A change binds the project to the new repository.\n\n" +
-					"A rename of the repository on GitHub does not change the binding, and the plan " +
-					"reports no difference. The provider tells repositories apart by `repository_id`.",
-				Validators: []validator.String{
-					stringvalidator.RegexMatches(gitHubRepositoryPattern,
-						"must be a GitHub repository in the form owner/name"),
-				},
+				Description: "Repository to bind, as its full path: `owner/name` on GitHub, and " +
+					"`group/name` or `group/subgroup/name` on GitLab. The comparison ignores case. " +
+					"A change binds the project to the new repository.\n\n" +
+					"A rename or a move of the repository on the DevOps platform does not change " +
+					"the binding, and the plan reports no difference. The provider tells " +
+					"repositories apart by `repository_id`.",
 			},
 			"repository_id": schema.StringAttribute{
 				Computed:      true,
-				Description:   "Identifier that GitHub gives the repository.",
+				Description:   "Identifier that the DevOps platform gives the repository.",
 				PlanModifiers: []planmodifier.String{repositoryIDPlanModifier{}},
 			},
 		},
@@ -200,8 +198,9 @@ const (
 // no change to the project attributes of this resource, so the state can name
 // a binding that is gone. The project is then bound again.
 //
-// A binding to the same repository is kept as it is. GitHub ignores the case
-// of a slug, so a slug that differs in case only is the same repository.
+// A binding to the same repository is kept as it is. The DevOps platforms
+// ignore the case of a slug, so a slug that differs in case only is the same
+// repository.
 func (r *projectBindingResource) ensureBinding(
 	ctx context.Context,
 	plan projectBindingModel,

@@ -177,13 +177,17 @@ and these:
   web address of the instance, the path of a top-level group, and two personal
   access tokens with the `api` scope of an owner of the group. SonarQube Cloud
   must reach the instance at a public HTTPS address.
+* `SONARQUBE_TEST_GITLAB_REPOSITORY` and
+  `SONARQUBE_TEST_GITLAB_SUBGROUP_REPOSITORY`: the full paths of two private
+  repositories with a default branch, one in the group and one in a subgroup
+  of the group.
 
 `make gitlab-start` starts a temporary GitLab CE instance in Docker behind an
-ngrok tunnel, makes the group and the tokens, and writes these four variables
-to `.gitlab-self-managed.env`. `make testacc-gitlab` reads that file. It needs
-an ngrok auth token in `NGROK_AUTHTOKEN`, or in the configuration of the ngrok
-agent. The first start takes some minutes. `make gitlab-stop` removes the
-instance and the file.
+ngrok tunnel, makes the group, a subgroup, the two repositories and the
+tokens, and writes these six variables to `.gitlab-self-managed.env`.
+`make testacc-gitlab` reads that file. It needs an ngrok auth token in
+`NGROK_AUTHTOKEN`, or in the configuration of the ngrok agent. The first start
+takes some minutes. `make gitlab-stop` removes the instance and the file.
 
 ```bash
 make gitlab-start

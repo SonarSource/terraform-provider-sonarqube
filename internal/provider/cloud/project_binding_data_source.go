@@ -50,8 +50,9 @@ func (d *projectBindingDataSource) Schema(_ context.Context, _ datasource.Schema
 				Description: "Identifier of the binding.",
 			},
 			"repository": schema.StringAttribute{
-				Computed:    true,
-				Description: "Repository that the project is bound to, as `owner/name`.",
+				Computed: true,
+				Description: "Repository that the project is bound to, as its full path, such as " +
+					"`owner/name` on GitHub or `group/subgroup/name` on GitLab.",
 			},
 			"repository_id": schema.StringAttribute{
 				Computed:    true,

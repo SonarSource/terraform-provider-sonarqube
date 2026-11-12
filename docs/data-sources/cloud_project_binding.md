@@ -33,5 +33,5 @@ output "repository" {
 ### Read-Only
 
 - `id` (String) Identifier of the binding.
-- `repository` (String) Repository that the project is bound to, as `owner/name`.
+- `repository` (String) Repository that the project is bound to, as its full path, such as `owner/name` on GitHub or `group/subgroup/name` on GitLab.
 - `repository_id` (String) Identifier that the DevOps platform gives the repository.

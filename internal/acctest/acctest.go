@@ -362,6 +362,11 @@ const (
 	// to the second.
 	EnvTestGitLabToken       = "SONARQUBE_TEST_GITLAB_TOKEN"
 	EnvTestGitLabSecondToken = "SONARQUBE_TEST_GITLAB_SECOND_TOKEN"
+	// EnvTestGitLabRepository and EnvTestGitLabSubgroupRepository are the
+	// full paths of two private repositories with a default branch: one in
+	// the group, and one in a subgroup of the group.
+	EnvTestGitLabRepository         = "SONARQUBE_TEST_GITLAB_REPOSITORY"
+	EnvTestGitLabSubgroupRepository = "SONARQUBE_TEST_GITLAB_SUBGROUP_REPOSITORY"
 	// EnvTestEnterpriseKey is the key of an enterprise that the token user
 	// administers. The server stores a GitLab configuration only for an
 	// organization with the Enterprise plan, and an organization that a test
@@ -373,6 +378,7 @@ const (
 // GitLabSelfManaged holds the values of the GitLab Self-Managed variables.
 type GitLabSelfManaged struct {
 	URL, Group, Token, SecondToken, EnterpriseKey string
+	Repository, SubgroupRepository                string
 }
 
 // PreCheckGitLabSelfManaged stops a test that has no GitLab Self-Managed
@@ -383,18 +389,22 @@ func PreCheckGitLabSelfManaged(t *testing.T) GitLabSelfManaged {
 	PreCheckDestructive(t)
 
 	values := GitLabSelfManaged{
-		URL:           os.Getenv(EnvTestGitLabURL),
-		Group:         os.Getenv(EnvTestGitLabGroup),
-		Token:         os.Getenv(EnvTestGitLabToken),
-		SecondToken:   os.Getenv(EnvTestGitLabSecondToken),
-		EnterpriseKey: os.Getenv(EnvTestEnterpriseKey),
+		URL:                os.Getenv(EnvTestGitLabURL),
+		Group:              os.Getenv(EnvTestGitLabGroup),
+		Token:              os.Getenv(EnvTestGitLabToken),
+		SecondToken:        os.Getenv(EnvTestGitLabSecondToken),
+		EnterpriseKey:      os.Getenv(EnvTestEnterpriseKey),
+		Repository:         os.Getenv(EnvTestGitLabRepository),
+		SubgroupRepository: os.Getenv(EnvTestGitLabSubgroupRepository),
 	}
 	for name, value := range map[string]string{
-		EnvTestGitLabURL:         values.URL,
-		EnvTestGitLabGroup:       values.Group,
-		EnvTestGitLabToken:       values.Token,
-		EnvTestGitLabSecondToken: values.SecondToken,
-		EnvTestEnterpriseKey:     values.EnterpriseKey,
+		EnvTestGitLabURL:                values.URL,
+		EnvTestGitLabGroup:              values.Group,
+		EnvTestGitLabToken:              values.Token,
+		EnvTestGitLabSecondToken:        values.SecondToken,
+		EnvTestEnterpriseKey:            values.EnterpriseKey,
+		EnvTestGitLabRepository:         values.Repository,
+		EnvTestGitLabSubgroupRepository: values.SubgroupRepository,
 	} {
 		if value == "" {
 			t.Skipf("%s is not set. Run scripts/gitlab-self-managed/start.sh to start a GitLab "+

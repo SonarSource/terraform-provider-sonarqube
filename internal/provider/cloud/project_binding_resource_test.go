@@ -72,6 +72,9 @@ var repositoryIDs = map[string]string{
 	"my-github-org/my-repo":    "1001",
 	"my-github-org/other-repo": "1002",
 	"my-github-org/old-name":   "1001",
+	// GitLab names a repository by its full path, which can hold subgroups.
+	"my-group/my-subgroup/my-repo": "2001",
+	"my-group/other-repo":          "2002",
 }
 
 // currentSlugs holds the repositories that were renamed on GitHub. The server
@@ -279,6 +282,44 @@ func TestProjectBindingResourceLifecycle(t *testing.T) {
 	}
 	if len(instance.calls) != calls {
 		t.Errorf("delete called the API: %v", instance.calls[calls:])
+	}
+}
+
+// A GitLab repository is named by its full path, which can hold subgroups.
+// The path goes to the server as it is, for the bind and for a change.
+func TestProjectBindingResourceBindsAGitLabRepositoryInASubgroup(t *testing.T) {
+	t.Parallel()
+
+	instance := newFakeBindingInstance()
+	r := &projectBindingResource{client: instance.start(t)}
+	s := projectBindingResourceSchema(t)
+
+	created := &resource.CreateResponse{State: providertest.EmptyState(t, s)}
+	r.Create(context.Background(), resource.CreateRequest{Plan: bindingPlan(t, s, "my-group/my-subgroup/my-repo")}, created)
+	if created.Diagnostics.HasError() {
+		t.Fatal(created.Diagnostics)
+	}
+	if instance.repository != "my-group/my-subgroup/my-repo" {
+		t.Errorf("bound repository = %q, want the full path", instance.repository)
+	}
+	model := providertest.ReadModel[projectBindingModel](t, created.State)
+	if model.Repository.ValueString() != "my-group/my-subgroup/my-repo" || model.RepositoryID.ValueString() != "2001" {
+		t.Errorf("state = %+v, want the path and the identifier of the repository", model)
+	}
+
+	updated := &resource.UpdateResponse{State: created.State}
+	r.Update(context.Background(), resource.UpdateRequest{
+		Plan:  bindingPlan(t, s, "my-group/other-repo"),
+		State: created.State,
+	}, updated)
+	if updated.Diagnostics.HasError() {
+		t.Fatal(updated.Diagnostics)
+	}
+	if instance.repository != "my-group/other-repo" {
+		t.Errorf("changed repository = %q, want my-group/other-repo", instance.repository)
+	}
+	if got := providertest.ReadModel[projectBindingModel](t, updated.State).RepositoryID.ValueString(); got != "2002" {
+		t.Errorf("repository_id = %q, want 2002", got)
 	}
 }
 
@@ -644,22 +685,6 @@ func TestRepositoryIDPlanModifier(t *testing.T) {
 		}
 		if got := !resp.PlanValue.IsUnknown(); got != keeps {
 			t.Errorf("%s: kept = %v, want %v", repository, got, keeps)
-		}
-	}
-}
-
-func TestProjectBindingResourceValidatesTheRepository(t *testing.T) {
-	t.Parallel()
-
-	s := projectBindingResourceSchema(t)
-	for _, value := range []string{"", "my-repo", "owner/", "/repo", "owner/repo/more", "https://github.com/owner/repo", "own er/repo"} {
-		if diags := providertest.ValidateString(t, s, "repository", value); !diags.HasError() {
-			t.Errorf("repository = %q was allowed", value)
-		}
-	}
-	for _, value := range []string{"owner/repo", "My-Org/my.repo_1", "a/b"} {
-		if diags := providertest.ValidateString(t, s, "repository", value); diags.HasError() {
-			t.Errorf("repository = %q was refused: %v", value, diags)
 		}
 	}
 }
