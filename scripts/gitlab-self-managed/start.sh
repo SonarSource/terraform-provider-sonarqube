@@ -42,97 +42,133 @@ diagnostics() {
 }
 trap diagnostics ERR
 
-"$(dirname "$0")/stop.sh" >/dev/null 2>&1 || true
-docker network create "${network}" >/dev/null
 
-# The tunnel starts first, because GitLab needs its public address as the
-# external URL. The agent sends the traffic to GitLab on the Docker network.
-# The agent logs JSON, and the line that starts the tunnel holds its address.
-docker run --detach --name "${ngrok}" --network "${network}" --env NGROK_AUTHTOKEN \
-  "${ngrok_image}" http "${gitlab}:80" --log stdout --log-format json >/dev/null
+# The technical start of the instance: containers, tunnel and readiness.
+start_instance() {
+  "$(dirname "$0")/stop.sh" >/dev/null 2>&1 || true
+  docker network create "${network}" >/dev/null
 
-url=""
-for _ in $(seq 1 60); do
-  url=$(docker logs "${ngrok}" 2>/dev/null |
-    jq -rR 'fromjson? | .url? // empty | select(startswith("https://"))' | head -n 1 || true)
-  [[ -n "${url}" ]] && break
-  sleep 1
-done
-[[ -n "${url}" ]] || { echo "ngrok did not open an HTTPS tunnel. Check NGROK_AUTHTOKEN, and check that no other tunnel uses the account."; false; }
-echo "Tunnel: ${url}"
+  # The tunnel starts first, because GitLab needs its public address as the
+  # external URL. The agent sends the traffic to GitLab on the Docker network.
+  # The agent logs JSON, and the line that starts the tunnel holds its address.
+  docker run --detach --name "${ngrok}" --network "${network}" --env NGROK_AUTHTOKEN \
+    "${ngrok_image}" http "${gitlab}:80" --log stdout --log-format json >/dev/null
 
-# The configuration goes in an environment variable, so that nothing is
-# mounted. Docker Desktop and Rancher Desktop do not share every host
-# directory with their virtual machine.
-# The image is the latest release. Docker does not pull a tag again when a copy
-# exists, so --pull always keeps a local copy from going stale.
-docker run --detach --pull always --name "${gitlab}" --hostname gitlab --network "${network}" \
-  --shm-size 256m --publish "127.0.0.1:${local_port}:80" \
-  --env GITLAB_OMNIBUS_CONFIG="external_url '${url}'
+  url=""
+  for _ in $(seq 1 60); do
+    url=$(docker logs "${ngrok}" 2>/dev/null |
+      jq -rR 'fromjson? | .url? // empty | select(startswith("https://"))' | head -n 1 || true)
+    [[ -n "${url}" ]] && break
+    sleep 1
+  done
+  [[ -n "${url}" ]] || { echo "ngrok did not open an HTTPS tunnel. Check NGROK_AUTHTOKEN, and check that no other tunnel uses the account."; false; }
+  echo "Tunnel: ${url}"
+
+  # The configuration goes in an environment variable, so that nothing is
+  # mounted. Docker Desktop and Rancher Desktop do not share every host
+  # directory with their virtual machine.
+  # The image is the latest release. Docker does not pull a tag again when a copy
+  # exists, so --pull always keeps a local copy from going stale.
+  docker run --detach --pull always --name "${gitlab}" --hostname gitlab --network "${network}" \
+    --shm-size 256m --publish "127.0.0.1:${local_port}:80" \
+    --env GITLAB_OMNIBUS_CONFIG="external_url '${url}'
 letsencrypt['enable'] = false
 nginx['listen_port'] = 80
 nginx['listen_https'] = false
 nginx['proxy_set_headers'] = { 'X-Forwarded-Proto' => 'https', 'X-Forwarded-Ssl' => 'on' }
 gitlab_rails['gitlab_shell_ssh_port'] = 2222" \
-  "${gitlab_image}" >/dev/null
+    "${gitlab_image}" >/dev/null
 
-echo "Waiting for GitLab. The first start takes some minutes."
-for _ in $(seq 1 120); do
-  if curl --fail --silent --max-time 5 "http://127.0.0.1:${local_port}/help" >/dev/null 2>&1; then
-    break
-  fi
-  if [[ "$(docker inspect --format '{{.State.Status}}' "${gitlab}")" != running ]]; then
-    echo "The GitLab container stopped."
-    false
-  fi
-  sleep 10
-done
-curl --fail --silent --show-error --max-time 10 "http://127.0.0.1:${local_port}/help" >/dev/null
+  echo "Waiting for GitLab. The first start takes some minutes."
+  for _ in $(seq 1 120); do
+    if curl --fail --silent --max-time 5 "http://127.0.0.1:${local_port}/help" >/dev/null 2>&1; then
+      break
+    fi
+    if [[ "$(docker inspect --format '{{.State.Status}}' "${gitlab}")" != running ]]; then
+      echo "The GitLab container stopped."
+      false
+    fi
+    sleep 10
+  done
+  curl --fail --silent --show-error --max-time 10 "http://127.0.0.1:${local_port}/help" >/dev/null
+}
 
-# The root user owns the group and gives the two tokens. The second token lets
-# a test change the token of a binding.
-seed=$(docker exec "${gitlab}" gitlab-rails runner "
-group = Group.find_or_create_by!(path: '${group}') do |g|
-  g.name = '${group}'
-  g.visibility_level = Gitlab::VisibilityLevel::PRIVATE
-  g.organization = Organizations::Organization.default_organization
-end
+# The tokens of the root user, which the API calls below and the tests use.
+create_tokens() {
+  # The root user gives the two tokens. The second token lets a test change the
+  # token of a binding. The REST API cannot make a personal access token, so the
+  # Rails runner makes them. Everything else goes through the REST API below.
+  seed=$(docker exec "${gitlab}" gitlab-rails runner "
 root = User.find_by_username!('root')
-group.add_owner(root)
 root.personal_access_tokens.where(name: ['tf-acc-first', 'tf-acc-second']).delete_all
 first = root.personal_access_tokens.create!(name: 'tf-acc-first', scopes: [:api], expires_at: 30.days.from_now)
 second = root.personal_access_tokens.create!(name: 'tf-acc-second', scopes: [:api], expires_at: 30.days.from_now)
 puts('TF_ACC_SEED ' + { first: first.token, second: second.token }.to_json)
 ")
-# The runner can print warnings before the result, so only the marked line
-# counts.
-seed=$(sed -n 's/^TF_ACC_SEED //p' <<<"${seed}" | tail -n 1)
-first_token=$(jq -er '.first' <<<"${seed}")
-second_token=$(jq -er '.second' <<<"${seed}")
-unset seed
-if [[ -n "${GITHUB_ACTIONS:-}" ]]; then
-  echo "::add-mask::${first_token}"
-  echo "::add-mask::${second_token}"
-fi
+  # The runner can print warnings before the result, so only the marked line
+  # counts.
+  seed=$(sed -n 's/^TF_ACC_SEED //p' <<<"${seed}" | tail -n 1)
+  first_token=$(jq -er '.first' <<<"${seed}")
+  second_token=$(jq -er '.second' <<<"${seed}")
+  unset seed
+  if [[ -n "${GITHUB_ACTIONS:-}" ]]; then
+    echo "::add-mask::${first_token}"
+    echo "::add-mask::${second_token}"
+  fi
+}
 
-# Check the path that SonarQube Cloud takes: the API through the tunnel, with
-# the token, on the group.
-for _ in $(seq 1 30); do
-  curl --fail --silent --max-time 10 --header "PRIVATE-TOKEN: ${first_token}" \
-    "${url}/api/v4/groups/${group}" >/dev/null 2>&1 && break
-  sleep 2
-done
-curl --fail --silent --show-error --max-time 10 --header "PRIVATE-TOKEN: ${first_token}" \
-  "${url}/api/v4/groups/${group}" >/dev/null
+gitlab_api() {
+  curl --fail --silent --show-error --max-time 30 \
+    --header "PRIVATE-TOKEN: ${first_token}" "$@"
+}
 
-umask 077
-cat >"${env_file}" <<EOF
+check_api() {
+  # Check the path that SonarQube Cloud takes: the API through the tunnel, with
+  # the token.
+  for _ in $(seq 1 30); do
+    gitlab_api "${url}/api/v4/user" >/dev/null 2>&1 && break
+    sleep 2
+  done
+  gitlab_api "${url}/api/v4/user" >/dev/null
+}
+
+# The test data. It is separate from the start of the instance, so that a
+# test that needs other data changes only this function.
+seed_test_data() {
+  # The instance is new (stop.sh removes the old data), so nothing exists yet.
+  # root owns what it makes. The binding tests use the group, and the project
+  # binding tests bind to the two repositories. A repository gets a README, so
+  # that it has a default branch.
+  group_id=$(gitlab_api --request POST "${url}/api/v4/groups" --data "name=${group}" \
+    --data "path=${group}" --data "visibility=private" | jq -er '.id')
+  subgroup_id=$(gitlab_api --request POST "${url}/api/v4/groups" --data "name=tf-acc-test-subgroup" \
+    --data "path=tf-acc-test-subgroup" --data "parent_id=${group_id}" --data "visibility=private" | jq -er '.id')
+  repositories=()
+  for namespace_id in "${group_id}" "${subgroup_id}"; do
+    repositories+=("$(gitlab_api --request POST "${url}/api/v4/projects" --data "name=tf-acc-test-repo" \
+      --data "path=tf-acc-test-repo" --data "namespace_id=${namespace_id}" --data "visibility=private" \
+      --data "initialize_with_readme=true" | jq -er '.path_with_namespace')")
+  done
+}
+
+write_env_file() {
+  umask 077
+  cat >"${env_file}" <<EOF
 SONARQUBE_TEST_GITLAB_URL=${url}
 SONARQUBE_TEST_GITLAB_GROUP=${group}
 SONARQUBE_TEST_GITLAB_TOKEN=${first_token}
 SONARQUBE_TEST_GITLAB_SECOND_TOKEN=${second_token}
+SONARQUBE_TEST_GITLAB_REPOSITORY=${repositories[0]}
+SONARQUBE_TEST_GITLAB_SUBGROUP_REPOSITORY=${repositories[1]}
 EOF
-# The image is the latest release, so a run says which one it used.
-version=$(curl --silent --max-time 10 --header "PRIVATE-TOKEN: ${first_token}" \
-  "${url}/api/v4/version" | jq -r '.version // "unknown"' 2>/dev/null || echo unknown)
-echo "GitLab ${version} is ready at ${url}. The test variables are in ${env_file}."
+  # The image is the latest release, so a run says which one it used.
+  version=$(curl --silent --max-time 10 --header "PRIVATE-TOKEN: ${first_token}" \
+    "${url}/api/v4/version" | jq -r '.version // "unknown"' 2>/dev/null || echo unknown)
+  echo "GitLab ${version} is ready at ${url}. The test variables are in ${env_file}."
+}
+
+start_instance
+create_tokens
+check_api
+seed_test_data
+write_env_file

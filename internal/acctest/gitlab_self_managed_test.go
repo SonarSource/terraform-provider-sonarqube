@@ -22,6 +22,8 @@ func setGitLabSelfManagedEnvironment(t *testing.T) {
 	t.Setenv(EnvTestGitLabToken, "first-token")
 	t.Setenv(EnvTestGitLabSecondToken, "second-token")
 	t.Setenv(EnvTestEnterpriseKey, "my-enterprise")
+	t.Setenv(EnvTestGitLabRepository, "my-group/my-repo")
+	t.Setenv(EnvTestGitLabSubgroupRepository, "my-group/my-subgroup/my-repo")
 }
 
 func TestPreCheckGitLabSelfManagedReturnsTheValues(t *testing.T) {
@@ -29,11 +31,13 @@ func TestPreCheckGitLabSelfManagedReturnsTheValues(t *testing.T) {
 
 	got := PreCheckGitLabSelfManaged(t)
 	want := GitLabSelfManaged{
-		URL:           "https://gitlab.example.com",
-		Group:         "my-group",
-		Token:         "first-token",
-		SecondToken:   "second-token",
-		EnterpriseKey: "my-enterprise",
+		URL:                "https://gitlab.example.com",
+		Group:              "my-group",
+		Token:              "first-token",
+		SecondToken:        "second-token",
+		EnterpriseKey:      "my-enterprise",
+		Repository:         "my-group/my-repo",
+		SubgroupRepository: "my-group/my-subgroup/my-repo",
 	}
 	if got != want {
 		t.Errorf("PreCheckGitLabSelfManaged() = %+v, want %+v", got, want)
@@ -45,6 +49,7 @@ func TestPreCheckGitLabSelfManagedReturnsTheValues(t *testing.T) {
 func TestPreCheckGitLabSelfManagedSkipsWithoutAVariable(t *testing.T) {
 	for _, name := range []string{
 		EnvTestGitLabURL, EnvTestGitLabGroup, EnvTestGitLabToken, EnvTestGitLabSecondToken, EnvTestEnterpriseKey,
+		EnvTestGitLabRepository, EnvTestGitLabSubgroupRepository,
 	} {
 		t.Run(name, func(t *testing.T) {
 			setGitLabSelfManagedEnvironment(t)

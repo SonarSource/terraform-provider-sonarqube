@@ -2,12 +2,12 @@
 page_title: "sonarqube_cloud_project_binding Resource - SonarQube"
 subcategory: "SonarQube Cloud"
 description: |-
-  Binds a SonarQube Cloud project to a GitHub repository. The organization of the project must be bound to GitHub, and the GitHub application installation of the organization must be able to see the repository.
+  Binds a SonarQube Cloud project to a repository on the DevOps platform that its organization is bound to: GitHub or GitLab Self-Managed. On GitHub, the GitHub application installation of the organization must be able to see the repository. On GitLab, the token of the organization binding must be able to read it.
 ---
 
 # sonarqube_cloud_project_binding (Resource)
 
-Binds a SonarQube Cloud project to a GitHub repository. The organization of the project must be bound to GitHub, and the GitHub application installation of the organization must be able to see the repository.
+Binds a SonarQube Cloud project to a repository on the DevOps platform that its organization is bound to: GitHub or GitLab Self-Managed. On GitHub, the GitHub application installation of the organization must be able to see the repository. On GitLab, the token of the organization binding must be able to read it.
 
 A project that is already bound to the same repository is adopted, not bound again. A project that is bound to a different repository gives an error: import that binding instead.
 
@@ -28,8 +28,9 @@ resource "sonarqube_project" "example" {
   name         = "My repository"
 }
 
-# The organization must be bound to GitHub, and the GitHub application
-# installation of the organization must be able to see the repository.
+# The organization of this project is bound to GitHub, and the GitHub
+# application installation of the organization must be able to see the
+# repository.
 resource "sonarqube_cloud_project_binding" "example" {
   organization = sonarqube_project.example.organization
   project_key  = sonarqube_project.example.key
@@ -40,6 +41,15 @@ resource "sonarqube_cloud_project_binding" "example" {
   lifecycle {
     replace_triggered_by = [sonarqube_project.example]
   }
+}
+
+# The organization of this project is bound to a GitLab Self-Managed group,
+# and the token of that binding must be able to read the repository. The
+# repository is the full path, which can hold subgroups.
+resource "sonarqube_cloud_project_binding" "gitlab" {
+  organization = "my-gitlab-organization"
+  project_key  = "my-gitlab-organization_my-repo"
+  repository   = "my-group/my-subgroup/my-repo"
 }
 
 # A destroy does not remove the binding. The API cannot do that: the binding
@@ -53,11 +63,11 @@ resource "sonarqube_cloud_project_binding" "example" {
 
 - `organization` (String) Key of the organization that owns the project. A change replaces the binding.
 - `project_key` (String) Key of the project to bind. A change replaces the binding.
-- `repository` (String) GitHub repository to bind, as `owner/name`. The comparison ignores case. A change binds the project to the new repository.
+- `repository` (String) Repository to bind, as its full path: `owner/name` on GitHub, and `group/name` or `group/subgroup/name` on GitLab. The comparison ignores case. A change binds the project to the new repository.
 
-A rename of the repository on GitHub does not change the binding, and the plan reports no difference. The provider tells repositories apart by `repository_id`.
+A rename or a move of the repository on the DevOps platform does not change the binding, and the plan reports no difference. The provider tells repositories apart by `repository_id`.
 
 ### Read-Only
 
 - `id` (String) Identifier of the binding.
-- `repository_id` (String) Identifier that GitHub gives the repository.
+- `repository_id` (String) Identifier that the DevOps platform gives the repository.

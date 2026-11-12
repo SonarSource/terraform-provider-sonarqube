@@ -3,7 +3,6 @@ package cloud
 import (
 	"context"
 	"errors"
-	"regexp"
 	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework/diag"
@@ -13,11 +12,6 @@ import (
 
 	"github.com/SonarSource/terraform-provider-sonarqube/internal/client"
 )
-
-// gitHubRepositoryPattern is the slug of a GitHub repository, "owner/name".
-// GitHub allows letters, digits and dashes in the owner, and dots and
-// underscores as well in the name.
-var gitHubRepositoryPattern = regexp.MustCompile(`^[A-Za-z0-9-]+/[A-Za-z0-9._-]+$`)
 
 // projectBindingModel is the state of the resource and of the data source,
 // which report the same fields.
@@ -36,10 +30,11 @@ type projectBindingModel struct {
 // a project by its internal identifier only.
 //
 // The repository identifier, not the slug, says which repository is bound. A
-// slug can change for the same repository: GitHub ignores its case, and a
-// rename on GitHub gives a new one. The slug of prior is therefore kept while
-// it names the same repository, or the next plan would report a change that
-// is not one, and its apply would fail as an inconsistent result.
+// slug can change for the same repository: the DevOps platforms ignore its
+// case, and a rename or a move gives a new one. The slug of prior is
+// therefore kept while it names the same repository, or the next plan would
+// report a change that is not one, and its apply would fail as an
+// inconsistent result.
 //
 // prior names the same repository when it knows no identifier, which is the
 // plan of a bind or of a change: the server accepted that slug for this
@@ -100,9 +95,9 @@ func bindFailureDetail(err error) string {
 	}
 	return err.Error() + "\n\n" +
 		"The server refuses a binding when:\n" +
-		"  - the organization is not bound to GitHub,\n" +
-		"  - the GitHub application installation of the organization cannot see the " +
-		"repository,\n" +
+		"  - the organization is not bound to a DevOps platform,\n" +
+		"  - the repository does not exist, or the organization cannot see it: on GitHub, " +
+		"its application installation; on GitLab, the token of its binding,\n" +
 		"  - the project is public and the repository is private,\n" +
 		"  - another project of the organization is already bound to the repository. " +
 		"Terraform does not support a monorepo."
@@ -110,7 +105,7 @@ func bindFailureDetail(err error) string {
 
 // repositoryIDPlanModifier keeps the prior repository_id while the repository
 // stays the same. A new repository has a new identifier, which the apply
-// reports. The comparison ignores case, as GitHub does.
+// reports. The comparison ignores case, as the DevOps platforms do.
 type repositoryIDPlanModifier struct{}
 
 func (m repositoryIDPlanModifier) Description(_ context.Context) string {

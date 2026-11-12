@@ -155,8 +155,8 @@ permissions `admin`, `scan` and `provisioning`:
 | `UpdateProjectBinding` | `PATCH {api_url}/dop-translation/project-bindings/{id}` | Web API v2 | Internal | No (400 `AuthenticationType.SOT`) |
 
 * There is no delete. A binding goes away with its project.
-* For GitHub, the bind takes the slug `owner/name`, and a read gives the
-  numeric identifier of the repository.
+* The bind takes the slug (`owner/name` for GitHub, the full path for GitLab),
+  and a read gives the numeric identifier of the repository.
 
 ## Quality gates (`quality_gates.go`)
 

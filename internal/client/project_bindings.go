@@ -18,18 +18,18 @@ type ProjectBinding struct {
 	ProjectID      string `json:"projectId"`
 	DevOpsPlatform string `json:"devOpsPlatform"`
 	// RepositoryID is the identifier that the DevOps platform gives the
-	// repository. For GitHub it is a number, sent as a string.
+	// repository. For GitHub and GitLab it is a number, sent as a string.
 	RepositoryID string `json:"repositoryId"`
-	// Slug is "owner/name" for GitHub.
+	// Slug is the full path of the repository on the DevOps platform.
 	Slug string `json:"slug"`
 	URL  string `json:"url"`
 }
 
 // createProjectBindingRequest is the body of a bind call.
 //
-// For GitHub, repositoryId takes the slug "owner/name". It does not take the
-// number that a read reports in the field of the same name: the server gives
-// that value to GitHub, and GitHub answers 404 for a number.
+// repositoryId takes the slug. For GitHub, it does not take the number that a
+// read reports in the field of the same name: the server gives that value to
+// GitHub, and GitHub answers 404 for a number.
 type createProjectBindingRequest struct {
 	ProjectID    string `json:"projectId"`
 	RepositoryID string `json:"repositoryId"`
@@ -46,17 +46,16 @@ type patchProjectBindingRequest struct {
 var ErrNotBound = errors.New("project not bound")
 
 // CreateProjectBinding binds a project to a repository. repository is the
-// slug "owner/name" for GitHub.
+// slug.
 //
 // It takes the project that GetProject returns rather than an identifier, so
 // that no caller can give the key or the UUID where the legacy identifier
 // belongs. The compiler cannot see such a mistake between two strings.
 //
 // The server refuses the bind when the organization of the project is not
-// bound, when its application installation cannot see the repository, when
-// the project is public and the repository is private, when the project is
-// already bound, and when one other project of the organization is already
-// bound to the repository.
+// bound, when it cannot see the repository, when the project is public and
+// the repository is private, when the project is already bound, and when one
+// other project of the organization is already bound to the repository.
 func (c *Client) CreateProjectBinding(ctx context.Context, project *Project, repository string) (*ProjectBinding, error) {
 	var out ProjectBinding
 	req := createProjectBindingRequest{ProjectID: project.LegacyID, RepositoryID: repository}
