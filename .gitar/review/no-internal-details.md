@@ -20,8 +20,10 @@ Do not flag these items:
 
 - A link to a public API documentation page.
 - A short note that tells why the provider calls an API in a given way, such
-  as the identifier that the API takes, or why an internal or Web API v1
-  endpoint is in use.
+  as the identifier that the API takes, why an internal or Web API v1
+  endpoint is in use, or a limit or semantic that shapes a resource.
+- The path or the fields of an endpoint that the client calls, in `APIS.md`
+  or in the client code.
 - A status code or an error text that the client code branches on, when a
   comment next to that code states it.
 
