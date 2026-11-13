@@ -72,9 +72,14 @@ func SkipWithSOT(t *testing.T, reason string) {
 	}
 }
 
+// providerVersion is the version that the provider reports in its User-Agent
+// header. The test client sends the same product token, so that one filter
+// finds all the traffic of the acceptance tests.
+const providerVersion = "acceptance-test"
+
 // The provider runs inside the test process.
 var ProtoV6ProviderFactories = map[string]func() (tfprotov6.ProviderServer, error){
-	"sonarqube": providerserver.NewProtocol6WithError(provider.New("test")()),
+	"sonarqube": providerserver.NewProtocol6WithError(provider.New(providerVersion)()),
 }
 
 // resource.Test already skips every test when TF_ACC is unset. This adds the
@@ -161,19 +166,24 @@ func checkSharedOrganization(ctx context.Context, c *client.Client, organization
 	return nil
 }
 
-// Client returns a client for the instance that the environment names, as the
-// provider configures it. A test uses it to change or read the instance
-// outside of Terraform.
+// userAgent marks the requests of the test client and the sweepers, so that
+// they can be removed from the usage data.
+const userAgent = "sonarqube-terraform/" + providerVersion
+
+// Client returns a client for the instance and the token that the environment
+// names, as the provider reads them. Its requests send userAgent. A test uses
+// it to change or read the instance outside of Terraform.
 func Client() *client.Client {
 	token := os.Getenv(provider.EnvToken)
 	if SOT() {
 		token = userToken
 	}
 	return client.New(client.Config{
-		URL:     cmp.Or(os.Getenv(provider.EnvURL), client.CloudURL),
-		APIURL:  os.Getenv(provider.EnvAPIURL),
-		Token:   token,
-		Product: client.ProductCloud,
+		URL:       cmp.Or(os.Getenv(provider.EnvURL), client.CloudURL),
+		APIURL:    os.Getenv(provider.EnvAPIURL),
+		Token:     token,
+		Product:   client.ProductCloud,
+		UserAgent: userAgent,
 	})
 }
 

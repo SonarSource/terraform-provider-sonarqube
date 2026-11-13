@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.1.0-alpha.5 (Unreleased)
+
+ENHANCEMENTS:
+
+* The provider now sends a User-Agent header with the Terraform version and the provider version, for example
+  `Terraform/1.9.8 (+https://www.terraform.io) sonarqube-terraform/0.1.0-alpha.5`. To add your own text at the
+  end, set the `TF_APPEND_USER_AGENT` environment variable. The provider removes control characters and
+  non-ASCII characters from this text, and keeps at most 256 characters.
+
 ## 0.1.0-alpha.4 (November 13, 2026)
 
 FEATURES:

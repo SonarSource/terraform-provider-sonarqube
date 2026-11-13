@@ -30,6 +30,10 @@ const (
 	EnvURL    = "SONARQUBE_URL"
 	EnvAPIURL = "SONARQUBE_API_URL"
 	EnvToken  = "SONARQUBE_TOKEN"
+
+	// envAppendUserAgent is the Terraform convention for text at the end of
+	// the User-Agent header.
+	envAppendUserAgent = "TF_APPEND_USER_AGENT"
 )
 
 var _ provider.Provider = &sonarqubeProvider{}
@@ -155,10 +159,11 @@ func (p *sonarqubeProvider) Configure(ctx context.Context, req provider.Configur
 	}
 
 	c := client.New(client.Config{
-		URL:     instanceURL,
-		APIURL:  apiURL,
-		Token:   token,
-		Product: product,
+		URL:       instanceURL,
+		APIURL:    apiURL,
+		Token:     token,
+		Product:   product,
+		UserAgent: userAgent(req.TerraformVersion, p.version, os.Getenv(envAppendUserAgent)),
 	})
 
 	resp.DataSourceData = c
