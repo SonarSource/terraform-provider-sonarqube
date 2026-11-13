@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.1.0-alpha.4 (November 13, 2026)
+
+FEATURES:
+
+* **New Resource:** `sonarqube_cloud_organization_gitlab_self_managed_binding`
+
+ENHANCEMENTS:
+
+* `sonarqube_cloud_project_binding` and its data source: bind a project of an organization that is bound to GitLab
+  Self-Managed. The repository is the full path of the GitLab project, for example `group/subgroup/name`.
+
 ## 0.1.0-alpha.3 (November 9, 2026)
 
 BREAKING CHANGES:
