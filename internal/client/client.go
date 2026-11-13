@@ -12,6 +12,7 @@ package client
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -39,6 +40,8 @@ const CloudURL = "https://sonarcloud.io"
 
 const defaultTimeout = 30 * time.Second
 
+const defaultUserAgent = "sonarqube-terraform"
+
 // Config configures a Client.
 type Config struct {
 	URL string
@@ -47,6 +50,9 @@ type Config struct {
 	APIURL  string
 	Token   string
 	Product Product
+	// UserAgent is the User-Agent header of each request. An empty value
+	// sends "sonarqube-terraform".
+	UserAgent string
 	// HTTPClient replaces the default client. Tests set it; leave it nil
 	// elsewhere.
 	HTTPClient *http.Client
@@ -54,11 +60,12 @@ type Config struct {
 
 // Client talks to one SonarQube instance.
 type Client struct {
-	url     string
-	apiURL  string
-	token   string
-	product Product
-	http    *http.Client
+	url       string
+	apiURL    string
+	token     string
+	product   Product
+	userAgent string
+	http      *http.Client
 }
 
 // New builds a Client from cfg.
@@ -76,11 +83,12 @@ func New(cfg Config) *Client {
 	}
 
 	return &Client{
-		url:     url,
-		apiURL:  apiURL,
-		token:   cfg.Token,
-		product: cfg.Product,
-		http:    httpClient,
+		url:       url,
+		apiURL:    apiURL,
+		token:     cfg.Token,
+		product:   cfg.Product,
+		userAgent: cmp.Or(cfg.UserAgent, defaultUserAgent),
+		http:      httpClient,
 	}
 }
 
@@ -165,6 +173,11 @@ func (c *Client) URL() string {
 // APIURL returns the address of Web API v2.
 func (c *Client) APIURL() string {
 	return c.apiURL
+}
+
+// UserAgent returns the User-Agent header of each request.
+func (c *Client) UserAgent() string {
+	return c.userAgent
 }
 
 // Product returns the product the instance runs.
@@ -304,6 +317,7 @@ func (c *Client) apiMergePatch(ctx context.Context, path string, body, out any) 
 // do decodes a successful answer into out. A nil out discards the body.
 func (c *Client) do(req *http.Request, out any) error {
 	req.Header.Set("Accept", "application/json")
+	req.Header.Set("User-Agent", c.userAgent)
 
 	resp, err := c.http.Do(req)
 	if err != nil {

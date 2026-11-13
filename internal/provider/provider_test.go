@@ -143,13 +143,16 @@ func providerSchema(t *testing.T) *provider.SchemaResponse {
 	return resp
 }
 
+// testTerraformVersion is the Terraform version that configure reports.
+const testTerraformVersion = "1.9.8"
+
 // configure runs Configure with the given environment and attributes. Every
 // variable and every attribute that the caller leaves out is empty, so that no
 // test depends on the environment of the machine it runs on.
 func configure(t *testing.T, env map[string]string, attributes map[string]tftypes.Value) *provider.ConfigureResponse {
 	t.Helper()
 
-	for _, name := range []string{EnvURL, EnvAPIURL, EnvToken} {
+	for _, name := range []string{EnvURL, EnvAPIURL, EnvToken, envAppendUserAgent} {
 		t.Setenv(name, env[name])
 	}
 
@@ -171,7 +174,8 @@ func configure(t *testing.T, env map[string]string, attributes map[string]tftype
 	}
 
 	req := provider.ConfigureRequest{
-		Config: tfsdk.Config{Schema: schema, Raw: tftypes.NewValue(objectType, values)},
+		TerraformVersion: testTerraformVersion,
+		Config:           tfsdk.Config{Schema: schema, Raw: tftypes.NewValue(objectType, values)},
 	}
 	resp := &provider.ConfigureResponse{}
 	New("test")().Configure(ctx, req, resp)

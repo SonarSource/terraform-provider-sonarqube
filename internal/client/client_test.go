@@ -1,6 +1,7 @@
 package client
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -9,6 +10,10 @@ import (
 )
 
 func newTestClient(srv *httptest.Server) *Client {
+	return newTestClientWithUserAgent(srv, "")
+}
+
+func newTestClientWithUserAgent(srv *httptest.Server, userAgent string) *Client {
 	// The test server answers on one host, so both surfaces point at it. A
 	// derived api host would name a host that does not exist.
 	return New(Config{
@@ -16,6 +21,7 @@ func newTestClient(srv *httptest.Server) *Client {
 		APIURL:     srv.URL,
 		Token:      "test-token",
 		Product:    ProductCloud,
+		UserAgent:  userAgent,
 		HTTPClient: srv.Client(),
 	})
 }
@@ -276,5 +282,47 @@ func TestValidateURL(t *testing.T) {
 		if !strings.Contains(err.Error(), want) {
 			t.Errorf("ValidateURL(%q) = %v, want an error about %q", value, err, want)
 		}
+	}
+}
+
+// Both API surfaces send the User-Agent header.
+func TestRequestsSendTheUserAgent(t *testing.T) {
+	t.Parallel()
+
+	const configured = "Terraform/1.9.8 (+https://www.terraform.io) sonarqube-terraform/1.2.3"
+
+	cases := []struct {
+		name      string
+		userAgent string
+		want      string
+	}{
+		{"configured", configured, configured},
+		{"default", "", "sonarqube-terraform"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			var got []string
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				got = append(got, r.UserAgent())
+				w.WriteHeader(http.StatusOK)
+			}))
+			defer srv.Close()
+
+			c := newTestClientWithUserAgent(srv, tc.userAgent)
+
+			if err := c.get(context.Background(), "/api/web", nil, nil); err != nil {
+				t.Fatalf("get: %v", err)
+			}
+			if err := c.apiGet(context.Background(), "/api-v2", nil, nil); err != nil {
+				t.Fatalf("apiGet: %v", err)
+			}
+
+			if len(got) != 2 || got[0] != tc.want || got[1] != tc.want {
+				t.Errorf("User-Agent headers = %q, want %q on both requests", got, tc.want)
+			}
+		})
 	}
 }
