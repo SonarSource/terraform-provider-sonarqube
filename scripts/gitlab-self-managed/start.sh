@@ -29,7 +29,8 @@ gitlab=tf-acc-gitlab
 ngrok=tf-acc-gitlab-ngrok
 group=tf-acc-test-group
 gitlab_image=gitlab/gitlab-ce:latest
-ngrok_image=ngrok/ngrok:3-alpine
+ngrok_base_image=ngrok/ngrok:3-alpine
+ngrok_image=tf-acc-gitlab-ngrok:patched
 local_port=8929
 
 diagnostics() {
@@ -42,11 +43,26 @@ diagnostics() {
 }
 trap diagnostics ERR
 
+# The newest ngrok tag still has ca-certificates-bundle 20260413-r0, which trusts a
+# certificate authority with compromised keys (CVE-2026-111943). Upgrade the bundle
+# until ngrok publishes a fixed tag.
+build_ngrok_image() {
+  docker build --quiet --tag "${ngrok_image}" - >/dev/null <<EOF
+FROM ${ngrok_base_image}
+USER root
+RUN apk upgrade --no-cache ca-certificates-bundle
+USER ngrok
+EOF
+  ca_bundle=$(docker run --rm --entrypoint apk "${ngrok_image}" list -I ca-certificates-bundle | cut -d' ' -f1)
+  [[ "$(docker run --rm --entrypoint apk "${ngrok_image}" version -t "${ca_bundle#ca-certificates-bundle-}" 20261020-r0)" != '<' ]] ||
+    { echo "The ngrok image has ${ca_bundle}, which is older than 20261020-r0."; false; }
+}
 
 # The technical start of the instance: containers, tunnel and readiness.
 start_instance() {
   "$(dirname "$0")/stop.sh" >/dev/null 2>&1 || true
   docker network create "${network}" >/dev/null
+  build_ngrok_image
 
   # The tunnel starts first, because GitLab needs its public address as the
   # external URL. The agent sends the traffic to GitLab on the Docker network.
