@@ -70,7 +70,7 @@ func (d *organizationDataSource) Schema(_ context.Context, _ datasource.SchemaRe
 }
 
 func (d *organizationDataSource) Configure(_ context.Context, req datasource.ConfigureRequest, resp *datasource.ConfigureResponse) {
-	c, diagnostics := configure.CloudClient(req.ProviderData,
+	c, diagnostics := configure.CloudClientAcceptingScopedToken(req.ProviderData,
 		"The sonarqube_cloud_organization data source reads an organization")
 	resp.Diagnostics.Append(diagnostics...)
 	d.client = c

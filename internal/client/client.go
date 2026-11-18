@@ -190,6 +190,11 @@ func (c *Client) IsCloud() bool {
 	return c.product == ProductCloud
 }
 
+// ScopedToken reports whether the token is a scoped organization token.
+func (c *Client) ScopedToken() bool {
+	return strings.HasPrefix(c.token, ScopedTokenPrefix)
+}
+
 // send builds a request and hands it to do. The two API surfaces differ only
 // in the host they answer at and in the way they take the token, so prepare
 // carries that difference and everything else stays in one place.
@@ -332,7 +337,7 @@ func (c *Client) do(req *http.Request, out any) error {
 
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
 		apiErr := newAPIError(resp.StatusCode, body)
-		apiErr.ScopedToken = strings.HasPrefix(c.token, ScopedTokenPrefix)
+		apiErr.ScopedToken = c.ScopedToken()
 		return apiErr
 	}
 

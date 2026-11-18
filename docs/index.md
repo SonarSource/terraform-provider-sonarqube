@@ -56,6 +56,7 @@ supports only a small set of resources and data sources with them.
 | `sonarqube_cloud_quality_gate` data source | Supported |
 | `sonarqube_quality_profile` data source | Supported |
 | `sonarqube_cloud_scoped_organization_token` | Supported. The token must have the `admin` organization permission. `project_keys` works only with public projects. |
+| `sonarqube_cloud_organization_quality_gate_settings` | Supported. The token must have the `admin` organization permission. |
 | All other resources and data sources | Not supported |
 
 Give the token the organization permissions `admin`, `scan` and
@@ -71,8 +72,16 @@ Limits:
 * The token has no user. Resources that change groups, permissions, quality
   gates or quality profiles need a user token.
 
-When an API refuses a scoped organization token, the error tells that the
-token is a possible cause. Use a user token for that resource.
+With a scoped organization token, each resource and data source that is not
+supported fails with an error before it calls an API. A plan, a refresh, an
+import and a destroy fail, and Terraform keeps the state. When an API refuses
+a scoped organization token, the error tells that the token is a possible
+cause. Use a user token for these resources and data sources.
+
+To stop managing such a resource without a user token, use
+`terraform state rm`, or (with Terraform 1.10 or later) a `removed` block with
+`destroy = false`. Older Terraform versions refresh the removed resource first,
+so run them with `-refresh=false`.
 
 ## User-Agent
 

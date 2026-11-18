@@ -89,7 +89,7 @@ func (r *scopedOrganizationTokenResource) Schema(_ context.Context, _ resource.S
 }
 
 func (r *scopedOrganizationTokenResource) Configure(_ context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
-	c, diagnostics := configure.CloudClient(req.ProviderData, "The sonarqube_cloud_scoped_organization_token resource manages an organization token")
+	c, diagnostics := configure.CloudClientAcceptingScopedToken(req.ProviderData, "The sonarqube_cloud_scoped_organization_token resource manages an organization token")
 	resp.Diagnostics.Append(diagnostics...)
 	r.client = c
 }

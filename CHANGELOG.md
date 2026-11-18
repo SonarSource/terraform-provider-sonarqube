@@ -2,6 +2,15 @@
 
 ## 0.1.0-alpha.5 (Unreleased)
 
+BREAKING CHANGES:
+
+* With a scoped organization token, each resource and data source that does not support these tokens fails before
+  it calls an API. A plan, a refresh, an import and a destroy fail, and Terraform keeps the state. Before, some of
+  them worked, but `sonarqube_project` made a private project that the next refresh could not find, and Terraform
+  removed it from the state with no warning. The provider docs list the supported resources and data sources. For
+  the others, set a user token in the provider, or remove them from the state with `terraform state rm` or a
+  `removed` block with `destroy = false` (Terraform 1.10 or later, or `-refresh=false` on older versions).
+
 ENHANCEMENTS:
 
 * The provider now sends a User-Agent header with the Terraform version and the provider version, for example

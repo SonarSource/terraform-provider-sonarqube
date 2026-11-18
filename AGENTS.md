@@ -227,6 +227,12 @@ with `SONARQUBE_TEST_SOT_TOKEN` (see [CONTRIBUTING.md](CONTRIBUTING.md)). If
 the token cannot run it, start the test with `acctest.SkipWithSOT`, and update
 the scoped organization token section of the provider docs.
 
+A resource or data source that supports a scoped organization token calls
+`configure.CloudClientAcceptingScopedToken` in `Configure`. All others call
+`configure.CloudClient`, which refuses these tokens. Add a supported type to
+`supportScopedToken` in `internal/provider/scoped_token_test.go` and to the
+table in `templates/index.md.tmpl`. The test compares the two.
+
 ## Documentation
 
 Update these instructions when commands, package boundaries, or development

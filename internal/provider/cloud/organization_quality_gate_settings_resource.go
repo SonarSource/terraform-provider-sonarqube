@@ -61,7 +61,7 @@ func (r *organizationQualityGateSettingsResource) Schema(_ context.Context, _ re
 }
 
 func (r *organizationQualityGateSettingsResource) Configure(_ context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
-	c, diagnostics := configure.CloudClient(req.ProviderData,
+	c, diagnostics := configure.CloudClientAcceptingScopedToken(req.ProviderData,
 		"The sonarqube_cloud_organization_quality_gate_settings resource manages organization quality gate settings")
 	resp.Diagnostics.Append(diagnostics...)
 	r.client = c
