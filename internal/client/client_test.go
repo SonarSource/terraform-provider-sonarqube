@@ -6,8 +6,13 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
+	"time"
 )
+
+// testReadWaits keep the retries of reads short in the tests.
+var testReadWaits = []time.Duration{time.Millisecond, time.Millisecond, time.Millisecond}
 
 func newTestClient(srv *httptest.Server) *Client {
 	return newTestClientWithUserAgent(srv, "")
@@ -23,6 +28,7 @@ func newTestClientWithUserAgent(srv *httptest.Server, userAgent string) *Client 
 		Product:    ProductCloud,
 		UserAgent:  userAgent,
 		HTTPClient: srv.Client(),
+		ReadWaits:  testReadWaits,
 	})
 }
 
@@ -324,5 +330,51 @@ func TestRequestsSendTheUserAgent(t *testing.T) {
 				t.Errorf("User-Agent headers = %q, want %q on both requests", got, tc.want)
 			}
 		})
+	}
+}
+
+// failingServer answers 500 to the first failures requests, and 200 with
+// {"valid":true} after that. It counts the requests.
+func failingServer(t *testing.T, failures int32) (*httptest.Server, *atomic.Int32) {
+	t.Helper()
+	calls := &atomic.Int32{}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		if calls.Add(1) <= failures {
+			w.WriteHeader(http.StatusInternalServerError)
+			_, _ = w.Write([]byte(`{"message": "Internal server error"}`))
+			return
+		}
+		_, _ = w.Write([]byte(`{"valid":true}`))
+	}))
+	t.Cleanup(srv.Close)
+	return srv, calls
+}
+
+func TestReadsTryAgainAfterServerErrors(t *testing.T) {
+	t.Parallel()
+	for name, tc := range map[string]struct {
+		failures  int32
+		wantErr   bool
+		wantCalls int32
+	}{
+		"success after retries": {failures: 3, wantCalls: 4},
+		"failure after waits":   {failures: 4, wantErr: true, wantCalls: 4},
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			srv, calls := failingServer(t, tc.failures)
+			err := newTestClient(srv).get(t.Context(), "/api/anything", nil, nil)
+			if (err != nil) != tc.wantErr || calls.Load() != tc.wantCalls {
+				t.Errorf("err = %v, calls = %d, want %d", err, calls.Load(), tc.wantCalls)
+			}
+		})
+	}
+}
+
+func TestWritesDoNotTryAgain(t *testing.T) {
+	t.Parallel()
+	srv, calls := failingServer(t, 1)
+	if err := newTestClient(srv).post(t.Context(), "/api/anything", nil); err == nil || calls.Load() != 1 {
+		t.Errorf("err = %v, calls = %d, want one failed call", err, calls.Load())
 	}
 }
