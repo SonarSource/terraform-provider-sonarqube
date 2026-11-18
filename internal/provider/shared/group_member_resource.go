@@ -31,7 +31,10 @@ var (
 
 // NewGroupMemberResource returns the sonarqube_group_member resource.
 func NewGroupMemberResource() resource.Resource {
-	return &groupMemberResource{readRetries: []time.Duration{time.Second, 2 * time.Second, 3 * time.Second}}
+	return &groupMemberResource{
+		readRetries: []time.Duration{time.Second, 2 * time.Second, 3 * time.Second},
+		groupWaits:  eventual.GroupChangeWaits,
+	}
 }
 
 type groupMemberResource struct {
@@ -40,6 +43,9 @@ type groupMemberResource struct {
 	// member list of SonarQube Cloud can show the old members for some
 	// seconds after a change.
 	readRetries []time.Duration
+	// groupWaits are the waits before Create adds the user again, while the
+	// group is not ready after a recent change.
+	groupWaits []time.Duration
 }
 
 type groupMemberResourceModel struct {
@@ -79,7 +85,11 @@ func (r *groupMemberResource) Schema(_ context.Context, _ resource.SchemaRequest
 			"## Delays\n\n" +
 			"The member list of SonarQube Cloud can show the old members for some seconds after a change. " +
 			"When a refresh does not find the user, it reads the list again for about six seconds. A removal " +
-			"outside Terraform thus shows some seconds later than other changes.",
+			"outside Terraform thus shows some seconds later than other changes.\n\n" +
+			"For some seconds after a group is created, renamed, or deleted, SonarQube Cloud can refuse " +
+			"to add a member to a group with that name. Create then tries again for about ten seconds. Thus a " +
+			"group name that does not exist, for example after a typing error or a deletion outside " +
+			"Terraform, shows its error about ten seconds later.",
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{Computed: true, Description: "`<organization>/<group_name>/<login>`.",
 				PlanModifiers: []planmodifier.String{stringplanmodifier.UseStateForUnknown()}},
@@ -113,7 +123,10 @@ func (r *groupMemberResource) Create(ctx context.Context, req resource.CreateReq
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	if err := r.client.AddGroupMember(ctx, organization, groupName, plan.Login.ValueString()); err != nil {
+	err := eventual.Retry(ctx, r.groupWaits, client.IsGroupNotReady, func() error {
+		return r.client.AddGroupMember(ctx, organization, groupName, plan.Login.ValueString())
+	})
+	if err != nil {
 		resp.Diagnostics.AddError("Cannot add the user to the group "+groupName, err.Error())
 		return
 	}

@@ -57,6 +57,9 @@ type permissionsResource[M any, P permissionsModelPointer[M]] struct {
 	// readRetries are the waits before Delete reads again, after a remove
 	// that failed, to find a group or a project that is being deleted.
 	readRetries []time.Duration
+	// groupWaits are the waits before create and update try a call for a
+	// group again, while the group is not ready after a recent change.
+	groupWaits []time.Duration
 }
 
 // permissionReadRetries is the default of readRetries.
@@ -108,7 +111,15 @@ func (r *permissionsResource[M, P]) apply(ctx context.Context, planned tfsdk.Pla
 	if diagnostics.HasError() {
 		return
 	}
-	current, err := r.client.GetPermissions(ctx, model.scope(), model.principal())
+	waits := r.groupWaits
+	if !model.principal().Group {
+		waits = nil
+	}
+	var current []string
+	err := eventual.Retry(ctx, waits, isGroupNotListed, func() (err error) {
+		current, err = r.client.GetPermissions(ctx, model.scope(), model.principal())
+		return err
+	})
 	if err != nil {
 		r.addReadError(diagnostics, err, model)
 		return
@@ -120,7 +131,7 @@ func (r *permissionsResource[M, P]) apply(ctx context.Context, planned tfsdk.Pla
 			return
 		}
 	}
-	if err := r.applyDiff(ctx, model, current, desired); err != nil {
+	if err := r.applyDiff(ctx, model, current, desired, waits); err != nil {
 		diagnostics.AddError("Cannot change "+r.noun(), err.Error())
 		return
 	}
@@ -180,7 +191,7 @@ func (r *permissionsResource[M, P]) Delete(ctx context.Context, req resource.Del
 		r.addReadError(&resp.Diagnostics, err, model)
 		return
 	}
-	if err := r.applyDiff(ctx, model, current, nil); err != nil {
+	if err := r.applyDiff(ctx, model, current, nil, nil); err != nil {
 		// A destroy can delete the group or the project at the same time.
 		// Then the remove fails, but there is nothing left to remove.
 		if !isRefusal(err) && r.targetGone(ctx, model) {
@@ -239,19 +250,35 @@ func (r *permissionsResource[M, P]) ImportState(ctx context.Context, req resourc
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("id"), id)...)
 }
 
+// isGroupNotListed reports a group that the permission list does not show
+// yet, or another failure of a group that is not ready.
+func isGroupNotListed(err error) bool {
+	return errors.Is(err, client.ErrNotFound) || client.IsGroupNotReady(err)
+}
+
 // applyDiff adds the missing permissions before it removes the extra ones, so
 // that a change of admin does not remove the last administrator for a moment.
-func (r *permissionsResource[M, P]) applyDiff(ctx context.Context, model P, current, desired []string) error {
+// Each call is tried again after each of waits while the group is not ready.
+func (r *permissionsResource[M, P]) applyDiff(ctx context.Context, model P, current, desired []string, waits []time.Duration) error {
 	scope, principal := model.scope(), model.principal()
+	type change struct {
+		verb, permission string
+		call             func(context.Context, client.PermissionScope, client.PermissionPrincipal, string) error
+	}
 	adds, removes := permissionDiff(current, desired)
+	var changes []change
 	for _, permission := range adds {
-		if err := r.client.AddPermission(ctx, scope, principal, permission); err != nil {
-			return fmt.Errorf("add %s: %w", permission, err)
-		}
+		changes = append(changes, change{"add", permission, r.client.AddPermission})
 	}
 	for _, permission := range removes {
-		if err := r.client.RemovePermission(ctx, scope, principal, permission); err != nil {
-			return fmt.Errorf("remove %s: %w", permission, err)
+		changes = append(changes, change{"remove", permission, r.client.RemovePermission})
+	}
+	for _, c := range changes {
+		err := eventual.Retry(ctx, waits, client.IsGroupNotReady, func() error {
+			return c.call(ctx, scope, principal, c.permission)
+		})
+		if err != nil {
+			return fmt.Errorf("%s %s: %w", c.verb, c.permission, err)
 		}
 	}
 	return nil

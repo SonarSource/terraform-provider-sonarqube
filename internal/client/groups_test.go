@@ -225,3 +225,30 @@ func TestSearchGroupsSendsTheText(t *testing.T) {
 		t.Errorf("groups=%+v", groups)
 	}
 }
+
+func TestIsGroupNotReady(t *testing.T) {
+	t.Parallel()
+	notFound := func(message string) error {
+		return fmt.Errorf("add scan: %w", &APIError{StatusCode: http.StatusNotFound, Messages: []string{message}})
+	}
+	tests := map[string]struct {
+		err  error
+		want bool
+	}{
+		"server error":         {err: &APIError{StatusCode: http.StatusInternalServerError}, want: true},
+		"gateway error":        {err: &APIError{StatusCode: http.StatusBadGateway}, want: false},
+		"unavailable":          {err: &APIError{StatusCode: http.StatusServiceUnavailable}, want: false},
+		"group of user_groups": {err: notFound("No group with name 'team' in organization 'my-org'"), want: true},
+		"group of permissions": {err: notFound("Group with name 'team' in organization 'org-uuid' not found"), want: true},
+		"missing organization": {err: notFound("Organization with key 'my-org' not found"), want: false},
+		"missing project":      {err: notFound("Project key 'my-project' not found"), want: false},
+		"missing user":         {err: notFound("Could not find a user with login 'alice'"), want: false},
+		"refusal":              {err: &APIError{StatusCode: http.StatusBadRequest}, want: false},
+		"other error":          {err: errors.New("connection refused"), want: false},
+	}
+	for name, test := range tests {
+		if got := IsGroupNotReady(test.err); got != test.want {
+			t.Errorf("%s: got %v", name, got)
+		}
+	}
+}

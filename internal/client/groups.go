@@ -11,6 +11,21 @@ import (
 
 const groupsPath = "/users/groups"
 
+// IsGroupNotReady reports a failure that a call that names a group can get
+// for some seconds after a change to a group with that name: a 500, or a 404
+// for the group. The 500 comes from the lookup of the group by name, before
+// the call changes anything. A 404 for the organization, the project or the
+// user, and a 502, 503 or 504 of the gateway, are not such failures.
+func IsGroupNotReady(err error) bool {
+	var apiErr *APIError
+	if !errors.As(err, &apiErr) {
+		return false
+	}
+	return apiErr.StatusCode == http.StatusInternalServerError ||
+		apiErr.StatusCode == http.StatusNotFound && (hasMessagePrefix(apiErr.Messages, "No group with name ") ||
+			hasMessagePrefix(apiErr.Messages, "Group with name "))
+}
+
 // Group is a user group of an organization. ID is a UUID.
 type Group struct {
 	ID          string `json:"id"`
