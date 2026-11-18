@@ -37,6 +37,9 @@ it — do not decide unilaterally.
 ## Repository structure
 
 - `main.go`: provider executable entry point.
+- `sonarqube`: the only public package. It gives `New(version)` to Go programs
+  outside this module, for example Crossplane Upjet. Keep all other code in
+  `internal`.
 - `internal/provider`: the provider: its settings, and the registration of
   every resource and data source.
   - `cloud`: resources and data sources for SonarQube Cloud only.

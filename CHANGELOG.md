@@ -20,6 +20,9 @@ ENHANCEMENTS:
   `Terraform/1.9.8 (+https://www.terraform.io) sonarqube-terraform/0.1.0-alpha.5`. To add your own text at the
   end, set the `TF_APPEND_USER_AGENT` environment variable. The provider removes control characters and
   non-ASCII characters from this text, and keeps at most 256 characters.
+* The new public Go package `github.com/SonarSource/terraform-provider-sonarqube/sonarqube` gives the provider
+  constructor `New(version)` to Go programs outside this module, for example Crossplane Upjet. This API is
+  experimental and can change in any release before version 1.0.0. See the README.
 
 BUG FIXES:
 
