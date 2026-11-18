@@ -83,6 +83,21 @@ To stop managing such a resource without a user token, use
 `destroy = false`. Older Terraform versions refresh the removed resource first,
 so run them with `-refresh=false`.
 
+## Import an Existing Setup
+
+`terraform plan -generate-config-out=<file>` writes the configuration of the
+resources in `import` blocks. This configuration has hard-coded names and keys,
+so Terraform does not know the dependencies between the resources. Replace the
+hard-coded values with references to the other resources, for example
+`group_name = sonarqube_group.developers.name` instead of
+`group_name = "developers"`. Then Terraform creates, changes and deletes the
+resources in the correct sequence.
+
+Without references, a destroy deletes a group or a project at the same time as
+its permissions or settings. The provider accepts this: when the group, the
+project or the quality profile is already deleted, the delete of the dependent
+resource succeeds.
+
 ## User-Agent
 
 The provider sends the Terraform version and the provider version in the

@@ -25,6 +25,7 @@ import (
 
 	"github.com/SonarSource/terraform-provider-sonarqube/internal/client"
 	"github.com/SonarSource/terraform-provider-sonarqube/internal/provider/configure"
+	"github.com/SonarSource/terraform-provider-sonarqube/internal/provider/eventual"
 )
 
 var (
@@ -293,34 +294,44 @@ func (r *qualityProfileRuleResource) Delete(ctx context.Context, req resource.De
 	if resp.Diagnostics.HasError() {
 		return
 	}
+	// A destroy can delete the profile at the same time as its rules. Then
+	// the change of the rule fails, but there is nothing left to change.
+	if summary, err := r.remove(ctx, state); err != nil && !r.profileGone(ctx, state.QualityProfileKey.ValueString()) {
+		resp.Diagnostics.AddError(summary, ruleErrorDetail(err))
+	}
+}
+
+// remove gives the profile the state that it has without the resource. On a
+// failure, it also returns the summary of the error.
+func (r *qualityProfileRuleResource) remove(ctx context.Context, state qualityProfileRuleResourceModel) (string, error) {
 	key, rule := state.QualityProfileKey.ValueString(), state.Rule.ValueString()
+	activateSummary := cannotActivateRule + rule + " in the quality profile " + key
 	if state.inactive() {
-		if err := r.activateInherited(ctx, key, rule); err != nil {
-			resp.Diagnostics.AddError(cannotActivateRule+rule+" in the quality profile "+key, ruleErrorDetail(err))
-		}
-		return
+		return activateSummary, r.activateInherited(ctx, key, rule)
 	}
 	active, err := r.findRule(ctx, key, rule)
 	switch {
 	case errors.Is(err, client.ErrNotFound):
 		// Someone deactivated the inherited rule outside of Terraform after
 		// the refresh. The destroy still gives it the values of the parent.
-		if err := r.activateInherited(ctx, key, rule); err != nil {
-			resp.Diagnostics.AddError(cannotActivateRule+rule+" in the quality profile "+key, ruleErrorDetail(err))
-		}
-		return
+		return activateSummary, r.activateInherited(ctx, key, rule)
 	case err != nil:
-		resp.Diagnostics.AddError(readRuleSummary(key, rule), err.Error())
-		return
-	}
-	if active.Inherit == client.RuleInheritNone {
+		return readRuleSummary(key, rule), err
+	case active.Inherit == client.RuleInheritNone:
 		err = r.client.DeactivateQualityProfileRule(ctx, key, rule)
-	} else {
+	default:
 		err = r.client.ResetQualityProfileRule(ctx, key, rule)
 	}
-	if err != nil {
-		resp.Diagnostics.AddError("Cannot remove the rule "+rule+" from the quality profile "+key, ruleErrorDetail(err))
-	}
+	return "Cannot remove the rule " + rule + " from the quality profile " + key, err
+}
+
+// profileGone reports a profile that does not exist any more. The profile can
+// still show for a moment, so it reads again after each of readRetries.
+func (r *qualityProfileRuleResource) profileGone(ctx context.Context, key string) bool {
+	_, err := eventual.ReadAgain(ctx, r.readRetries,
+		func() (string, error) { return r.client.GetQualityProfileParentKey(ctx, key) },
+		func(_ string, err error) bool { return errors.Is(err, client.ErrNotFound) })
+	return errors.Is(err, client.ErrNotFound)
 }
 
 // ImportState takes "<quality_profile_key>/<rule>". A profile key has no "/".
@@ -420,7 +431,7 @@ func (r *qualityProfileRuleResource) getRule(ctx context.Context, key, rule stri
 // findRule reads the rule, and reads it again after each wait of readRetries
 // while the search does not find it, because the index can lag.
 func (r *qualityProfileRuleResource) findRule(ctx context.Context, key, rule string) (*client.ActiveRule, error) {
-	return readAgain(ctx, r.readRetries, r.getRule(ctx, key, rule),
+	return eventual.ReadAgain(ctx, r.readRetries, r.getRule(ctx, key, rule),
 		func(_ *client.ActiveRule, err error) bool { return !errors.Is(err, client.ErrNotFound) })
 }
 
@@ -430,7 +441,7 @@ func (r *qualityProfileRuleResource) findRule(ctx context.Context, key, rule str
 // to find that fault.
 func (r *qualityProfileRuleResource) checkApplied(ctx context.Context, key, rule string, planned client.RuleValues) diag.Diagnostics {
 	var diagnostics diag.Diagnostics
-	active, err := readAgain(ctx, r.writeRetries, r.getRule(ctx, key, rule),
+	active, err := eventual.ReadAgain(ctx, r.writeRetries, r.getRule(ctx, key, rule),
 		func(active *client.ActiveRule, err error) bool {
 			return (err != nil && !errors.Is(err, client.ErrNotFound)) || (err == nil && len(mismatches(active.Values, planned)) == 0)
 		})

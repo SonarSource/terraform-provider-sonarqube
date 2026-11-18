@@ -269,9 +269,36 @@ func TestProjectQualityProfileResourceModifyPlan(t *testing.T) {
 	if got := providertest.ReadModel[projectQualityProfileResourceModel](t, tfsdk.State(unknown.Plan)); !got.Language.IsUnknown() || len(unknown.RequiresReplace) != 0 {
 		t.Errorf("plan = %+v, replace = %v", got, unknown.RequiresReplace)
 	}
+}
 
-	missing := modifyProjectProfilePlan(t, r, providertest.EmptyState(t, projectQualityProfileSchema(t)), projectProfileModel("my-project", "nope"))
-	providertest.AssertDiagnosticsContain(t, missing.Diagnostics, "Quality profile nope not found")
+// terraform destroy plans the configuration first. A profile that is already
+// deleted must not stop it, for a new resource and for a resource in the
+// state. The apply reports the missing profile.
+func TestProjectQualityProfileResourcePlanWarnsAboutMissingProfile(t *testing.T) {
+	t.Parallel()
+	_, r := newFakeProjectProfiles(t)
+	create := createProjectProfile(t, r, projectProfileModel("my-project", "java-a"))
+	if create.Diagnostics.HasError() {
+		t.Fatal(create.Diagnostics)
+	}
+	for name, state := range map[string]tfsdk.State{
+		"new":      providertest.EmptyState(t, projectQualityProfileSchema(t)),
+		"in state": create.State,
+	} {
+		missing := modifyProjectProfilePlan(t, r, state, projectProfileModel("my-project", "nope"))
+		if missing.Diagnostics.HasError() || missing.Diagnostics.WarningsCount() != 1 ||
+			missing.Diagnostics[0].Summary() != "Quality profile nope not found" {
+			t.Fatalf("%s: diagnostics = %v", name, missing.Diagnostics)
+		}
+		if got := providertest.ReadModel[projectQualityProfileResourceModel](t, tfsdk.State(missing.Plan)); !got.Language.IsUnknown() || !got.ID.IsUnknown() {
+			t.Errorf("%s: plan = %+v", name, got)
+		}
+	}
+
+	created := createProjectProfile(t, r, projectProfileModel("my-project", "nope"))
+	providertest.AssertDiagnosticsContain(t, created.Diagnostics, "Quality profile nope not found")
+	updated := updateProjectProfile(t, r, create.State, projectProfileModel("my-project", "nope"))
+	providertest.AssertDiagnosticsContain(t, updated.Diagnostics, "Quality profile nope not found")
 }
 
 // When the plan did not know the profile key, the language changes in the

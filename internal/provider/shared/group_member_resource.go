@@ -19,6 +19,7 @@ import (
 
 	"github.com/SonarSource/terraform-provider-sonarqube/internal/client"
 	"github.com/SonarSource/terraform-provider-sonarqube/internal/provider/configure"
+	"github.com/SonarSource/terraform-provider-sonarqube/internal/provider/eventual"
 	"github.com/SonarSource/terraform-provider-sonarqube/internal/provider/validate"
 )
 
@@ -173,7 +174,7 @@ func (r *groupMemberResource) Read(ctx context.Context, req resource.ReadRequest
 // made a few seconds ago is not taken for a removed one.
 func (r *groupMemberResource) isMember(ctx context.Context, state groupMemberResourceModel) (bool, error) {
 	organization, group, login := state.Organization.ValueString(), state.GroupName.ValueString(), state.Login.ValueString()
-	return readAgain(ctx, r.readRetries,
+	return eventual.ReadAgain(ctx, r.readRetries,
 		func() (bool, error) { return r.client.IsGroupMember(ctx, organization, group, login) },
 		func(member bool, err error) bool { return err != nil || member })
 }
