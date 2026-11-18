@@ -57,6 +57,9 @@ type fakeProjectPermissionInstance struct {
 	public        bool
 	projectReads  int
 	projectExists bool
+	// deleteProjectOnRemove deletes the project just before the next
+	// remove, as a parallel destroy can do.
+	deleteProjectOnRemove bool
 }
 
 func (f *fakeProjectPermissionInstance) start(t *testing.T) *projectPermissionsResource {
@@ -64,6 +67,7 @@ func (f *fakeProjectPermissionInstance) start(t *testing.T) *projectPermissionsR
 	srv := httptest.NewServer(http.HandlerFunc(f.serveProject))
 	t.Cleanup(srv.Close)
 	r := NewProjectPermissionsResource().(*projectPermissionsResource)
+	r.readRetries = nil
 	r.client = providertest.NewCloudClient(srv)
 	return r
 }
@@ -85,6 +89,9 @@ func (f *fakeProjectPermissionInstance) serveProject(w http.ResponseWriter, r *h
 	if err := r.ParseForm(); err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		return
+	}
+	if f.deleteProjectOnRemove && strings.Contains(r.URL.Path, "/remove_") {
+		f.projectExists = false
 	}
 	if !f.projectExists || r.Form.Get("projectKey") != "my-project" {
 		w.WriteHeader(http.StatusNotFound)
@@ -266,6 +273,38 @@ func TestProjectPermissionsMissingProject(t *testing.T) {
 	if deleted.Diagnostics.HasError() {
 		t.Errorf("destroy of a missing project: %v", deleted.Diagnostics)
 	}
+}
+
+func TestProjectPermissionsDeleteWhenProjectIsDeletedMeanwhile(t *testing.T) {
+	instance := newFakeProjectPermissionInstance(map[string][]string{"Developers": {"scan"}})
+	r := instance.start(t)
+	s := projectPermissionsSchema(t)
+	created := &resource.CreateResponse{State: providertest.EmptyState(t, s)}
+	r.Create(t.Context(), resource.CreateRequest{Plan: projectPermissionPlan(t, s, projectPermissionModel("Developers", "scan"))}, created)
+	if created.Diagnostics.HasError() {
+		t.Fatal(created.Diagnostics)
+	}
+	instance.deleteProjectOnRemove = true
+	deleted := &resource.DeleteResponse{State: created.State}
+	r.Delete(t.Context(), resource.DeleteRequest{State: created.State}, deleted)
+	if deleted.Diagnostics.HasError() {
+		t.Errorf("destroy: %v", deleted.Diagnostics)
+	}
+}
+
+func TestProjectPermissionsDeleteErrorWhenProjectExists(t *testing.T) {
+	instance := newFakeProjectPermissionInstance(map[string][]string{"Developers": {"scan"}})
+	r := instance.start(t)
+	s := projectPermissionsSchema(t)
+	created := &resource.CreateResponse{State: providertest.EmptyState(t, s)}
+	r.Create(t.Context(), resource.CreateRequest{Plan: projectPermissionPlan(t, s, projectPermissionModel("Developers", "scan"))}, created)
+	if created.Diagnostics.HasError() {
+		t.Fatal(created.Diagnostics)
+	}
+	instance.failRemove = true
+	deleted := &resource.DeleteResponse{State: created.State}
+	r.Delete(t.Context(), resource.DeleteRequest{State: created.State}, deleted)
+	providertest.AssertDiagnosticsContain(t, deleted.Diagnostics, "remove scan")
 }
 
 func TestProjectPermissionsUser(t *testing.T) {

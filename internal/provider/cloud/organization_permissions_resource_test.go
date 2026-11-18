@@ -9,6 +9,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
@@ -56,6 +57,13 @@ type fakePermissionInstance struct {
 	groups map[string][]string
 	users  map[string][]string
 	calls  []string
+	// failRemove makes each remove fail with a server error. With
+	// deleteOnRemove, the principal is deleted first.
+	failRemove, deleteOnRemove bool
+	// vanishing is a group that the reads still show readsLeft more times,
+	// before it is gone, as the list can show a deleted group for a moment.
+	vanishing string
+	readsLeft int
 }
 
 func (f *fakePermissionInstance) start(t *testing.T) *organizationPermissionsResource {
@@ -63,6 +71,7 @@ func (f *fakePermissionInstance) start(t *testing.T) *organizationPermissionsRes
 	srv := httptest.NewServer(http.HandlerFunc(f.serve))
 	t.Cleanup(srv.Close)
 	r := NewOrganizationPermissionsResource().(*organizationPermissionsResource)
+	r.readRetries = nil
 	r.client = providertest.NewCloudClient(srv)
 	return r
 }
@@ -71,6 +80,12 @@ func (f *fakePermissionInstance) serve(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil || r.Form.Get("organization") != "my-org" {
 		w.WriteHeader(http.StatusNotFound)
 		return
+	}
+	if r.Method == http.MethodGet && f.vanishing != "" {
+		if f.readsLeft == 0 {
+			delete(f.groups, f.vanishing)
+		}
+		f.readsLeft--
 	}
 	switch {
 	case r.Method == http.MethodGet && r.URL.Path == "/api/permissions/groups":
@@ -143,6 +158,13 @@ func (f *fakePermissionInstance) serveWrite(w http.ResponseWriter, r *http.Reque
 	}
 	if _, found := grants[name]; !found {
 		w.WriteHeader(http.StatusNotFound)
+		return
+	}
+	if f.failRemove && strings.Contains(r.URL.Path, "/remove_") {
+		if f.deleteOnRemove {
+			delete(grants, name)
+		}
+		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 	if r.URL.Path == "/api/permissions/add_group" || r.URL.Path == "/api/permissions/add_user" {
@@ -353,6 +375,64 @@ func TestOrganizationPermissionsReadMissingPrincipal(t *testing.T) {
 			r.Read(t.Context(), resource.ReadRequest{State: state}, resp)
 			if resp.Diagnostics.HasError() || !resp.State.Raw.IsNull() || (resp.Diagnostics.WarningsCount() > 0) != tc.warning {
 				t.Errorf("diagnostics = %v, state = %v", resp.Diagnostics, resp.State.Raw)
+			}
+		})
+	}
+}
+
+// A destroy can delete the group after the delete of its permissions read
+// them. The remove then fails, and the delete still succeeds.
+func TestOrganizationPermissionsDeleteWhenGroupIsDeletedMeanwhile(t *testing.T) {
+	for name, deleteGroup := range map[string]bool{"group deleted": true, "group still there": false} {
+		t.Run(name, func(t *testing.T) {
+			instance := &fakePermissionInstance{groups: map[string][]string{"Developers": {"scan"}}}
+			r := instance.start(t)
+			s := organizationPermissionsSchema(t)
+			created := &resource.CreateResponse{State: providertest.EmptyState(t, s)}
+			r.Create(t.Context(), resource.CreateRequest{Plan: permissionPlan(t, s, permissionModel("Developers", "scan"))}, created)
+			if created.Diagnostics.HasError() {
+				t.Fatal(created.Diagnostics)
+			}
+			instance.failRemove, instance.deleteOnRemove = true, deleteGroup
+			deleted := &resource.DeleteResponse{State: created.State}
+			r.Delete(t.Context(), resource.DeleteRequest{State: created.State}, deleted)
+			if deleteGroup && deleted.Diagnostics.HasError() {
+				t.Errorf("destroy: %v", deleted.Diagnostics)
+			}
+			if !deleteGroup {
+				providertest.AssertDiagnosticsContain(t, deleted.Diagnostics, "remove scan")
+			}
+		})
+	}
+}
+
+// The list can still show a deleted group for a moment, so Delete reads
+// again after each of readRetries.
+func TestOrganizationPermissionsDeleteWaitsForDeletedGroup(t *testing.T) {
+	for name, tc := range map[string]struct {
+		waits   []time.Duration
+		success bool
+	}{
+		"enough waits":     {waits: []time.Duration{0, 0}, success: true},
+		"not enough waits": {waits: []time.Duration{0}, success: false},
+	} {
+		t.Run(name, func(t *testing.T) {
+			instance := &fakePermissionInstance{groups: map[string][]string{"Developers": {"scan"}}}
+			r := instance.start(t)
+			s := organizationPermissionsSchema(t)
+			created := &resource.CreateResponse{State: providertest.EmptyState(t, s)}
+			r.Create(t.Context(), resource.CreateRequest{Plan: permissionPlan(t, s, permissionModel("Developers", "scan"))}, created)
+			if created.Diagnostics.HasError() {
+				t.Fatal(created.Diagnostics)
+			}
+			// The read before the remove and the first two reads after it
+			// still show the group.
+			instance.failRemove, instance.vanishing, instance.readsLeft = true, "Developers", 3
+			r.readRetries = tc.waits
+			deleted := &resource.DeleteResponse{State: created.State}
+			r.Delete(t.Context(), resource.DeleteRequest{State: created.State}, deleted)
+			if deleted.Diagnostics.HasError() == tc.success {
+				t.Errorf("destroy: %v", deleted.Diagnostics)
 			}
 		})
 	}

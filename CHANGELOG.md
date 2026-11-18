@@ -18,6 +18,16 @@ ENHANCEMENTS:
   end, set the `TF_APPEND_USER_AGENT` environment variable. The provider removes control characters and
   non-ASCII characters from this text, and keeps at most 256 characters.
 
+BUG FIXES:
+
+* `sonarqube_cloud_organization_permissions` and `sonarqube_cloud_project_permissions`: the destroy succeeds when
+  the same destroy deletes the group or the project. Before, the remove failed, for example with the configuration
+  from `terraform plan -generate-config-out`, which has no references between resources.
+* `sonarqube_quality_profile_rule`: the destroy succeeds when the same destroy deletes the quality profile.
+* `sonarqube_project_quality_profile`: a quality profile key that is not found is a warning in the plan, and an
+  error in the apply. Before, the plan failed, and a destroy could not start after an earlier destroy that
+  deleted the quality profile.
+
 ## 0.1.0-alpha.4 (November 13, 2026)
 
 FEATURES:

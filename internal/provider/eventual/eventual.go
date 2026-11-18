@@ -1,15 +1,17 @@
-package shared
+// Package eventual reads the eventually consistent lists of SonarQube Cloud
+// again until they show the result of a write.
+package eventual
 
 import (
 	"context"
 	"time"
 )
 
-// readAgain calls read, and while settled does not accept the result, calls
+// ReadAgain calls read, and while settled does not accept the result, calls
 // it again after each wait. The lists of SonarQube Cloud are eventually
 // consistent, so a read soon after a write can show the old values. After the
 // last wait, the result is returned as it is.
-func readAgain[T any](ctx context.Context, waits []time.Duration, read func() (T, error), settled func(T, error) bool) (T, error) {
+func ReadAgain[T any](ctx context.Context, waits []time.Duration, read func() (T, error), settled func(T, error) bool) (T, error) {
 	value, err := read()
 	for _, wait := range waits {
 		if settled(value, err) {

@@ -46,6 +46,8 @@ it — do not decide unilaterally.
   - `configure`: gives the resources and data sources the client that the
     provider built.
   - `validate`: the rules that the server applies to keys.
+  - `eventual`: reads again until an eventually consistent list shows the
+    result of a write.
   - `providertest`: helpers for the unit tests of the packages above.
 - `internal/acctest`: helpers for the acceptance tests, such as the provider
   factories and the check that refuses a production instance.

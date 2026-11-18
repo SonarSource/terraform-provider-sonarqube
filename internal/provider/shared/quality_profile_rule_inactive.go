@@ -11,6 +11,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 
 	"github.com/SonarSource/terraform-provider-sonarqube/internal/client"
+	"github.com/SonarSource/terraform-provider-sonarqube/internal/provider/eventual"
 )
 
 // This file holds the parts of sonarqube_quality_profile_rule for
@@ -83,7 +84,7 @@ func (r *qualityProfileRuleResource) deactivate(ctx context.Context, plan qualit
 // because the index can lag behind the deactivation.
 func (r *qualityProfileRuleResource) waitInactive(ctx context.Context, key, rule string) diag.Diagnostics {
 	var diagnostics diag.Diagnostics
-	_, err := readAgain(ctx, r.writeRetries, r.getRule(ctx, key, rule),
+	_, err := eventual.ReadAgain(ctx, r.writeRetries, r.getRule(ctx, key, rule),
 		func(_ *client.ActiveRule, err error) bool { return err != nil })
 	switch {
 	case err == nil:

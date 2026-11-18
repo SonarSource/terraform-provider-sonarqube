@@ -91,6 +91,11 @@ type fakeRules struct {
 	lag int
 	// refuseValues makes each activation with values fail.
 	refuseValues bool
+	// deleteOnWrite deletes the profile just before the next rule change,
+	// as a parallel destroy can do.
+	deleteOnWrite bool
+	// failReset makes each reset of a rule fail.
+	failReset bool
 }
 
 var ruleDefaults = map[string]ruleActivation{
@@ -125,6 +130,14 @@ func (f *fakeRules) serve(w http.ResponseWriter, r *http.Request) {
 	case "/api/qualityprofiles/inheritance":
 		f.inheritance(w, key)
 		return
+	case "/api/qualityprofiles/activate_rule", "/api/qualityprofiles/deactivate_rule":
+		if f.deleteOnWrite {
+			delete(f.active, key)
+			writeError(w, http.StatusNotFound, "Quality Profile with key '"+key+"' does not exist")
+			return
+		}
+	}
+	switch r.URL.Path {
 	case "/api/qualityprofiles/activate_rule":
 		if !f.recordActivation(w, r) {
 			return
@@ -166,6 +179,10 @@ func (f *fakeRules) inheritance(w http.ResponseWriter, key string) {
 func (f *fakeRules) recordActivation(w http.ResponseWriter, r *http.Request) bool {
 	if r.Form.Get("reset") == "true" {
 		f.calls = append(f.calls, "reset")
+		if f.failReset {
+			writeError(w, http.StatusInternalServerError, "An unexpected error occurred.")
+			return false
+		}
 	} else {
 		f.calls = append(f.calls, "activate "+r.Form.Get("impacts")+" "+r.Form.Get("params"))
 	}
@@ -659,6 +676,40 @@ func TestQualityProfileRuleResourceDeletedProfile(t *testing.T) {
 			deleteRule(t, r, create.State)
 		})
 	}
+}
+
+// A destroy can delete the profile after the delete of a rule read it. The
+// change of the rule then fails, and the delete still succeeds.
+func TestQualityProfileRuleResourceProfileDeletedDuringDelete(t *testing.T) {
+	t.Parallel()
+	for name, model := range map[string]qualityProfileRuleResourceModel{
+		"override": ruleModel("child", "java:S3329", map[string]string{"SECURITY": "LOW"}, nil),
+		"inactive": inactiveRuleModel("child", "java:S3329"),
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			f, r := newFakeRules(t)
+			create := createRule(t, r, model)
+			if create.Diagnostics.HasError() {
+				t.Fatal(create.Diagnostics)
+			}
+			f.deleteOnWrite = true
+			deleteRule(t, r, create.State)
+		})
+	}
+}
+
+func TestQualityProfileRuleResourceDeleteErrorWhenProfileExists(t *testing.T) {
+	t.Parallel()
+	f, r := newFakeRules(t)
+	create := createRule(t, r, ruleModel("child", "java:S3329", map[string]string{"SECURITY": "LOW"}, nil))
+	if create.Diagnostics.HasError() {
+		t.Fatal(create.Diagnostics)
+	}
+	f.failReset = true
+	resp := &resource.DeleteResponse{State: create.State}
+	r.Delete(t.Context(), resource.DeleteRequest{State: create.State}, resp)
+	providertest.AssertDiagnosticsContain(t, resp.Diagnostics, "Cannot remove the rule java:S3329")
 }
 
 // When the parent does not activate the rule any more, a rule with

@@ -1,6 +1,7 @@
 package cloud
 
 import (
+	"fmt"
 	"reflect"
 	"testing"
 
@@ -99,5 +100,18 @@ func TestPermissionDiff(t *testing.T) {
 	adds, removes := permissionDiff([]string{"gateadmin", "scan"}, []string{"scan", "admin"})
 	if !reflect.DeepEqual(adds, []string{"admin"}) || !reflect.DeepEqual(removes, []string{"gateadmin"}) {
 		t.Errorf("diff = %v, %v", adds, removes)
+	}
+}
+
+func TestIsRefusal(t *testing.T) {
+	t.Parallel()
+	for status, want := range map[int]bool{400: true, 403: true, 404: false, 500: false} {
+		err := fmt.Errorf("remove scan: %w", &client.APIError{StatusCode: status})
+		if got := isRefusal(err); got != want {
+			t.Errorf("isRefusal(%d) = %v, want %v", status, got, want)
+		}
+	}
+	if isRefusal(&client.ScopeNotFoundError{Kind: client.ScopeProject, Key: "my-project"}) {
+		t.Error("a missing project is a refusal")
 	}
 }

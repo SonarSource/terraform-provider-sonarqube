@@ -4,8 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/resourcevalidator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
@@ -21,6 +23,7 @@ import (
 
 	"github.com/SonarSource/terraform-provider-sonarqube/internal/client"
 	"github.com/SonarSource/terraform-provider-sonarqube/internal/provider/configure"
+	"github.com/SonarSource/terraform-provider-sonarqube/internal/provider/eventual"
 )
 
 // permissionsModel is the state of a resource that controls the full
@@ -51,7 +54,13 @@ type permissionsResource[M any, P permissionsModelPointer[M]] struct {
 	// checkApply, when set, can refuse the permissions that create or update
 	// would add, before any change is sent.
 	checkApply func(ctx context.Context, c *client.Client, scope client.PermissionScope, adds []string) diag.Diagnostics
+	// readRetries are the waits before Delete reads again, after a remove
+	// that failed, to find a group or a project that is being deleted.
+	readRetries []time.Duration
 }
+
+// permissionReadRetries is the default of readRetries.
+var permissionReadRetries = []time.Duration{time.Second, 2 * time.Second, 4 * time.Second}
 
 // noun names the managed grants in diagnostics, for example "project permissions".
 func (r *permissionsResource[M, P]) noun() string {
@@ -164,8 +173,7 @@ func (r *permissionsResource[M, P]) Delete(ctx context.Context, req resource.Del
 	}
 	model := P(&state)
 	current, err := r.client.GetPermissions(ctx, model.scope(), model.principal())
-	var missing *client.ScopeNotFoundError
-	if errors.Is(err, client.ErrNotFound) || errors.As(err, &missing) {
+	if isPermissionTargetGone(err) {
 		return
 	}
 	if err != nil {
@@ -173,8 +181,38 @@ func (r *permissionsResource[M, P]) Delete(ctx context.Context, req resource.Del
 		return
 	}
 	if err := r.applyDiff(ctx, model, current, nil); err != nil {
+		// A destroy can delete the group or the project at the same time.
+		// Then the remove fails, but there is nothing left to remove.
+		if !isRefusal(err) && r.targetGone(ctx, model) {
+			return
+		}
 		resp.Diagnostics.AddError("Cannot remove "+r.noun(), err.Error())
 	}
+}
+
+// isRefusal reports a 4xx answer other than 404, such as the refusal to
+// remove the last administrator. A deleted group, user or project does not
+// cause it, so the error shows at once.
+func isRefusal(err error) bool {
+	var apiErr *client.APIError
+	return errors.As(err, &apiErr) && apiErr.StatusCode >= http.StatusBadRequest &&
+		apiErr.StatusCode < http.StatusInternalServerError && apiErr.StatusCode != http.StatusNotFound
+}
+
+// targetGone reads the permissions again after each of readRetries, until
+// the read does not find the principal, the project or the organization.
+func (r *permissionsResource[M, P]) targetGone(ctx context.Context, model P) bool {
+	_, err := eventual.ReadAgain(ctx, r.readRetries,
+		func() ([]string, error) { return r.client.GetPermissions(ctx, model.scope(), model.principal()) },
+		func(_ []string, err error) bool { return isPermissionTargetGone(err) })
+	return isPermissionTargetGone(err)
+}
+
+// isPermissionTargetGone reports a read that did not find the principal, the
+// project or the organization.
+func isPermissionTargetGone(err error) bool {
+	var missing *client.ScopeNotFoundError
+	return errors.Is(err, client.ErrNotFound) || errors.As(err, &missing)
 }
 
 func (r *permissionsResource[M, P]) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {

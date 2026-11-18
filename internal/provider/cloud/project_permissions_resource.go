@@ -42,6 +42,7 @@ func NewProjectPermissionsResource() resource.Resource {
 		scopeAttributes: []string{"organization", "project_key"},
 		typeSuffix:      "_cloud_project_permissions",
 		checkApply:      checkPublicProjectPermissions,
+		readRetries:     permissionReadRetries,
 	}}
 }
 

@@ -11,7 +11,7 @@ This resource sets the quality profile that a project uses for the language of t
 
 A change of `quality_profile_key` to a different profile of the same language changes the assignment in place. A change to a profile of a different language replaces the resource: the project then uses the default profile again for the earlier language. When the plan does not know the key yet, for example for a profile that the same apply creates, the plan shows an update. The apply then also removes the assignment of the earlier language.
 
-When someone changes the profile of the project outside of Terraform, the next plan shows the change. When the profile is deleted, the project uses the default profile again. If the configuration still names the key of the deleted profile, the next plan fails, because the profile does not exist.
+When someone changes the profile of the project outside of Terraform, the next plan shows the change. When the profile is deleted, the project uses the default profile again. If the configuration still names the key of the deleted profile, the next plan shows a warning, and the apply fails, because the profile does not exist. A destroy still works.
 
 A destroy makes the project use the default profile of the organization for the language again.
 

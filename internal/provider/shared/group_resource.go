@@ -18,6 +18,7 @@ import (
 
 	"github.com/SonarSource/terraform-provider-sonarqube/internal/client"
 	"github.com/SonarSource/terraform-provider-sonarqube/internal/provider/configure"
+	"github.com/SonarSource/terraform-provider-sonarqube/internal/provider/eventual"
 	"github.com/SonarSource/terraform-provider-sonarqube/internal/provider/validate"
 )
 
@@ -203,7 +204,7 @@ func (r *groupResource) ImportState(ctx context.Context, req resource.ImportStat
 // retries.
 func (r *groupResource) readGroup(ctx context.Context, state groupResourceModel) (*client.Group, error) {
 	organization, id := state.Organization.ValueString(), state.ID.ValueString()
-	return readAgain(ctx, r.readRetries,
+	return eventual.ReadAgain(ctx, r.readRetries,
 		func() (*client.Group, error) { return r.client.GetGroup(ctx, organization, id) },
 		func(group *client.Group, err error) bool {
 			if err != nil {

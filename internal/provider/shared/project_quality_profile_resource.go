@@ -63,7 +63,8 @@ func (r *projectQualityProfileResource) Schema(_ context.Context, _ resource.Sch
 			"removes the assignment of the earlier language.\n\n" +
 			"When someone changes the profile of the project outside of Terraform, the next plan shows the change. " +
 			"When the profile is deleted, the project uses the default profile again. If the configuration still " +
-			"names the key of the deleted profile, the next plan fails, because the profile does not exist.\n\n" +
+			"names the key of the deleted profile, the next plan shows a warning, and the apply fails, because the " +
+			"profile does not exist. A destroy still works.\n\n" +
 			"A destroy makes the project use the default profile of the organization for the language again.\n\n" +
 			"## Permissions\n\n" +
 			"The token needs one of these permissions: Administer Quality Profiles on the organization, the " +
@@ -125,8 +126,20 @@ func (r *projectQualityProfileResource) ModifyPlan(ctx context.Context, req reso
 		resp.Diagnostics.Append(resp.Plan.Set(ctx, &plan)...)
 		return
 	}
-	language, ok := r.profileLanguage(ctx, plan, &resp.Diagnostics)
-	if !ok {
+	// terraform destroy plans the configuration first. There, a profile that
+	// an earlier destroy deleted must not stop the plan, so a missing profile
+	// is a warning, and the apply reports it.
+	language, err := r.profileLanguage(ctx, plan)
+	if errors.Is(err, client.ErrNotFound) {
+		summary, detail := missingProfile(plan)
+		resp.Diagnostics.AddAttributeWarning(path.Root("quality_profile_key"), summary,
+			detail+" The apply fails if the profile does not exist then.")
+		plan.Language, plan.ID = types.StringUnknown(), types.StringUnknown()
+		resp.Diagnostics.Append(resp.Plan.Set(ctx, &plan)...)
+		return
+	}
+	if err != nil {
+		addProfileError(&resp.Diagnostics, plan, err)
 		return
 	}
 	plan.Language = types.StringValue(language)
@@ -141,21 +154,32 @@ func (r *projectQualityProfileResource) ModifyPlan(ctx context.Context, req reso
 }
 
 // profileLanguage finds the profile in the organization. add_project would
-// accept a profile of a different organization only to refuse it, so this
-// gives a clearer error.
-func (r *projectQualityProfileResource) profileLanguage(ctx context.Context, plan projectQualityProfileResourceModel, diagnostics *diag.Diagnostics) (string, bool) {
-	organization, key := plan.Organization.ValueString(), plan.QualityProfileKey.ValueString()
-	profile, err := r.client.GetQualityProfile(ctx, organization, "", key)
-	switch {
-	case errors.Is(err, client.ErrNotFound):
-		diagnostics.AddAttributeError(path.Root("quality_profile_key"), "Quality profile "+key+" not found",
-			"No quality profile with this key is in the organization "+organization+". Check the key.")
-		return "", false
-	case err != nil:
-		diagnostics.AddError("Cannot read the quality profile "+key, organizationErrorDetail(err, organization))
-		return "", false
+// accept a profile of a different organization only to refuse it, so a
+// missing profile gives client.ErrNotFound here, with a clearer error.
+func (r *projectQualityProfileResource) profileLanguage(ctx context.Context, plan projectQualityProfileResourceModel) (string, error) {
+	profile, err := r.client.GetQualityProfile(ctx, plan.Organization.ValueString(), "", plan.QualityProfileKey.ValueString())
+	if err != nil {
+		return "", err
 	}
-	return profile.Language, true
+	return profile.Language, nil
+}
+
+// missingProfile explains a quality profile key that the organization does
+// not have.
+func missingProfile(plan projectQualityProfileResourceModel) (summary, detail string) {
+	return "Quality profile " + plan.QualityProfileKey.ValueString() + " not found",
+		"No quality profile with this key is in the organization " + plan.Organization.ValueString() + ". Check the key."
+}
+
+// addProfileError reports a failed read of the profile of the plan.
+func addProfileError(diagnostics *diag.Diagnostics, plan projectQualityProfileResourceModel, err error) {
+	if errors.Is(err, client.ErrNotFound) {
+		summary, detail := missingProfile(plan)
+		diagnostics.AddAttributeError(path.Root("quality_profile_key"), summary, detail)
+		return
+	}
+	diagnostics.AddError("Cannot read the quality profile "+plan.QualityProfileKey.ValueString(),
+		organizationErrorDetail(err, plan.Organization.ValueString()))
 }
 
 func (r *projectQualityProfileResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
@@ -176,8 +200,9 @@ func (r *projectQualityProfileResource) Create(ctx context.Context, req resource
 func (r *projectQualityProfileResource) assign(ctx context.Context, plan *projectQualityProfileResourceModel, diagnostics *diag.Diagnostics) bool {
 	language := plan.Language.ValueString()
 	if plan.Language.IsUnknown() || plan.Language.IsNull() {
-		var ok bool
-		if language, ok = r.profileLanguage(ctx, *plan, diagnostics); !ok {
+		var err error
+		if language, err = r.profileLanguage(ctx, *plan); err != nil {
+			addProfileError(diagnostics, *plan, err)
 			return false
 		}
 	}

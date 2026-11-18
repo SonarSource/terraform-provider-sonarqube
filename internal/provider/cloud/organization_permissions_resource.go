@@ -34,6 +34,7 @@ func NewOrganizationPermissionsResource() resource.Resource {
 		scopeName:       "organization",
 		scopeAttributes: []string{"organization"},
 		typeSuffix:      "_cloud_organization_permissions",
+		readRetries:     permissionReadRetries,
 	}}
 }
 
