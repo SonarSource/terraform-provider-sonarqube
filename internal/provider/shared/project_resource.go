@@ -39,6 +39,7 @@ type projectResourceModel struct {
 	Key          types.String `tfsdk:"key"`
 	Name         types.String `tfsdk:"name"`
 	Organization types.String `tfsdk:"organization"`
+	MainBranch   types.String `tfsdk:"main_branch"`
 }
 
 func (r *projectResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -49,14 +50,16 @@ func (r *projectResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 	replace := []planmodifier.String{stringplanmodifier.RequiresReplace()}
 	resp.Schema = schema.Schema{
 		Description: "Manages a SonarQube Cloud project without a repository binding.\n\n" +
-			"A change to any attribute replaces the project. SonarQube Cloud cannot " +
-			"rename a project. It cannot move a project to a different organization.\n\n" +
+			"A change to `key`, `name` or `organization` replaces the project. SonarQube Cloud " +
+			"cannot rename a project. It cannot move a project to a different organization.\n\n" +
 			"A replacement deletes the project. The analysis history, the issues and " +
-			"the settings go with it. Terraform then makes an empty project.",
+			"the settings go with it. Terraform then makes an empty project. A change to " +
+			"`main_branch` renames the main branch in place, and the project keeps its history.",
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
-				Computed:    true,
-				Description: "Project key.",
+				Computed:      true,
+				Description:   "Project key.",
+				PlanModifiers: []planmodifier.String{stringplanmodifier.UseStateForUnknown()},
 			},
 			"key": schema.StringAttribute{
 				Required:      true,
@@ -80,6 +83,18 @@ func (r *projectResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 				Description:   "Key of the organization that owns the project.",
 				Validators:    validate.OrganizationKey(),
 				PlanModifiers: replace,
+			},
+			"main_branch": schema.StringAttribute{
+				Optional: true,
+				Computed: true,
+				Description: "Name of the main branch of the project. Set it to the default branch of the " +
+					"repository, because a pull request can target only a long-lived branch. A change " +
+					"renames the main branch in place, and the project keeps its analysis history. " +
+					"No other branch of the project can have this name.\n\n" +
+					"When you do not set it, SonarQube Cloud chooses the main branch of a new project, " +
+					"and Terraform keeps the main branch that the project has.",
+				Validators:    []validator.String{stringvalidator.LengthBetween(1, 255)},
+				PlanModifiers: []planmodifier.String{stringplanmodifier.UseStateForUnknown()},
 			},
 		},
 	}
@@ -106,7 +121,31 @@ func (r *projectResource) Create(ctx context.Context, req resource.CreateRequest
 	}
 
 	plan.ID = types.StringValue(key)
+	configured := !plan.MainBranch.IsNull() && !plan.MainBranch.IsUnknown()
+	if !configured {
+		plan.MainBranch = types.StringNull()
+	}
+	// The state holds the project before the next calls, so that a failure
+	// taints the project and does not leave one that Terraform does not know.
 	resp.Diagnostics.Append(resp.State.Set(ctx, plan)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	if configured {
+		if err := r.client.RenameMainBranch(ctx, key, plan.MainBranch.ValueString()); err != nil {
+			resp.Diagnostics.AddError("Cannot set the main branch of the project "+key, err.Error())
+		}
+		return
+	}
+	branch, err := r.client.GetMainBranch(ctx, key)
+	if err != nil {
+		// An error here would taint a project that exists, and the next
+		// refresh reads the main branch.
+		resp.Diagnostics.AddWarning("Cannot read the main branch of the project "+key, err.Error())
+		return
+	}
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("main_branch"), branch)...)
 }
 
 func (r *projectResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
@@ -126,7 +165,17 @@ func (r *projectResource) Read(ctx context.Context, req resource.ReadRequest, re
 		resp.Diagnostics.AddError("Cannot read the project "+key, err.Error())
 		return
 	}
+	branch, err := r.client.GetMainBranch(ctx, key)
+	if errors.Is(err, client.ErrNotFound) {
+		resp.State.RemoveResource(ctx)
+		return
+	}
+	if err != nil {
+		resp.Diagnostics.AddError("Cannot read the main branch of the project "+key, err.Error())
+		return
+	}
 	state.ID = types.StringValue(project.Key)
+	state.MainBranch = types.StringValue(branch)
 	// Only an import lacks a name. Taking any other name from the server would
 	// plan a replacement, which deletes the analysis history.
 	if state.Name.IsNull() {
@@ -135,8 +184,21 @@ func (r *projectResource) Read(ctx context.Context, req resource.ReadRequest, re
 	resp.Diagnostics.Append(resp.State.Set(ctx, state)...)
 }
 
-func (r *projectResource) Update(_ context.Context, _ resource.UpdateRequest, resp *resource.UpdateResponse) {
-	resp.Diagnostics.AddError("Cannot update the project", "Changes to a project require replacement.")
+func (r *projectResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
+	var plan, state projectResourceModel
+	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
+	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	// The main branch is the only attribute that does not replace the project.
+	key := state.Key.ValueString()
+	if err := r.client.RenameMainBranch(ctx, key, plan.MainBranch.ValueString()); err != nil {
+		resp.Diagnostics.AddError("Cannot set the main branch of the project "+key, err.Error())
+		return
+	}
+	resp.Diagnostics.Append(resp.State.Set(ctx, plan)...)
 }
 
 func (r *projectResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {

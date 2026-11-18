@@ -60,9 +60,11 @@ func (r *projectBindingResource) Schema(_ context.Context, _ resource.SchemaRequ
 			"When the old project stays, it keeps the repository, and the server refuses the new " +
 			"binding.\n\n" +
 			"A replacement of the project for a new name keeps the key, so this resource sees no " +
-			"change, and the project loses its binding. Add `replace_triggered_by` on the project " +
-			"to the `lifecycle` block of this resource, so that Terraform binds the new project " +
-			"in the same apply.\n\n" +
+			"change, and the project loses its binding. Add `replace_triggered_by` on the `id` of " +
+			"the project to the `lifecycle` block of this resource, so that Terraform binds the " +
+			"new project in the same apply. Refer to `id`, not to the whole resource: a new " +
+			"`main_branch` updates the project in place, and a reference to the whole resource " +
+			"would replace the binding.\n\n" +
 			"A monorepo, where more than one project is bound to the same repository, is not " +
 			"supported. The binding does not turn on automatic analysis.",
 		Attributes: map[string]schema.Attribute{

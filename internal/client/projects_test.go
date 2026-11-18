@@ -168,6 +168,110 @@ func TestDeleteProjectAlreadyGone(t *testing.T) {
 	}
 }
 
+// branchListServer answers the branch list of my-project with answer.
+func branchListServer(t *testing.T, answer string) *httptest.Server {
+	t.Helper()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet || r.URL.Path != "/api/project_branches/list" {
+			t.Errorf("request = %s %s, want GET /api/project_branches/list", r.Method, r.URL.Path)
+		}
+		if got := r.URL.Query().Get("project"); got != "my-project" {
+			t.Errorf("project = %q, want my-project", got)
+		}
+		w.Write([]byte(answer))
+	}))
+	t.Cleanup(srv.Close)
+	return srv
+}
+
+func TestGetMainBranch(t *testing.T) {
+	t.Parallel()
+
+	srv := branchListServer(t, `{"branches":[{"name":"feature","isMain":false},{"name":"main","isMain":true}]}`)
+
+	got, err := newTestClient(srv).GetMainBranch(t.Context(), "my-project")
+	if err != nil || got != "main" {
+		t.Errorf("GetMainBranch() = %q, %v, want main", got, err)
+	}
+}
+
+func TestGetMainBranchRefusesAnswersWithoutAMainBranch(t *testing.T) {
+	t.Parallel()
+
+	for name, answer := range map[string]string{
+		"only other branches": `{"branches":[{"name":"feature","isMain":false}]}`,
+		"no branches":         `{"branches":[]}`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			_, err := newTestClient(branchListServer(t, answer)).GetMainBranch(t.Context(), "my-project")
+			if err == nil || !strings.Contains(err.Error(), "has no main branch") {
+				t.Errorf("error = %v, want one about the missing main branch", err)
+			}
+		})
+	}
+}
+
+func TestGetMainBranchReportsFailure(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+		w.Write([]byte(`{"errors":[{"msg":"Project 'my-project' not found"}]}`))
+	}))
+	defer srv.Close()
+
+	_, err := newTestClient(srv).GetMainBranch(t.Context(), "my-project")
+	if !errors.Is(err, ErrNotFound) {
+		t.Errorf("error = %v, want ErrNotFound", err)
+	}
+}
+
+func TestRenameMainBranch(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/api/project_branches/rename" {
+			t.Errorf("request = %s %s, want POST /api/project_branches/rename", r.Method, r.URL.Path)
+		}
+		if err := r.ParseForm(); err != nil {
+			t.Fatal(err)
+		}
+		if got := r.PostForm.Get("project"); got != "my-project" {
+			t.Errorf("project = %q, want my-project", got)
+		}
+		if got := r.PostForm.Get("name"); got != "release/1.x" {
+			t.Errorf("name = %q, want release/1.x", got)
+		}
+		if len(r.PostForm) != 2 {
+			t.Errorf("form = %v, want only the project and the name", r.PostForm)
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer srv.Close()
+
+	if err := newTestClient(srv).RenameMainBranch(t.Context(), "my-project", "release/1.x"); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestRenameMainBranchReportsFailure(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write([]byte(`{"errors":[{"msg":"a branch with name \"main\" already exists in the project"}]}`))
+	}))
+	defer srv.Close()
+
+	err := newTestClient(srv).RenameMainBranch(t.Context(), "my-project", "main")
+	if err == nil || !strings.Contains(err.Error(), "already exists") {
+		t.Errorf("error = %v, want the API failure", err)
+	}
+}
+
 func TestSearchProjectKeysReadsEveryPage(t *testing.T) {
 	t.Parallel()
 	var pages []string
