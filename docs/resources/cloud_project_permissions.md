@@ -25,6 +25,10 @@ A change of the project visibility also changes the grants. When a project becom
 
 SonarQube Cloud does not protect the last project administrator. An apply can remove `admin` from all principals of the project.
 
+## Delays
+
+For some seconds after a group is created, renamed, or deleted, SonarQube Cloud can refuse permission changes for a group with that name. Create and update then try each call again for about ten seconds. Thus a group name that does not exist, for example after a typing error or a deletion outside Terraform, shows its error about ten seconds later.
+
 ## Example Usage
 
 ```terraform

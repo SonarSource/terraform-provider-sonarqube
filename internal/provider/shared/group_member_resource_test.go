@@ -56,6 +56,9 @@ type fakeMembers struct {
 	hiddenReads int
 	// listHidden makes the v2 group search answer with no group.
 	listHidden bool
+	// failedAdds is the number of add_user calls that answer 500, as after
+	// a recent change to a group.
+	failedAdds int
 	// removeStatus and removeMessage, when set, are the answer of remove_user.
 	removeStatus  int
 	removeMessage string
@@ -66,7 +69,7 @@ func newFakeMembers(t *testing.T) (*fakeMembers, *groupMemberResource) {
 	f := &fakeMembers{members: map[string]map[string]bool{"team/a": {}}, managed: map[string]bool{}}
 	srv := httptest.NewServer(http.HandlerFunc(f.serve))
 	t.Cleanup(srv.Close)
-	return f, &groupMemberResource{client: providertest.NewCloudClient(srv)}
+	return f, &groupMemberResource{client: providertest.NewCloudClient(srv), groupWaits: []time.Duration{time.Millisecond, time.Millisecond}}
 }
 
 func writeError(w http.ResponseWriter, status int, message string) {
@@ -96,6 +99,11 @@ func (f *fakeMembers) serve(w http.ResponseWriter, r *http.Request) {
 	}
 	switch r.URL.Path {
 	case "/api/user_groups/add_user":
+		if f.failedAdds > 0 {
+			f.failedAdds--
+			writeError(w, http.StatusInternalServerError, "An unexpected error occurred. Please try again later.")
+			return
+		}
 		members[login] = true
 		w.WriteHeader(http.StatusNoContent)
 	case "/api/user_groups/remove_user":
@@ -264,4 +272,15 @@ func TestGroupMemberResourceImport(t *testing.T) {
 	for _, id := range []string{"my-org", "my-org/alice", "/team/alice", "My Org/team/alice", "my-org//alice", "my-org/team/"} {
 		providertest.AssertDiagnosticsContain(t, importMember(id).Diagnostics, "<organization>/<group_name>/<login>")
 	}
+}
+
+func TestGroupMemberResourceCreateWaitsForChangedGroup(t *testing.T) {
+	t.Parallel()
+	f, r := newFakeMembers(t)
+	f.failedAdds = 2
+	if resp := createMember(t, r, "team/a"); resp.Diagnostics.HasError() || !f.members["team/a"]["alice@github"] {
+		t.Fatalf("create after server errors: %v", resp.Diagnostics)
+	}
+	f.failedAdds = 3
+	providertest.AssertDiagnosticsContain(t, createMember(t, r, "team/a").Diagnostics, "unexpected error")
 }

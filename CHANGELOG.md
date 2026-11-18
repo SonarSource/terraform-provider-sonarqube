@@ -33,6 +33,11 @@ BUG FIXES:
 * `sonarqube_project_quality_profile`: a quality profile key that is not found is a warning in the plan, and an
   error in the apply. Before, the plan failed, and a destroy could not start after an earlier destroy that
   deleted the quality profile.
+* `sonarqube_group_member`, `sonarqube_cloud_organization_permissions` and `sonarqube_cloud_project_permissions`:
+  the apply that creates a group with a recently used name, or restores a group name that was changed outside
+  Terraform, can now add members and permissions to the group. For some seconds after such a change, SonarQube
+  Cloud can refuse these changes. The create of a member, and the create and update of permissions, then try
+  each call again for about ten seconds. Before, the apply failed with status 404 or 500, and a second apply was necessary.
 
 ## 0.1.0-alpha.4 (November 13, 2026)
 

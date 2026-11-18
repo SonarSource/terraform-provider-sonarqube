@@ -17,6 +17,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 
 	"github.com/SonarSource/terraform-provider-sonarqube/internal/client"
+	"github.com/SonarSource/terraform-provider-sonarqube/internal/provider/eventual"
 	"github.com/SonarSource/terraform-provider-sonarqube/internal/provider/validate"
 )
 
@@ -43,6 +44,7 @@ func NewProjectPermissionsResource() resource.Resource {
 		typeSuffix:      "_cloud_project_permissions",
 		checkApply:      checkPublicProjectPermissions,
 		readRetries:     permissionReadRetries,
+		groupWaits:      eventual.GroupChangeWaits,
 	}}
 }
 
@@ -110,7 +112,12 @@ func (r *projectPermissionsResource) Schema(_ context.Context, _ resource.Schema
 			"project. The next plan then shows a change.\n\n" +
 			"## Administrators\n\n" +
 			"SonarQube Cloud does not protect the last project administrator. An apply can remove `admin` " +
-			"from all principals of the project.",
+			"from all principals of the project.\n\n" +
+			"## Delays\n\n" +
+			"For some seconds after a group is created, renamed, or deleted, SonarQube Cloud can refuse " +
+			"permission changes for a group with that name. Create and update then try each call again for " +
+			"about ten seconds. Thus a group name that does not exist, for example after a typing error or a " +
+			"deletion outside Terraform, shows its error about ten seconds later.",
 		Attributes: attributes,
 	}
 }

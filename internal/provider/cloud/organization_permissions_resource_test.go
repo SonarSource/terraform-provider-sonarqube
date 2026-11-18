@@ -64,6 +64,10 @@ type fakePermissionInstance struct {
 	// before it is gone, as the list can show a deleted group for a moment.
 	vanishing string
 	readsLeft int
+	// hiddenReads is the number of group list reads that do not show the
+	// groups, and failedWrites the number of writes that answer 500, as
+	// after a recent change to a group.
+	hiddenReads, failedWrites int
 }
 
 func (f *fakePermissionInstance) start(t *testing.T) *organizationPermissionsResource {
@@ -72,6 +76,7 @@ func (f *fakePermissionInstance) start(t *testing.T) *organizationPermissionsRes
 	t.Cleanup(srv.Close)
 	r := NewOrganizationPermissionsResource().(*organizationPermissionsResource)
 	r.readRetries = nil
+	r.groupWaits = []time.Duration{time.Millisecond, time.Millisecond}
 	r.client = providertest.NewCloudClient(srv)
 	return r
 }
@@ -88,6 +93,9 @@ func (f *fakePermissionInstance) serve(w http.ResponseWriter, r *http.Request) {
 		f.readsLeft--
 	}
 	switch {
+	case r.Method == http.MethodGet && r.URL.Path == "/api/permissions/groups" && f.hiddenReads > 0:
+		f.hiddenReads--
+		f.serveList(w, r, "groups", "name", nil)
 	case r.Method == http.MethodGet && r.URL.Path == "/api/permissions/groups":
 		f.serveList(w, r, "groups", "name", f.groups)
 	case r.Method == http.MethodGet && r.URL.Path == "/api/permissions/users":
@@ -158,6 +166,11 @@ func (f *fakePermissionInstance) serveWrite(w http.ResponseWriter, r *http.Reque
 	}
 	if _, found := grants[name]; !found {
 		w.WriteHeader(http.StatusNotFound)
+		return
+	}
+	if f.failedWrites > 0 {
+		f.failedWrites--
+		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 	if f.failRemove && strings.Contains(r.URL.Path, "/remove_") {
@@ -435,5 +448,59 @@ func TestOrganizationPermissionsDeleteWaitsForDeletedGroup(t *testing.T) {
 				t.Errorf("destroy: %v", deleted.Diagnostics)
 			}
 		})
+	}
+}
+
+func TestOrganizationPermissionsCreateWaitsForChangedGroup(t *testing.T) {
+	instance := &fakePermissionInstance{groups: map[string][]string{"Developers": {"admin"}}, hiddenReads: 2, failedWrites: 2}
+	r := instance.start(t)
+	s := organizationPermissionsSchema(t)
+	resp := &resource.CreateResponse{State: providertest.EmptyState(t, s)}
+	r.Create(t.Context(), resource.CreateRequest{Plan: permissionPlan(t, s, permissionModel("Developers", "scan"))}, resp)
+	if resp.Diagnostics.HasError() || !reflect.DeepEqual(instance.groups["Developers"], []string{"scan"}) {
+		t.Fatalf("create: %v, grants = %v", resp.Diagnostics, instance.groups)
+	}
+}
+
+func TestOrganizationPermissionsCreateStopsWaitingForGroup(t *testing.T) {
+	instance := &fakePermissionInstance{groups: map[string][]string{"Developers": {}}, failedWrites: 3}
+	r := instance.start(t)
+	s := organizationPermissionsSchema(t)
+	resp := &resource.CreateResponse{State: providertest.EmptyState(t, s)}
+	r.Create(t.Context(), resource.CreateRequest{Plan: permissionPlan(t, s, permissionModel("Developers", "scan"))}, resp)
+	providertest.AssertDiagnosticsContain(t, resp.Diagnostics, "add scan")
+	if len(instance.calls) != 3 {
+		t.Errorf("calls = %v, want 1 try and 2 retries", instance.calls)
+	}
+}
+
+func TestOrganizationPermissionsDeleteDoesNotWaitForGroup(t *testing.T) {
+	instance := &fakePermissionInstance{groups: map[string][]string{"Developers": {"scan"}}}
+	r := instance.start(t)
+	s := organizationPermissionsSchema(t)
+	state := tfsdk.State{Schema: s}
+	model := permissionModel("Developers", "scan")
+	if diags := state.Set(t.Context(), &model); diags.HasError() {
+		t.Fatal(diags)
+	}
+	instance.failedWrites = 1
+	resp := &resource.DeleteResponse{State: state}
+	r.Delete(t.Context(), resource.DeleteRequest{State: state}, resp)
+	providertest.AssertDiagnosticsContain(t, resp.Diagnostics, "remove scan")
+	if len(instance.calls) != 1 {
+		t.Errorf("calls = %v, want 1", instance.calls)
+	}
+}
+
+func TestOrganizationPermissionsWaitForEachWrite(t *testing.T) {
+	instance := &fakePermissionInstance{groups: map[string][]string{"Developers": {"scan"}}, failRemove: true}
+	r := instance.start(t)
+	s := organizationPermissionsSchema(t)
+	resp := &resource.CreateResponse{State: providertest.EmptyState(t, s)}
+	r.Create(t.Context(), resource.CreateRequest{Plan: permissionPlan(t, s, permissionModel("Developers", "gateadmin"))}, resp)
+	providertest.AssertDiagnosticsContain(t, resp.Diagnostics, "remove scan")
+	// The add succeeded, and the remove is still tried again after each wait.
+	if len(instance.calls) != 4 {
+		t.Errorf("calls = %v, want 1 add and 3 removes", instance.calls)
 	}
 }
