@@ -2,6 +2,9 @@ package provider
 
 import (
 	"context"
+	"errors"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 
@@ -151,6 +154,13 @@ const testTerraformVersion = "1.9.8"
 // test depends on the environment of the machine it runs on.
 func configure(t *testing.T, env map[string]string, attributes map[string]tftypes.Value) *provider.ConfigureResponse {
 	t.Helper()
+	return configureWithTokenCheck(t, env, attributes, func(context.Context, *client.Client) error { return nil })
+}
+
+// configureWithTokenCheck is configure with checkToken as the token check.
+func configureWithTokenCheck(t *testing.T, env map[string]string, attributes map[string]tftypes.Value,
+	checkToken func(context.Context, *client.Client) error) *provider.ConfigureResponse {
+	t.Helper()
 
 	for _, name := range []string{EnvURL, EnvAPIURL, EnvToken, envAppendUserAgent} {
 		t.Setenv(name, env[name])
@@ -178,7 +188,8 @@ func configure(t *testing.T, env map[string]string, attributes map[string]tftype
 		Config:           tfsdk.Config{Schema: schema, Raw: tftypes.NewValue(objectType, values)},
 	}
 	resp := &provider.ConfigureResponse{}
-	New("test")().Configure(ctx, req, resp)
+	p := &sonarqubeProvider{version: "test", checkToken: checkToken}
+	p.Configure(ctx, req, resp)
 	return resp
 }
 
@@ -324,4 +335,48 @@ func TestConfigureRefusesAnInvalidAPIAddress(t *testing.T) {
 		})
 
 	assertErrorContains(t, resp, "Invalid address in api_url")
+}
+
+func TestConfigureRefusesAnInvalidToken(t *testing.T) {
+	resp := configureWithTokenCheck(t, map[string]string{EnvToken: "a-token"}, nil,
+		func(context.Context, *client.Client) error {
+			return &client.APIError{StatusCode: 403, Messages: []string{
+				"User is not authorized to access this resource with an explicit deny in an identity-based policy"}}
+		})
+	assertErrorContains(t, resp, "The token is wrong, expired or revoked")
+	if resp.ResourceData != nil || resp.DataSourceData != nil {
+		t.Error("Configure gave a client for an invalid token")
+	}
+}
+
+// A failed check does not stop Configure: the calls of the resources report
+// the problem.
+func TestConfigureContinuesWhenTheTokenCheckFails(t *testing.T) {
+	resp := configureWithTokenCheck(t, map[string]string{EnvToken: "a-token"}, nil,
+		func(context.Context, *client.Client) error { return errors.New("connection refused") })
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("unexpected diagnostics: %v", resp.Diagnostics)
+	}
+	configuredClient(t, resp)
+}
+
+// The token check of New reads the enterprise list, which each valid token can
+// read, and the gateway refuses a wrong token there.
+func TestNewChecksTheTokenWithTheEnterpriseList(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/enterprises/enterprises" || r.Header.Get("Authorization") != "Bearer wrong-token" {
+			t.Errorf("request %s with Authorization %q", r.URL.Path, r.Header.Get("Authorization"))
+		}
+		w.WriteHeader(http.StatusForbidden)
+		_, _ = w.Write([]byte(`{"Message":"User is not authorized to access this resource with an explicit deny in an identity-based policy"}`))
+	}))
+	t.Cleanup(srv.Close)
+	p, ok := New("test")().(*sonarqubeProvider)
+	if !ok {
+		t.Fatal("New does not build a sonarqubeProvider")
+	}
+	c := client.New(client.Config{URL: srv.URL, APIURL: srv.URL, Token: "wrong-token", HTTPClient: srv.Client()})
+	if err := p.checkToken(t.Context(), c); !client.IsInvalidToken(err) {
+		t.Errorf("checkToken() = %v, want an invalid token", err)
+	}
 }

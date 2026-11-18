@@ -18,12 +18,15 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math/rand/v2"
 	"net"
 	"net/http"
 	"net/url"
 	"slices"
 	"strings"
 	"time"
+
+	"github.com/hashicorp/terraform-plugin-log/tflog"
 )
 
 // Product is the SonarQube product an instance runs.
@@ -39,6 +42,11 @@ const (
 const CloudURL = "https://sonarcloud.io"
 
 const defaultTimeout = 30 * time.Second
+
+// defaultReadWaits are the waits before a read is sent again after a
+// transient failure. Under load, the reads of SonarQube Cloud can answer 500
+// for a moment.
+var defaultReadWaits = []time.Duration{time.Second, 2 * time.Second, 4 * time.Second}
 
 const defaultUserAgent = "sonarqube-terraform"
 
@@ -56,6 +64,9 @@ type Config struct {
 	// HTTPClient replaces the default client. Tests set it; leave it nil
 	// elsewhere.
 	HTTPClient *http.Client
+	// ReadWaits replace the waits before a read is sent again after a
+	// transient failure. Tests set short waits; leave it nil elsewhere.
+	ReadWaits []time.Duration
 }
 
 // Client talks to one SonarQube instance.
@@ -66,6 +77,7 @@ type Client struct {
 	product   Product
 	userAgent string
 	http      *http.Client
+	readWaits []time.Duration
 }
 
 // New builds a Client from cfg.
@@ -73,6 +85,10 @@ func New(cfg Config) *Client {
 	httpClient := cfg.HTTPClient
 	if httpClient == nil {
 		httpClient = &http.Client{Timeout: defaultTimeout}
+	}
+
+	if cfg.ReadWaits == nil {
+		cfg.ReadWaits = defaultReadWaits
 	}
 
 	url := strings.TrimRight(cfg.URL, "/")
@@ -89,6 +105,7 @@ func New(cfg Config) *Client {
 		product:   cfg.Product,
 		userAgent: cmp.Or(cfg.UserAgent, defaultUserAgent),
 		http:      httpClient,
+		readWaits: cfg.ReadWaits,
 	}
 }
 
@@ -210,13 +227,31 @@ func (c *Client) send(
 		target += "?" + params.Encode()
 	}
 
-	req, err := http.NewRequestWithContext(ctx, method, target, body)
-	if err != nil {
-		return err
+	tries := 0
+	try := func() error {
+		tries++
+		req, err := http.NewRequestWithContext(ctx, method, target, body)
+		if err != nil {
+			return err
+		}
+		prepare(req)
+		return c.do(req, tries, out)
 	}
-	prepare(req)
+	if method != http.MethodGet {
+		return try()
+	}
+	// A read changes nothing, so it is safe to send it again.
+	return retry(ctx, jitter(c.readWaits), try)
+}
 
-	return c.do(req, out)
+// jitter adds up to half of each wait at random, so that parallel reads that
+// failed together do not all try again at the same moment.
+func jitter(waits []time.Duration) []time.Duration {
+	spread := make([]time.Duration, len(waits))
+	for i, wait := range waits {
+		spread[i] = wait + rand.N(wait/2+1)
+	}
+	return spread
 }
 
 // webServiceAuth applies the scheme of the older web service, which takes the
@@ -320,15 +355,21 @@ func (c *Client) apiMergePatch(ctx context.Context, path string, body, out any) 
 }
 
 // do decodes a successful answer into out. A nil out discards the body.
-func (c *Client) do(req *http.Request, out any) error {
+// try is the number of the try, for the debug log.
+func (c *Client) do(req *http.Request, try int, out any) error {
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("User-Agent", c.userAgent)
 
 	resp, err := c.http.Do(req)
+	logFields := map[string]any{"method": req.Method, "host": req.URL.Host, "path": req.URL.Path, "try": try}
 	if err != nil {
+		logFields["error"] = err.Error()
+		tflog.Debug(req.Context(), "SonarQube API request", logFields)
 		return err
 	}
 	defer resp.Body.Close()
+	logFields["status"] = resp.StatusCode
+	tflog.Debug(req.Context(), "SonarQube API request", logFields)
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {

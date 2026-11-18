@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
@@ -28,6 +29,7 @@ func NewCloudClient(srv *httptest.Server) *client.Client {
 		Token:      "test-token",
 		Product:    client.ProductCloud,
 		HTTPClient: srv.Client(),
+		ReadWaits:  []time.Duration{time.Millisecond, time.Millisecond, time.Millisecond},
 	})
 }
 

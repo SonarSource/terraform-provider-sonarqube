@@ -8,6 +8,7 @@ update its table in the same change.
 
 Web API v2 answers at the `api.` host and takes a bearer token. Web API v1
 answers at the instance host and takes the token as the basic-auth user name.
+The client sends each `GET` again after a transient failure, such as a 5xx.
 
 An endpoint is "Public" only when SonarSource's own docs link one as public.
 
@@ -266,6 +267,8 @@ permissions `admin`, `scan` and `provisioning`:
 | `DeleteEnterprise` | `DELETE {api_url}/enterprises/enterprises/{id}`, then `GET {api_url}/enterprises/enterprises/{id}` | Web API v2 | [Public](https://api-docs.sonarsource.com/sonarqube-cloud/default/public-sonarcloud-organizations-enterprises-external-1-2-0) | No |
 
 * The API needs a user token.
+* The provider calls `ListEnterprises` one time when it starts, to check the
+  token, because every valid token can read the list.
 * A license works only once.
 * `PATCH` can change `key`, but the docs do not list it, so the client does
   not send it.

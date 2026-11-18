@@ -155,6 +155,8 @@ func (s *TokenServer) unlink(tokenID string) {
 
 func (s *TokenServer) serve(w http.ResponseWriter, r *http.Request) {
 	switch {
+	case r.URL.Path == "/enterprises/enterprises":
+		_, _ = w.Write([]byte(`[]`))
 	case r.URL.Path == "/organizations/organizations":
 		fmt.Fprintf(w, `[{"key":%q,"uuidV4":%q}]`, TokenOrganization, TokenOrganizationID)
 	case r.URL.Path == "/projects/projects":

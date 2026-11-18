@@ -38,6 +38,11 @@ BUG FIXES:
   Terraform, can now add members and permissions to the group. For some seconds after such a change, SonarQube
   Cloud can refuse these changes. The create of a member, and the create and update of permissions, then try
   each call again for about ten seconds. Before, the apply failed with status 404 or 500, and a second apply was necessary.
+* A wrong, expired or revoked token now gives one clear error, "Invalid token", when the provider starts, for each
+  resource and data source. Before, the error was a 403 that looked like a missing permission, or "unexpected status
+  401", and it was different for each resource.
+* Each read is sent again after a temporary server error, after 1, 2 and 4 seconds. Before, a plan or a destroy with
+  a high `-parallelism` value, for example 30, could fail with "status 500: Internal server error".
 
 ## 0.1.0-alpha.4 (November 13, 2026)
 

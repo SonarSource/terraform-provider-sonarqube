@@ -82,6 +82,25 @@ const ScopedTokenPrefix = "sqco_"
 // answers 403, and the DevOps platform API answers 400 with this enum message.
 const sotHint = "The provider uses a scoped organization token. Possibly this endpoint does not accept scoped organization tokens, or the token does not have the necessary permission or is revoked. The provider docs list the resources that support these tokens."
 
+// invalidTokenMessage is the message of the 403 that the API gateway of Web
+// API v2 answers when it does not accept the token: a wrong, expired or
+// revoked token, of any kind. Other refusals have other messages.
+const invalidTokenMessage = "explicit deny in an identity-based policy"
+
+// InvalidTokenHint replaces the gateway message, which looks like a missing
+// permission.
+const InvalidTokenHint = "SonarQube Cloud does not accept the token. The token is wrong, expired or revoked."
+
+// IsInvalidToken reports a refusal of the token itself.
+func IsInvalidToken(err error) bool {
+	var apiErr *APIError
+	return errors.As(err, &apiErr) && apiErr.invalidToken()
+}
+
+func (e *APIError) invalidToken() bool {
+	return e.StatusCode == http.StatusForbidden && hasMessageContaining(e.Messages, invalidTokenMessage)
+}
+
 // refusedScopedToken tells if the response is a refusal that the scoped
 // organization token possibly causes.
 func (e *APIError) refusedScopedToken() bool {
@@ -94,6 +113,9 @@ func (e *APIError) refusedScopedToken() bool {
 
 // Error returns the status and the messages of the response.
 func (e *APIError) Error() string {
+	if e.invalidToken() {
+		return fmt.Sprintf("status %d: %s", e.StatusCode, InvalidTokenHint)
+	}
 	detail := strings.Join(e.Messages, "; ")
 	if detail == "" {
 		detail = e.Body

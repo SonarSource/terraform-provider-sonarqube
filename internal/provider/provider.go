@@ -5,6 +5,7 @@ import (
 	"cmp"
 	"context"
 	"os"
+	"time"
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
@@ -42,7 +43,17 @@ type sonarqubeProvider struct {
 	// version is set at build time: "dev" for local builds, the release tag
 	// for released binaries.
 	version string
+	// checkToken makes a call that each valid token can make. Unit tests
+	// replace it, so that Configure sends no request.
+	checkToken func(context.Context, *client.Client) error
 }
+
+// tokenSettings names the two places that give the token.
+const tokenSettings = "the token attribute of the provider, or the " + EnvToken + " environment variable"
+
+// tokenCheckTimeout limits the token check, so that a slow API does not hold
+// the start of each run.
+const tokenCheckTimeout = 10 * time.Second
 
 // New returns the factory that main and the acceptance tests use to build
 // the provider.
@@ -50,6 +61,10 @@ func New(version string) func() provider.Provider {
 	return func() provider.Provider {
 		return &sonarqubeProvider{
 			version: version,
+			checkToken: func(ctx context.Context, c *client.Client) error {
+				_, err := c.ListEnterprises(ctx)
+				return err
+			},
 		}
 	}
 }
@@ -152,8 +167,7 @@ func (p *sonarqubeProvider) Configure(ctx context.Context, req provider.Configur
 		resp.Diagnostics.AddAttributeError(
 			path.Root("token"),
 			"Missing token",
-			"Set the token attribute of the provider, or the "+EnvToken+
-				" environment variable.",
+			"Set "+tokenSettings+".",
 		)
 		return
 	}
@@ -165,6 +179,20 @@ func (p *sonarqubeProvider) Configure(ctx context.Context, req provider.Configur
 		Product:   product,
 		UserAgent: userAgent(req.TerraformVersion, p.version, os.Getenv(envAppendUserAgent)),
 	})
+
+	// Each API answers a wrong token in a different way, so one check here
+	// gives the same error for each resource. Another failure of the check
+	// does not stop Configure: the calls of the resources report it.
+	checkCtx, cancel := context.WithTimeout(ctx, tokenCheckTimeout)
+	defer cancel()
+	if err := p.checkToken(checkCtx, c); client.IsInvalidToken(err) {
+		resp.Diagnostics.AddAttributeError(
+			path.Root("token"),
+			"Invalid token",
+			client.InvalidTokenHint+" Check "+tokenSettings+".",
+		)
+		return
+	}
 
 	resp.DataSourceData = c
 	resp.ResourceData = c

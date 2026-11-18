@@ -292,9 +292,7 @@ func TestOrganizationResourceCreateReportsAFailure(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	r := &organizationResource{client: client.New(client.Config{
-		URL: srv.URL, APIURL: srv.URL, Product: client.ProductCloud, HTTPClient: srv.Client(),
-	})}
+	r := &organizationResource{client: providertest.NewCloudClient(srv)}
 
 	s := organizationResourceSchema(t)
 	resp := &resource.CreateResponse{State: providertest.EmptyState(t, s)}
@@ -322,9 +320,7 @@ func TestOrganizationResourceCreateReportsAFailedReadBack(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	r := &organizationResource{client: client.New(client.Config{
-		URL: srv.URL, APIURL: srv.URL, Product: client.ProductCloud, HTTPClient: srv.Client(),
-	})}
+	r := &organizationResource{client: providertest.NewCloudClient(srv)}
 
 	s := organizationResourceSchema(t)
 	resp := &resource.CreateResponse{State: providertest.EmptyState(t, s)}
@@ -360,9 +356,7 @@ func TestOrganizationResourceUpdateKeepsThePriorKeyWhenTheRenameFails(t *testing
 	}))
 	defer srv.Close()
 
-	r := &organizationResource{client: client.New(client.Config{
-		URL: srv.URL, APIURL: srv.URL, Product: client.ProductCloud, HTTPClient: srv.Client(),
-	})}
+	r := &organizationResource{client: providertest.NewCloudClient(srv)}
 
 	s := organizationResourceSchema(t)
 	// A prior state always carries the computed id beside the key.
@@ -435,9 +429,7 @@ func TestOrganizationResourceUpdateRecordsBeforeTheReadBack(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	r := &organizationResource{client: client.New(client.Config{
-		URL: srv.URL, APIURL: srv.URL, Product: client.ProductCloud, HTTPClient: srv.Client(),
-	})}
+	r := &organizationResource{client: providertest.NewCloudClient(srv)}
 
 	s := organizationResourceSchema(t)
 	prior := providertest.SchemaValue(t, s, map[string]string{

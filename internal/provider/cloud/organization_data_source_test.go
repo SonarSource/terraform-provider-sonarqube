@@ -183,13 +183,7 @@ func readOrganization(t *testing.T, srv *httptest.Server, key string) (tfsdk.Sta
 	d := &organizationDataSource{}
 	configureResp := &datasource.ConfigureResponse{}
 	d.Configure(ctx, datasource.ConfigureRequest{
-		ProviderData: client.New(client.Config{
-			URL:        srv.URL,
-			APIURL:     srv.URL,
-			Token:      "test-token",
-			Product:    client.ProductCloud,
-			HTTPClient: srv.Client(),
-		}),
+		ProviderData: providertest.NewCloudClient(srv),
 	}, configureResp)
 	if configureResp.Diagnostics.HasError() {
 		t.Fatalf("Configure reported %v", configureResp.Diagnostics)
