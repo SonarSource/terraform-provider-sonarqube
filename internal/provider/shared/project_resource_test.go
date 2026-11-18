@@ -12,6 +12,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
+	"github.com/hashicorp/terraform-plugin-go/tftypes"
 
 	"github.com/SonarSource/terraform-provider-sonarqube/internal/client"
 	"github.com/SonarSource/terraform-provider-sonarqube/internal/provider/providertest"
@@ -42,6 +43,10 @@ func TestProjectResourceSchema(t *testing.T) {
 	if !s.Attributes["id"].IsComputed() {
 		t.Error("id must be computed")
 	}
+	// Computed keeps the main branch of a project whose configuration omits it.
+	if mainBranch := s.Attributes["main_branch"]; !mainBranch.IsOptional() || !mainBranch.IsComputed() {
+		t.Error("main_branch must be optional and computed")
+	}
 	resp := &resource.MetadataResponse{}
 	NewProjectResource().Metadata(context.Background(), resource.MetadataRequest{ProviderTypeName: "sonarqube"}, resp)
 	if resp.TypeName != "sonarqube_project" {
@@ -70,11 +75,22 @@ func TestProjectResourceConfigureNeedsCloud(t *testing.T) {
 
 type fakeProjectInstance struct {
 	projects map[string]string
-	calls    []string
+	// mainBranches holds the main branch of each project. A new project has
+	// "master".
+	mainBranches map[string]string
+	// failBranches makes the branch actions fail with a 403.
+	failBranches bool
+	calls        []string
 }
 
 func newFakeProjectInstance() *fakeProjectInstance {
-	return &fakeProjectInstance{projects: map[string]string{}}
+	return &fakeProjectInstance{projects: map[string]string{}, mainBranches: map[string]string{}}
+}
+
+// addProject adds a project with the main branch "master".
+func (f *fakeProjectInstance) addProject(key, name string) {
+	f.projects[key] = name
+	f.mainBranches[key] = "master"
 }
 
 func (f *fakeProjectInstance) start(t *testing.T) *client.Client {
@@ -87,7 +103,7 @@ func (f *fakeProjectInstance) start(t *testing.T) *client.Client {
 			if r.PostForm.Get("organization") != "my-org" {
 				t.Errorf("organization = %q, want my-org", r.PostForm.Get("organization"))
 			}
-			f.projects[r.PostForm.Get("project")] = r.PostForm.Get("name")
+			f.addProject(r.PostForm.Get("project"), r.PostForm.Get("name"))
 			w.WriteHeader(http.StatusNoContent)
 		case "/organizations/organizations":
 			if r.URL.Query().Get("organizationKey") != "my-org" {
@@ -108,13 +124,36 @@ func (f *fakeProjectInstance) start(t *testing.T) *client.Client {
 		case "/api/projects/delete":
 			_ = r.ParseForm()
 			delete(f.projects, r.PostForm.Get("project"))
+			delete(f.mainBranches, r.PostForm.Get("project"))
 			w.WriteHeader(http.StatusNoContent)
+		case "/api/project_branches/list", "/api/project_branches/rename":
+			f.serveBranches(w, r)
 		default:
 			w.WriteHeader(http.StatusNotFound)
 		}
 	}))
 	t.Cleanup(srv.Close)
 	return providertest.NewCloudClient(srv)
+}
+
+func (f *fakeProjectInstance) serveBranches(w http.ResponseWriter, r *http.Request) {
+	if f.failBranches {
+		w.WriteHeader(http.StatusForbidden)
+		return
+	}
+	if r.URL.Path == "/api/project_branches/rename" {
+		_ = r.ParseForm()
+		f.mainBranches[r.PostForm.Get("project")] = r.PostForm.Get("name")
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+	name, found := f.mainBranches[r.URL.Query().Get("project")]
+	if !found {
+		w.WriteHeader(http.StatusNotFound)
+		return
+	}
+	branches := []map[string]any{{"name": "feature", "isMain": false}, {"name": name, "isMain": true}}
+	_ = json.NewEncoder(w).Encode(map[string]any{"branches": branches})
 }
 
 func TestProjectResourceLifecycle(t *testing.T) {
@@ -131,8 +170,9 @@ func TestProjectResourceLifecycle(t *testing.T) {
 	if created.Diagnostics.HasError() {
 		t.Fatal(created.Diagnostics)
 	}
-	if got := providertest.ReadModel[projectResourceModel](t, created.State).ID.ValueString(); got != "my-project" {
-		t.Errorf("id = %q, want my-project", got)
+	model := providertest.ReadModel[projectResourceModel](t, created.State)
+	if model.ID.ValueString() != "my-project" || model.MainBranch.ValueString() != "master" {
+		t.Errorf("id = %q, main_branch = %q, want my-project and master", model.ID.ValueString(), model.MainBranch.ValueString())
 	}
 
 	refreshed := &resource.ReadResponse{State: providertest.EmptyState(t, s)}
@@ -192,27 +232,115 @@ func TestProjectResourceReadAfterOrganizationDeletion(t *testing.T) {
 	}
 }
 
-// A read back would fail an apply whose create worked, and Terraform then
-// taints the project and replaces it on the next apply.
-func TestProjectResourceCreateDoesNotReadTheProjectBack(t *testing.T) {
+// withUnknown returns the value with the attribute unknown, as a plan holds a
+// computed attribute that the configuration omits.
+func withUnknown(t *testing.T, raw tftypes.Value, attribute string) tftypes.Value {
+	t.Helper()
+
+	var values map[string]tftypes.Value
+	if err := raw.As(&values); err != nil {
+		t.Fatal(err)
+	}
+	values[attribute] = tftypes.NewValue(tftypes.String, tftypes.UnknownValue)
+	return tftypes.NewValue(raw.Type(), values)
+}
+
+func createProject(t *testing.T, instance *fakeProjectInstance, attributes map[string]string) *resource.CreateResponse {
+	t.Helper()
+
+	r := &projectResource{client: instance.start(t)}
+	s := projectResourceSchema(t)
+	plan := providertest.SchemaValue(t, s, attributes)
+	if _, configured := attributes["main_branch"]; !configured {
+		plan = withUnknown(t, plan, "main_branch")
+	}
+	resp := &resource.CreateResponse{State: providertest.EmptyState(t, s)}
+	r.Create(context.Background(), resource.CreateRequest{Plan: tfsdk.Plan{Schema: s, Raw: plan}}, resp)
+	return resp
+}
+
+func TestProjectResourceCreateReadsTheMainBranchOfAProjectWithoutOne(t *testing.T) {
 	t.Parallel()
 
 	instance := newFakeProjectInstance()
-	r := &projectResource{client: instance.start(t)}
-	s := projectResourceSchema(t)
-	resp := &resource.CreateResponse{State: providertest.EmptyState(t, s)}
-	r.Create(context.Background(), resource.CreateRequest{Plan: tfsdk.Plan{Schema: s, Raw: providertest.SchemaValue(t, s, map[string]string{
-		"key": "my-project", "name": "My Project", "organization": "my-org",
-	})}}, resp)
+	resp := createProject(t, instance, map[string]string{"key": "my-project", "name": "My Project", "organization": "my-org"})
 	if resp.Diagnostics.HasError() {
 		t.Fatal(resp.Diagnostics)
 	}
-	if got := providertest.ReadModel[projectResourceModel](t, resp.State).ID.ValueString(); got != "my-project" {
-		t.Errorf("id = %q, want my-project", got)
+	if got := providertest.ReadModel[projectResourceModel](t, resp.State).MainBranch.ValueString(); got != "master" {
+		t.Errorf("main_branch = %q, want master", got)
 	}
-	if want := []string{"/api/projects/create"}; !slices.Equal(instance.calls, want) {
+	if want := []string{"/api/projects/create", "/api/project_branches/list"}; !slices.Equal(instance.calls, want) {
 		t.Errorf("calls = %v, want %v", instance.calls, want)
 	}
+}
+
+func TestProjectResourceCreateRenamesTheMainBranch(t *testing.T) {
+	t.Parallel()
+
+	instance := newFakeProjectInstance()
+	resp := createProject(t, instance, map[string]string{
+		"key": "my-project", "name": "My Project", "organization": "my-org", "main_branch": "main",
+	})
+	if resp.Diagnostics.HasError() {
+		t.Fatal(resp.Diagnostics)
+	}
+	if got := providertest.ReadModel[projectResourceModel](t, resp.State).MainBranch.ValueString(); got != "main" {
+		t.Errorf("main_branch = %q, want main", got)
+	}
+	if got := instance.mainBranches["my-project"]; got != "main" {
+		t.Errorf("main branch of the project = %q, want main", got)
+	}
+	if want := []string{"/api/projects/create", "/api/project_branches/rename"}; !slices.Equal(instance.calls, want) {
+		t.Errorf("calls = %v, want %v", instance.calls, want)
+	}
+}
+
+// An error taints the resource when the state holds it, and then the next
+// apply replaces the project. Without the state, the project would be
+// left behind.
+func TestProjectResourceCreateKeepsTheProjectWhenTheRenameFails(t *testing.T) {
+	t.Parallel()
+
+	instance := newFakeProjectInstance()
+	instance.failBranches = true
+	resp := createProject(t, instance, map[string]string{
+		"key": "my-project", "name": "My Project", "organization": "my-org", "main_branch": "main",
+	})
+	providertest.AssertDiagnosticsContain(t, resp.Diagnostics, "Cannot set the main branch of the project my-project")
+	if resp.State.Raw.IsNull() {
+		t.Error("the state lost a project that exists")
+	}
+}
+
+// A read back that failed would taint a project that Terraform made well.
+func TestProjectResourceCreateWarnsWhenTheMainBranchReadFails(t *testing.T) {
+	t.Parallel()
+
+	instance := newFakeProjectInstance()
+	instance.failBranches = true
+	resp := createProject(t, instance, map[string]string{"key": "my-project", "name": "My Project", "organization": "my-org"})
+	if resp.Diagnostics.HasError() {
+		t.Fatal(resp.Diagnostics)
+	}
+	if len(resp.Diagnostics.Warnings()) != 1 {
+		t.Errorf("diagnostics = %v, want one warning", resp.Diagnostics)
+	}
+	if model := providertest.ReadModel[projectResourceModel](t, resp.State); model.ID.ValueString() != "my-project" || !model.MainBranch.IsNull() {
+		t.Errorf("id = %q, main_branch = %v, want my-project and null", model.ID.ValueString(), model.MainBranch)
+	}
+}
+
+func projectState(t *testing.T, s schema.Schema, mainBranch string) tfsdk.State {
+	t.Helper()
+
+	attributes := map[string]string{
+		"id": "my-project", "key": "my-project", "name": "My Project", "organization": "my-org",
+	}
+	if mainBranch != "" {
+		attributes["main_branch"] = mainBranch
+	}
+	return tfsdk.State{Schema: s, Raw: providertest.SchemaValue(t, s, attributes)}
 }
 
 func TestProjectResourceReadRetainsStateOnFailure(t *testing.T) {
@@ -256,7 +384,7 @@ func TestProjectResourceReadKeepsTheConfiguredName(t *testing.T) {
 	t.Parallel()
 
 	instance := newFakeProjectInstance()
-	instance.projects["my-project"] = "Renamed in the user interface"
+	instance.addProject("my-project", "Renamed in the user interface")
 	r := &projectResource{client: instance.start(t)}
 	s := projectResourceSchema(t)
 	state := tfsdk.State{Schema: s, Raw: providertest.SchemaValue(t, s, map[string]string{
@@ -277,7 +405,7 @@ func TestProjectResourceReadFillsTheNameOfAnImport(t *testing.T) {
 	t.Parallel()
 
 	instance := newFakeProjectInstance()
-	instance.projects["my-project"] = "My Project"
+	instance.addProject("my-project", "My Project")
 	r := &projectResource{client: instance.start(t)}
 	s := projectResourceSchema(t)
 	state := tfsdk.State{Schema: s, Raw: providertest.SchemaValue(t, s, map[string]string{
@@ -291,6 +419,121 @@ func TestProjectResourceReadFillsTheNameOfAnImport(t *testing.T) {
 	}
 	if got := providertest.ReadModel[projectResourceModel](t, resp.State).Name.ValueString(); got != "My Project" {
 		t.Errorf("name = %q, want My Project", got)
+	}
+}
+
+func TestProjectResourceReadTakesTheMainBranchFromTheServer(t *testing.T) {
+	t.Parallel()
+
+	// An empty value is a state of an earlier version, which has no main branch.
+	for _, inState := range []string{"", "main", "master"} {
+		t.Run("state "+inState, func(t *testing.T) {
+			t.Parallel()
+
+			instance := newFakeProjectInstance()
+			instance.addProject("my-project", "My Project")
+			instance.mainBranches["my-project"] = "develop"
+			r := &projectResource{client: instance.start(t)}
+			s := projectResourceSchema(t)
+			state := projectState(t, s, inState)
+
+			resp := &resource.ReadResponse{State: state}
+			r.Read(context.Background(), resource.ReadRequest{State: state}, resp)
+			if resp.Diagnostics.HasError() {
+				t.Fatal(resp.Diagnostics)
+			}
+			if got := providertest.ReadModel[projectResourceModel](t, resp.State).MainBranch.ValueString(); got != "develop" {
+				t.Errorf("main_branch = %q, want develop", got)
+			}
+		})
+	}
+}
+
+// The project list found the project, so a 404 of the branch list means that
+// someone deleted the project in between.
+func TestProjectResourceReadAfterOutsideDeletionDuringTheRead(t *testing.T) {
+	t.Parallel()
+
+	instance := newFakeProjectInstance()
+	instance.addProject("my-project", "My Project")
+	delete(instance.mainBranches, "my-project")
+	r := &projectResource{client: instance.start(t)}
+	s := projectResourceSchema(t)
+	state := projectState(t, s, "main")
+
+	resp := &resource.ReadResponse{State: state}
+	r.Read(context.Background(), resource.ReadRequest{State: state}, resp)
+	if resp.Diagnostics.HasError() {
+		t.Fatal(resp.Diagnostics)
+	}
+	if !resp.State.Raw.IsNull() {
+		t.Error("a deleted project stayed in state")
+	}
+}
+
+func TestProjectResourceReadRetainsStateWhenTheMainBranchReadFails(t *testing.T) {
+	t.Parallel()
+
+	instance := newFakeProjectInstance()
+	instance.addProject("my-project", "My Project")
+	instance.failBranches = true
+	r := &projectResource{client: instance.start(t)}
+	s := projectResourceSchema(t)
+	state := projectState(t, s, "main")
+
+	resp := &resource.ReadResponse{State: state}
+	r.Read(context.Background(), resource.ReadRequest{State: state}, resp)
+	providertest.AssertDiagnosticsContain(t, resp.Diagnostics, "Cannot read the main branch of the project my-project")
+	if !resp.State.Raw.Equal(state.Raw) {
+		t.Error("a failed read changed the prior state")
+	}
+}
+
+func TestProjectResourceUpdateRenamesTheMainBranch(t *testing.T) {
+	t.Parallel()
+
+	instance := newFakeProjectInstance()
+	instance.addProject("my-project", "My Project")
+	r := &projectResource{client: instance.start(t)}
+	s := projectResourceSchema(t)
+
+	resp := &resource.UpdateResponse{State: projectState(t, s, "master")}
+	r.Update(context.Background(), resource.UpdateRequest{
+		Plan:  tfsdk.Plan{Schema: s, Raw: projectState(t, s, "main").Raw},
+		State: projectState(t, s, "master"),
+	}, resp)
+	if resp.Diagnostics.HasError() {
+		t.Fatal(resp.Diagnostics)
+	}
+	if got := instance.mainBranches["my-project"]; got != "main" {
+		t.Errorf("main branch of the project = %q, want main", got)
+	}
+	if got := providertest.ReadModel[projectResourceModel](t, resp.State).MainBranch.ValueString(); got != "main" {
+		t.Errorf("main_branch in state = %q, want main", got)
+	}
+	if want := []string{"/api/project_branches/rename"}; !slices.Equal(instance.calls, want) {
+		t.Errorf("calls = %v, want %v: the project must not be replaced", instance.calls, want)
+	}
+}
+
+func TestProjectResourceUpdateKeepsTheStateWhenTheRenameFails(t *testing.T) {
+	t.Parallel()
+
+	instance := newFakeProjectInstance()
+	instance.addProject("my-project", "My Project")
+	instance.failBranches = true
+	r := &projectResource{client: instance.start(t)}
+	s := projectResourceSchema(t)
+
+	prior := projectState(t, s, "master")
+	resp := &resource.UpdateResponse{State: prior}
+	r.Update(context.Background(), resource.UpdateRequest{
+		Plan:  tfsdk.Plan{Schema: s, Raw: projectState(t, s, "main").Raw},
+		State: prior,
+	}, resp)
+	providertest.AssertDiagnosticsContain(t, resp.Diagnostics, "Cannot set the main branch of the project my-project")
+	if got := providertest.ReadModel[projectResourceModel](t, resp.State).MainBranch.ValueString(); got != "master" {
+		t.Errorf("main_branch in state = %q, want master", got)
 	}
 }
 
@@ -333,18 +576,20 @@ func TestProjectResourceImportStateRefusesAMalformedIdentifier(t *testing.T) {
 	}
 }
 
-func TestProjectResourceValidatesTheKeyAndTheName(t *testing.T) {
+func TestProjectResourceValidatesTheAttributes(t *testing.T) {
 	t.Parallel()
 
 	s := projectResourceSchema(t)
 	refused := map[string][]string{
 		"key":          {"", "my project", "my/project", "42", strings.Repeat("a", 401)},
 		"name":         {"", strings.Repeat("a", 501)},
+		"main_branch":  {"", strings.Repeat("a", 256)},
 		"organization": {"", "My-Org", "-my-org", "my-org-", "my--org", strings.Repeat("a", 256)},
 	}
 	allowed := map[string][]string{
 		"key":          {"a", "my-project", "my_project.one:two", "42a", strings.Repeat("a", 400)},
 		"name":         {"My Project", strings.Repeat("a", 500)},
+		"main_branch":  {"main", "release/1.x", strings.Repeat("a", 255)},
 		"organization": {"a", "my-org", "my-org-1", "my_org", strings.Repeat("a", 255)},
 	}
 

@@ -22,6 +22,7 @@ permissions `admin`, `scan` and `provisioning`:
   not contain private projects. `Own organization only`: the answer contains
   only the organization of the token. A resource that needs more than this
   does not work with the token.
+* `Not checked`: nobody called the endpoint with such a token yet.
 * `No (status)`: the endpoint refused the token with this status. `No` alone
   means that the endpoint gives the token nothing useful, for example an
   empty list. `No (no user)`: the endpoint answers 200, but without a user,
@@ -139,12 +140,19 @@ permissions `admin`, `scan` and `provisioning`:
 | `FindProjectsByKey`, `FindProjectsByID` | `GET {api_url}/projects/projects?keys=&organizationIds=&pageIndex=&pageSize=`, or with `ids=` | Web API v2 | [Public](https://api-docs.sonarsource.com/sonarqube-cloud/default/public-projectsexternal-0-0-1#/Projects/getProjects) | Public projects only |
 | `CreateProject` | `POST {url}/api/projects/create` | Web API v1 | [Public](https://sonarcloud.io/web_api/api/projects/create) | Yes |
 | `DeleteProject` | `POST {url}/api/projects/delete` | Web API v1 | [Public](https://sonarcloud.io/web_api/api/projects/delete) | No (401) |
+| `GetMainBranch` | `GET {url}/api/project_branches/list?project=` | Web API v1 | [Public](https://sonarcloud.io/web_api/api/project_branches/list) | Not checked |
+| `RenameMainBranch` | `POST {url}/api/project_branches/rename` | Web API v1 | [Public](https://sonarcloud.io/web_api/api/project_branches/rename) | Not checked |
 | `SearchProjectKeys` | `GET {url}/api/projects/search?organization=&q=&p=&ps=` | Web API v1 | [Public](https://sonarcloud.io/web_api/api/projects/search) | Yes, not `provisioning` only |
 
 * The project bindings API takes the legacy identifier (`legacyId`), not the
   UUID in `id`.
 * `keys` and `ids` take one comma-separated value. The client sends at most 50
   values in one request.
+* The Web API v2 project list has no main branch name, so the client reads it
+  from the branch list.
+* `rename` renames the main branch in place, and the project keeps its history.
+  `api/projects/create` has a `branch` parameter, but it changes the project
+  key, so the provider does not use it.
 
 ## Project bindings (`project_bindings.go`)
 

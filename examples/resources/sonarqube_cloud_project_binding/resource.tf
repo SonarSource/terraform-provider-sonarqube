@@ -13,9 +13,11 @@ resource "sonarqube_cloud_project_binding" "example" {
   repository   = "my-github-org/my-repo"
 
   # A replacement of the project, such as for a new name, deletes the project
-  # and its binding. This binds the new project in the same apply.
+  # and its binding. This binds the new project in the same apply. Refer to
+  # id, not to the whole resource: a new main branch updates the project in
+  # place and must not replace the binding.
   lifecycle {
-    replace_triggered_by = [sonarqube_project.example]
+    replace_triggered_by = [sonarqube_project.example.id]
   }
 }
 

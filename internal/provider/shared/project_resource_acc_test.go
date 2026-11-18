@@ -22,15 +22,21 @@ func TestAccProjectResource(t *testing.T) {
 	key := fmt.Sprintf("%s%d", acctest.KeyPrefix, rand.Uint32())
 	newKey := key + "-new"
 	organization := os.Getenv(acctest.EnvTestOrganization)
-	config := func(key, name string) string {
+	// An empty mainBranch leaves main_branch out of the configuration.
+	configWithBranch := func(key, name, mainBranch string) string {
+		branch := ""
+		if mainBranch != "" {
+			branch = fmt.Sprintf("\n  main_branch  = %q", mainBranch)
+		}
 		return fmt.Sprintf(`
 resource "sonarqube_project" "test" {
   organization = %q
   key          = %q
-  name         = %q
+  name         = %q%s
 }
-`, organization, key, name)
+`, organization, key, name, branch)
 	}
+	config := func(key, name string) string { return configWithBranch(key, name, "") }
 
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { acctest.PreCheckSharedOrganization(t) },
@@ -46,7 +52,33 @@ resource "sonarqube_project" "test" {
 					resource.TestCheckResourceAttr(projectAddress, "id", key),
 					resource.TestCheckResourceAttr(projectAddress, "organization", organization),
 					resource.TestCheckResourceAttr(projectAddress, "name", "First name"),
+					resource.TestCheckResourceAttrSet(projectAddress, "main_branch"),
 					testAccCheckProjectName(t, organization, key, "First name"),
+					testAccCheckStateMainBranchMatches(t, key),
+				),
+			},
+			{
+				// A new main branch renames the branch and keeps the project.
+				Config:           configWithBranch(key, "First name", "main"),
+				ConfigPlanChecks: acctest.PlanAction(projectAddress, plancheck.ResourceActionUpdate),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr(projectAddress, "main_branch", "main"),
+					testAccCheckMainBranch(t, key, "main"),
+				),
+			},
+			{
+				PreConfig:        func() { renameMainBranchOutside(t, key, "outside") },
+				Config:           configWithBranch(key, "First name", "main"),
+				ConfigPlanChecks: acctest.PlanAction(projectAddress, plancheck.ResourceActionUpdate),
+				Check:            testAccCheckMainBranch(t, key, "main"),
+			},
+			{
+				// A configuration without the attribute keeps the main branch.
+				Config:           config(key, "First name"),
+				ConfigPlanChecks: acctest.PlanAction(projectAddress, plancheck.ResourceActionNoop),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr(projectAddress, "main_branch", "main"),
+					testAccCheckMainBranch(t, key, "main"),
 				),
 			},
 			{
@@ -80,6 +112,40 @@ resource "sonarqube_project" "test" {
 				func() (*client.Project, error) { return acctest.Client().GetProject(t.Context(), organization, newKey) }),
 		},
 	})
+}
+
+func renameMainBranchOutside(t *testing.T, key, name string) {
+	t.Helper()
+	if err := acctest.Client().RenameMainBranch(t.Context(), key, name); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// testAccCheckMainBranch compares the main branch of the project in the API
+// with want.
+func testAccCheckMainBranch(t *testing.T, key, want string) resource.TestCheckFunc {
+	return func(*terraform.State) error {
+		got, err := acctest.Client().GetMainBranch(t.Context(), key)
+		if err != nil {
+			return err
+		}
+		if got != want {
+			return fmt.Errorf("main branch of project %s = %q, want %q", key, got, want)
+		}
+		return nil
+	}
+}
+
+// testAccCheckStateMainBranchMatches compares main_branch in the state with
+// the main branch of the project in the API.
+func testAccCheckStateMainBranchMatches(t *testing.T, key string) resource.TestCheckFunc {
+	return func(state *terraform.State) error {
+		got, err := acctest.Client().GetMainBranch(t.Context(), key)
+		if err != nil {
+			return err
+		}
+		return resource.TestCheckResourceAttr(projectAddress, "main_branch", got)(state)
+	}
 }
 
 // testAccCheckProjectName compares the name of the project in the API with

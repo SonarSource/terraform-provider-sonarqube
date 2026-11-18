@@ -15,7 +15,7 @@ A project that is already bound to the same repository is adopted, not bound aga
 
 A change of `organization` or `project_key` replaces this resource. When the old project is deleted in the same apply, for example because `sonarqube_project` replaces it for a new key, its binding goes with it and the new project is bound. When the old project stays, it keeps the repository, and the server refuses the new binding.
 
-A replacement of the project for a new name keeps the key, so this resource sees no change, and the project loses its binding. Add `replace_triggered_by` on the project to the `lifecycle` block of this resource, so that Terraform binds the new project in the same apply.
+A replacement of the project for a new name keeps the key, so this resource sees no change, and the project loses its binding. Add `replace_triggered_by` on the `id` of the project to the `lifecycle` block of this resource, so that Terraform binds the new project in the same apply. Refer to `id`, not to the whole resource: a new `main_branch` updates the project in place, and a reference to the whole resource would replace the binding.
 
 A monorepo, where more than one project is bound to the same repository, is not supported. The binding does not turn on automatic analysis.
 
@@ -37,9 +37,11 @@ resource "sonarqube_cloud_project_binding" "example" {
   repository   = "my-github-org/my-repo"
 
   # A replacement of the project, such as for a new name, deletes the project
-  # and its binding. This binds the new project in the same apply.
+  # and its binding. This binds the new project in the same apply. Refer to
+  # id, not to the whole resource: a new main branch updates the project in
+  # place and must not replace the binding.
   lifecycle {
-    replace_triggered_by = [sonarqube_project.example]
+    replace_triggered_by = [sonarqube_project.example.id]
   }
 }
 

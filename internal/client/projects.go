@@ -64,6 +64,32 @@ func (c *Client) DeleteProject(ctx context.Context, key string) error {
 	return c.postIgnoringNotFound(ctx, "/api/projects/delete", params)
 }
 
+// GetMainBranch returns the name of the main branch of a project.
+func (c *Client) GetMainBranch(ctx context.Context, projectKey string) (string, error) {
+	var result struct {
+		Branches []struct {
+			Name   string `json:"name"`
+			IsMain bool   `json:"isMain"`
+		} `json:"branches"`
+	}
+	if err := c.get(ctx, "/api/project_branches/list", url.Values{"project": {projectKey}}, &result); err != nil {
+		return "", err
+	}
+	for _, branch := range result.Branches {
+		if branch.IsMain {
+			return branch.Name, nil
+		}
+	}
+	return "", fmt.Errorf("the branch list of the project %s has no main branch", projectKey)
+}
+
+// RenameMainBranch gives the main branch of a project a new name. The branch
+// keeps its analysis history. The server refuses a name that another branch
+// of the project has, and a name that is the current name is accepted.
+func (c *Client) RenameMainBranch(ctx context.Context, projectKey, name string) error {
+	return c.post(ctx, "/api/project_branches/rename", url.Values{"project": {projectKey}, "name": {name}})
+}
+
 // SearchProjectKeys returns the keys of the projects of an organization whose
 // key or name holds text.
 func (c *Client) SearchProjectKeys(ctx context.Context, organization, text string) ([]string, error) {

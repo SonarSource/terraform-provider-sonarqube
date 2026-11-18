@@ -13,6 +13,9 @@ BREAKING CHANGES:
 
 ENHANCEMENTS:
 
+* `sonarqube_project`: the new attribute `main_branch` sets the main branch of a project. A change renames the
+  main branch in place, and the project keeps its analysis history. When you do not set it, the project keeps
+  the main branch that SonarQube Cloud chose.
 * The provider now sends a User-Agent header with the Terraform version and the provider version, for example
   `Terraform/1.9.8 (+https://www.terraform.io) sonarqube-terraform/0.1.0-alpha.5`. To add your own text at the
   end, set the `TF_APPEND_USER_AGENT` environment variable. The provider removes control characters and
