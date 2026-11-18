@@ -52,7 +52,7 @@ func (d *qualityGateDataSource) Schema(_ context.Context, _ datasource.SchemaReq
 }
 
 func (d *qualityGateDataSource) Configure(_ context.Context, req datasource.ConfigureRequest, resp *datasource.ConfigureResponse) {
-	c, diagnostics := configure.CloudClient(req.ProviderData, "The sonarqube_cloud_quality_gate data source reads a quality gate")
+	c, diagnostics := configure.CloudClientAcceptingScopedToken(req.ProviderData, "The sonarqube_cloud_quality_gate data source reads a quality gate")
 	resp.Diagnostics.Append(diagnostics...)
 	d.client = c
 }

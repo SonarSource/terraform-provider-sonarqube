@@ -62,7 +62,7 @@ func (d *qualityProfileDataSource) Schema(_ context.Context, _ datasource.Schema
 }
 
 func (d *qualityProfileDataSource) Configure(_ context.Context, req datasource.ConfigureRequest, resp *datasource.ConfigureResponse) {
-	c, diagnostics := configure.CloudClient(req.ProviderData, "The sonarqube_quality_profile data source reads a quality profile")
+	c, diagnostics := configure.CloudClientAcceptingScopedToken(req.ProviderData, "The sonarqube_quality_profile data source reads a quality profile")
 	resp.Diagnostics.Append(diagnostics...)
 	d.client = c
 }

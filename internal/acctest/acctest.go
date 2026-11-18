@@ -55,11 +55,16 @@ func init() {
 // SOT tells if the provider under test uses a scoped organization token.
 func SOT() bool { return sotToken != "" }
 
+// UserToken returns the user token of SONARQUBE_TOKEN when the run starts. A
+// test that sets the token of the provider uses it.
+func UserToken() string { return userToken }
+
 // Reasons for SkipWithSOT.
 const (
 	SOTRefused         = "the API of this resource refuses a scoped organization token (see the SOT column of internal/client/APIS.md)"
 	SOTNoUser          = "the test needs the login of a user, and a scoped organization token has no user"
 	SOTPrivateProjects = "the projects API does not show private projects to a scoped organization token"
+	SOTNewOrganization = "a scoped organization token cannot create the organization of the test"
 )
 
 // SkipWithSOT skips a test that a scoped organization token cannot run.
