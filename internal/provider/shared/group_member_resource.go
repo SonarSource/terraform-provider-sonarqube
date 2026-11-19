@@ -40,8 +40,8 @@ func NewGroupMemberResource() resource.Resource {
 type groupMemberResource struct {
 	client *client.Client
 	// readRetries are the waits before Read reads a membership again. The
-	// member list of SonarQube Cloud can show the old members for some
-	// seconds after a change.
+	// member list of SonarQube Cloud can show the old members, or find no
+	// group, for some seconds after a change.
 	readRetries []time.Duration
 	// groupWaits are the waits before Create adds the user again, while the
 	// group is not ready after a recent change.
@@ -84,7 +84,7 @@ func (r *groupMemberResource) Schema(_ context.Context, _ resource.SchemaRequest
 			"another user to a group that has it.\n\n" +
 			"## Delays\n\n" +
 			"The member list of SonarQube Cloud can show the old members for some seconds after a change. " +
-			"When a refresh does not find the user, it reads the list again for about six seconds. A removal " +
+			"When a refresh does not find the user or the group, it reads the list again for about six seconds. A removal " +
 			"outside Terraform thus shows some seconds later than other changes.\n\n" +
 			"For some seconds after a group is created, renamed, or deleted, SonarQube Cloud can refuse " +
 			"to add a member to a group with that name. Create then tries again for about ten seconds. Thus a " +
@@ -182,14 +182,16 @@ func (r *groupMemberResource) Read(ctx context.Context, req resource.ReadRequest
 	}
 }
 
-// isMember reads the membership of the state. While the user is not in the
-// list, it reads again after each wait of readRetries, so that a membership
-// made a few seconds ago is not taken for a removed one.
+// isMember reads the membership of the state. While the user or the group is
+// not found, it reads again after each wait of readRetries, so that a recent
+// membership or group change is not taken for a removal.
 func (r *groupMemberResource) isMember(ctx context.Context, state groupMemberResourceModel) (bool, error) {
 	organization, group, login := state.Organization.ValueString(), state.GroupName.ValueString(), state.Login.ValueString()
 	return eventual.ReadAgain(ctx, r.readRetries,
 		func() (bool, error) { return r.client.IsGroupMember(ctx, organization, group, login) },
-		func(member bool, err error) bool { return err != nil || member })
+		func(member bool, err error) bool {
+			return member || (err != nil && !errors.Is(err, client.ErrNotFound))
+		})
 }
 
 // Update is never called with a change, because each attribute replaces the

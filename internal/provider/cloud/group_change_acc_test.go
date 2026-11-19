@@ -67,9 +67,19 @@ resource "sonarqube_cloud_organization_permissions" "test" {
 		}); err != nil {
 			return checkPermissions(t, api, scope, group, want)
 		}
-		return acctest.WaitFor(func() (bool, error) {
-			return api.IsGroupMember(t.Context(), organization, name, login)
+		var notFound error
+		err := acctest.WaitFor(func() (bool, error) {
+			member, err := api.IsGroupMember(t.Context(), organization, name, login)
+			if errors.Is(err, client.ErrNotFound) {
+				notFound = err
+				return false, nil
+			}
+			return member, err
 		})
+		if err != nil {
+			return errors.Join(err, notFound)
+		}
+		return nil
 	}
 	renameOutside := func() {
 		found, err := api.FindGroupByName(t.Context(), organization, name)

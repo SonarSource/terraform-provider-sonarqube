@@ -54,6 +54,9 @@ type fakeMembers struct {
 	// hiddenReads is the number of member reads that answer with no member,
 	// as the member list of SonarQube Cloud can do after a change.
 	hiddenReads int
+	// missingGroupReads is the number of member reads that answer that the
+	// group does not exist, as after a recent change to the group.
+	missingGroupReads int
 	// listHidden makes the v2 group search answer with no group.
 	listHidden bool
 	// failedAdds is the number of add_user calls that answer 500, as after
@@ -92,7 +95,7 @@ func (f *fakeMembers) serve(w http.ResponseWriter, r *http.Request) {
 		_ = json.NewEncoder(w).Encode(map[string]any{"groups": groups, "page": map[string]int{"total": len(groups)}})
 		return
 	}
-	members := f.members[group]
+	members := f.groupMembers(r.URL.Path, group)
 	if members == nil {
 		writeError(w, http.StatusNotFound, "No group with name '"+group+"' in organization 'my-org'")
 		return
@@ -126,6 +129,16 @@ func (f *fakeMembers) serve(w http.ResponseWriter, r *http.Request) {
 	default:
 		w.WriteHeader(http.StatusNotFound)
 	}
+}
+
+// groupMembers returns the members of group, or nil when the group is not
+// found.
+func (f *fakeMembers) groupMembers(path, group string) map[string]bool {
+	if path == "/api/user_groups/users" && f.missingGroupReads > 0 {
+		f.missingGroupReads--
+		return nil
+	}
+	return f.members[group]
 }
 
 func memberPlan(t *testing.T, s schema.Schema, group string) tfsdk.Plan {
@@ -188,6 +201,21 @@ func TestGroupMemberResourceReadWaitsForNewMembership(t *testing.T) {
 	f.hiddenReads = 3
 	if read := readMember(t, r, create.State); !read.State.Raw.IsNull() {
 		t.Fatal("a membership that stays missing after the retries kept the state")
+	}
+}
+
+func TestGroupMemberResourceReadWaitsForChangedGroup(t *testing.T) {
+	t.Parallel()
+	f, r := newFakeMembers(t)
+	r.readRetries = []time.Duration{time.Millisecond, time.Millisecond}
+	create := createMember(t, r, "team/a")
+	f.missingGroupReads = 2
+	if read := readMember(t, r, create.State); read.Diagnostics.HasError() || read.State.Raw.IsNull() {
+		t.Fatalf("a group that is not found for a moment removed the membership: %v", read.Diagnostics)
+	}
+	f.missingGroupReads = 3
+	if read := readMember(t, r, create.State); read.Diagnostics.HasError() || !read.State.Raw.IsNull() {
+		t.Fatalf("a group that stays missing after the retries kept the state: %v", read.Diagnostics)
 	}
 }
 

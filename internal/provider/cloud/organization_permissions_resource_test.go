@@ -68,6 +68,9 @@ type fakePermissionInstance struct {
 	// groups, and failedWrites the number of writes that answer 500, as
 	// after a recent change to a group.
 	hiddenReads, failedWrites int
+	// emptyReads is the number of group list reads that show each group
+	// with no permissions.
+	emptyReads int
 }
 
 func (f *fakePermissionInstance) start(t *testing.T) *organizationPermissionsResource {
@@ -96,6 +99,13 @@ func (f *fakePermissionInstance) serve(w http.ResponseWriter, r *http.Request) {
 	case r.Method == http.MethodGet && r.URL.Path == "/api/permissions/groups" && f.hiddenReads > 0:
 		f.hiddenReads--
 		f.serveList(w, r, "groups", "name", nil)
+	case r.Method == http.MethodGet && r.URL.Path == "/api/permissions/groups" && f.emptyReads > 0:
+		f.emptyReads--
+		empty := map[string][]string{}
+		for name := range f.groups {
+			empty[name] = []string{}
+		}
+		f.serveList(w, r, "groups", "name", empty)
 	case r.Method == http.MethodGet && r.URL.Path == "/api/permissions/groups":
 		f.serveList(w, r, "groups", "name", f.groups)
 	case r.Method == http.MethodGet && r.URL.Path == "/api/permissions/users":
@@ -334,8 +344,12 @@ func TestOrganizationPermissionsUserAndMissingGrant(t *testing.T) {
 		t.Fatalf("create: %v, grants = %v", created.Diagnostics, instance.users)
 	}
 	instance.users["alice"] = nil
+	// Only a group can lag after a change, so Read does not wait for a user.
+	r.readRetries = []time.Duration{time.Minute}
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+	defer cancel()
 	read := &resource.ReadResponse{State: created.State}
-	r.Read(t.Context(), resource.ReadRequest{State: created.State}, read)
+	r.Read(ctx, resource.ReadRequest{State: created.State}, read)
 	if read.Diagnostics.HasError() || !read.State.Raw.IsNull() {
 		t.Errorf("empty grants did not remove resource: %v, state = %v", read.Diagnostics, read.State.Raw)
 	}
@@ -387,6 +401,38 @@ func TestOrganizationPermissionsReadMissingPrincipal(t *testing.T) {
 			resp := &resource.ReadResponse{State: state}
 			r.Read(t.Context(), resource.ReadRequest{State: state}, resp)
 			if resp.Diagnostics.HasError() || !resp.State.Raw.IsNull() || (resp.Diagnostics.WarningsCount() > 0) != tc.warning {
+				t.Errorf("diagnostics = %v, state = %v", resp.Diagnostics, resp.State.Raw)
+			}
+		})
+	}
+}
+
+// The list can show no permissions for a moment after a change of the
+// group, so Read reads again after each of readRetries.
+func TestOrganizationPermissionsReadWaitsForChangedGroup(t *testing.T) {
+	for name, tc := range map[string]struct {
+		hiddenReads, emptyReads int
+		kept                    bool
+	}{
+		"group shows again":        {hiddenReads: 2, kept: true},
+		"group stays missing":      {hiddenReads: 3, kept: false},
+		"permissions show again":   {emptyReads: 2, kept: true},
+		"permissions stay missing": {emptyReads: 3, kept: false},
+	} {
+		t.Run(name, func(t *testing.T) {
+			instance := &fakePermissionInstance{groups: map[string][]string{"Developers": {"scan"}}}
+			r := instance.start(t)
+			s := organizationPermissionsSchema(t)
+			created := &resource.CreateResponse{State: providertest.EmptyState(t, s)}
+			r.Create(t.Context(), resource.CreateRequest{Plan: permissionPlan(t, s, permissionModel("Developers", "scan"))}, created)
+			if created.Diagnostics.HasError() {
+				t.Fatal(created.Diagnostics)
+			}
+			instance.hiddenReads, instance.emptyReads = tc.hiddenReads, tc.emptyReads
+			r.readRetries = []time.Duration{0, 0}
+			resp := &resource.ReadResponse{State: created.State}
+			r.Read(t.Context(), resource.ReadRequest{State: created.State}, resp)
+			if resp.Diagnostics.HasError() || resp.State.Raw.IsNull() == tc.kept {
 				t.Errorf("diagnostics = %v, state = %v", resp.Diagnostics, resp.State.Raw)
 			}
 		})
