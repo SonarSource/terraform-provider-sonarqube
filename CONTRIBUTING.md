@@ -1,5 +1,16 @@
 # Contributing
 
+> **We do not accept external pull requests on this project.** When all
+> changes come from the team, we can track, plan, prioritize and test each
+> change correctly. To report a bug or to ask for a feature,
+> [open a GitHub issue](https://github.com/SonarSource/terraform-provider-sonarqube/issues/new)
+> or write a post on the
+> [SonarSource Community forum](https://community.sonarsource.com/).
+>
+> The source code is public. You can fork it, read it and do tests with it.
+> The rest of this guide tells how to build, test and document the provider
+> from the source code.
+
 ## Requirements
 
 * Go, at the version that `go.mod` gives.
@@ -140,8 +151,11 @@ only where `TestMain` calls `resource.TestMain`. A package without that
 not import `helper/resource`.
 
 `.github/workflows/acceptance-tests.yml` runs the acceptance tests against
-SonarQube Cloud staging after each merge to `master` and each night at 03:17
-UTC. A failed run on `master` sends a Slack message to the squad. GitHub
+SonarQube Cloud staging on each pull request from a branch of this
+repository, after each merge to `master` and each night at 03:17 UTC. A pull
+request from a fork does not run them. One run at a time uses staging, so a
+run can wait for another one. A failed run on `master` sends a Slack message
+to the squad. GitHub
 disables the schedule of a public repository after 60 days without activity
 in the repository. Then the nightly runs stop without a message. To see the
 state of the workflow and to enable it again, run:
