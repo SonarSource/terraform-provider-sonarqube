@@ -57,6 +57,15 @@ func (c *Client) CreateProject(ctx context.Context, organization, key, name stri
 	return c.post(ctx, "/api/projects/create", params)
 }
 
+// UpdateProjectKey changes the key of a project. The project keeps its
+// analysis history. A key that another project has is refused with a 400.
+func (c *Client) UpdateProjectKey(ctx context.Context, from, to string) error {
+	params := url.Values{}
+	params.Set("from", from)
+	params.Set("to", to)
+	return c.post(ctx, "/api/projects/update_key", params)
+}
+
 // DeleteProject removes a project. A project that is already gone is success.
 func (c *Client) DeleteProject(ctx context.Context, key string) error {
 	params := url.Values{}

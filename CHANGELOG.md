@@ -23,6 +23,15 @@ ENHANCEMENTS:
 * The new public Go package `github.com/SonarSource/terraform-provider-sonarqube/sonarqube` gives the provider
   constructor `New(version)` to Go programs outside this module, for example Crossplane Upjet. This API is
   experimental and can change in any release before version 1.0.0. See the README.
+* `sonarqube_project`: a new `key` changes the key in place, and the project keeps its analysis history. Before, it
+  replaced the project, which deleted the analysis history, the issues and the settings.
+* `sonarqube_project`: the plan refuses a new `name` or `organization`, because SonarQube Cloud cannot rename a
+  project or move it to a different organization. Before, the change replaced the project, which deleted the
+  analysis history, the issues and the settings. The error tells how to make the project again. A new key of the
+  organization also changes `organization`: the docs of `sonarqube_cloud_organization` tell how to keep the
+  projects then.
+* `sonarqube_cloud_organization`: the docs tell what a new key does to the resources that refer to it, and how to
+  keep them.
 
 BUG FIXES:
 

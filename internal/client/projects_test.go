@@ -385,3 +385,25 @@ func TestFilterChunks(t *testing.T) {
 		})
 	}
 }
+
+func TestUpdateProjectKey(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/api/projects/update_key" {
+			t.Errorf("request = %s %s, want POST /api/projects/update_key", r.Method, r.URL.Path)
+		}
+		if err := r.ParseForm(); err != nil {
+			t.Fatal(err)
+		}
+		if from, to := r.PostForm.Get("from"), r.PostForm.Get("to"); from != "old-key" || to != "new-key" {
+			t.Errorf("from = %q, to = %q", from, to)
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer srv.Close()
+
+	if err := newTestClient(srv).UpdateProjectKey(t.Context(), "old-key", "new-key"); err != nil {
+		t.Fatal(err)
+	}
+}

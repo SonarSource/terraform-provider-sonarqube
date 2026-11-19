@@ -47,10 +47,31 @@ func (r *organizationResource) Metadata(_ context.Context, req resource.Metadata
 
 func (r *organizationResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		Description: "Manages a SonarQube Cloud organization. Organizations exist in " +
+		MarkdownDescription: "Manages a SonarQube Cloud organization. Organizations exist in " +
 			"SonarQube Cloud only.\n\n" +
 			"Take care against a production instance: a deletion starts billing events, " +
-			"and it can leave a binding to a DevOps platform behind.",
+			"and it can leave a binding to a DevOps platform behind.\n\n" +
+			"## Change the key\n\n" +
+			"SonarQube Cloud renames the organization in place and keeps its content. But in Terraform, " +
+			"each resource with an `organization` attribute that refers to the key gets a new value. The " +
+			"plan refuses it for a `sonarqube_project`, because a new project would lose the analysis " +
+			"history, issues and settings. Most other resources are replaced: Terraform deletes the object " +
+			"and makes a new one. A replaced group loses the members and permissions that Terraform does " +
+			"not manage.\n\n" +
+			"To keep these objects, do these steps:\n\n" +
+			"1. Remove each resource that refers to the key from the state, for example " +
+			"`terraform state rm sonarqube_project.example`. Find them with `terraform state list`.\n" +
+			"2. Apply the new key to the organization only, with " +
+			"`terraform apply -target=sonarqube_cloud_organization.example`.\n" +
+			"3. Import the removed resources with the new key, for example with an `import` block with the " +
+			"ID `<new key>/<project key>` for a project. Then run `terraform apply`. The plan shows only " +
+			"imports.\n\n" +
+			"These steps cannot keep a `sonarqube_cloud_scoped_organization_token`, because an import does " +
+			"not restore its secret. Revoke the token before step 1, with " +
+			"`terraform destroy -target=sonarqube_cloud_scoped_organization_token.example`. Do it before " +
+			"the rename, because after it Terraform cannot find the old token, and the old secret stays " +
+			"valid. The last `terraform apply` makes a new token. Give its secret to the places that use " +
+			"the old one.",
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
 				Computed:    true,
@@ -64,7 +85,9 @@ func (r *organizationResource) Schema(_ context.Context, _ resource.SchemaReques
 			"key": schema.StringAttribute{
 				Required: true,
 				Description: "Key of the organization. Must be unique. A new key renames the " +
-					"organization in place and keeps its projects.",
+					"organization in place. The plan refuses it for each `sonarqube_project` that refers to " +
+					"the key, and most other resources that refer to it are replaced. The section " +
+					"\"Change the key\" of this resource tells how to keep them.",
 				Validators: validate.OrganizationKey(),
 			},
 			"name": schema.StringAttribute{

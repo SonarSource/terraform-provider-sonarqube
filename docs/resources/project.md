@@ -9,9 +9,7 @@ description: |-
 
 Manages a SonarQube Cloud project without a repository binding.
 
-A change to `key`, `name` or `organization` replaces the project. SonarQube Cloud cannot rename a project. It cannot move a project to a different organization.
-
-A replacement deletes the project. The analysis history, the issues and the settings go with it. Terraform then makes an empty project. A change to `main_branch` renames the main branch in place, and the project keeps its history.
+A change to `key` or `main_branch` updates the project in place, and the project keeps its analysis history. SonarQube Cloud cannot rename a project or move it to a different organization, so the plan refuses a change to `name` or `organization`. A new project in their place loses the analysis history, the issues and the settings, so Terraform makes it only after the user deletes the project.
 
 ## Example Usage
 
@@ -29,11 +27,11 @@ resource "sonarqube_project" "example" {
 
 ### Required
 
-- `key` (String) Key of the project. Must be unique.
-- `name` (String) Name of the project. A new name replaces the project. The project then loses its analysis history.
+- `key` (String) Key of the project. Must be unique. A new key changes the key in place, and the project keeps its analysis history. The resources that refer to the key are replaced.
+- `name` (String) Name of the project. SonarQube Cloud cannot rename a project, so the plan refuses a new name. To delete the project and make a new one with a new name, keep the old name and run `terraform destroy -target` with the address of the project. Then set the new name and run `terraform apply`. The project then loses its analysis history.
 
-A name that changed outside Terraform stays out of the state. Terraform thus plans no replacement.
-- `organization` (String) Key of the organization that owns the project.
+A name that changed outside Terraform stays out of the state, so Terraform plans no change.
+- `organization` (String) Key of the organization that owns the project. SonarQube Cloud cannot move a project to a different organization, so the plan refuses a new value, also after a new key of the organization. To keep the projects after a new organization key, follow "Change the key" in the docs of `sonarqube_cloud_organization`.
 
 ### Optional
 

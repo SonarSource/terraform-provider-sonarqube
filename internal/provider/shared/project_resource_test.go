@@ -8,10 +8,14 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
+	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-go/tftypes"
 
 	"github.com/SonarSource/terraform-provider-sonarqube/internal/client"
@@ -80,7 +84,13 @@ type fakeProjectInstance struct {
 	mainBranches map[string]string
 	// failBranches makes the branch actions fail with a 403.
 	failBranches bool
-	calls        []string
+	// hiddenReads is the number of project reads that do not show a project,
+	// as the project list can do after a change of its key.
+	hiddenReads int
+	// hiddenBranchReads is the number of branch list reads that answer 404,
+	// as the branch list can do after a change of the key.
+	hiddenBranchReads int
+	calls             []string
 }
 
 func newFakeProjectInstance() *fakeProjectInstance {
@@ -111,13 +121,17 @@ func (f *fakeProjectInstance) start(t *testing.T) *client.Client {
 				return
 			}
 			_, _ = w.Write([]byte(`[{"id":"organization-id","uuidV4":"` + providertest.FakeOrganizationUUID + `","key":"my-org"}]`))
+		case "/api/projects/update_key":
+			f.serveUpdateKey(w, r)
 		case "/projects/projects":
 			if r.URL.Query().Get("organizationIds") != providertest.FakeOrganizationUUID {
 				t.Errorf("organizationIds = %q, want %q", r.URL.Query().Get("organizationIds"), providertest.FakeOrganizationUUID)
 			}
 			key := r.URL.Query().Get("keys")
 			projects := []client.Project{}
-			if name, found := f.projects[key]; found {
+			if f.hiddenReads > 0 {
+				f.hiddenReads--
+			} else if name, found := f.projects[key]; found {
 				projects = append(projects, client.Project{Key: key, Name: name, OrganizationID: providertest.FakeOrganizationUUID})
 			}
 			_ = json.NewEncoder(w).Encode(map[string]any{"projects": projects})
@@ -136,6 +150,22 @@ func (f *fakeProjectInstance) start(t *testing.T) *client.Client {
 	return providertest.NewCloudClient(srv)
 }
 
+// serveUpdateKey moves the project and its main branch to the new key, and
+// refuses a key that another project has, as the server does.
+func (f *fakeProjectInstance) serveUpdateKey(w http.ResponseWriter, r *http.Request) {
+	_ = r.ParseForm()
+	from, to := r.PostForm.Get("from"), r.PostForm.Get("to")
+	if _, taken := f.projects[to]; taken {
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = w.Write([]byte(`{"errors":[{"msg":"Impossible to update key: a component with key \"` + to + `\" already exists."}]}`))
+		return
+	}
+	f.projects[to], f.mainBranches[to] = f.projects[from], f.mainBranches[from]
+	delete(f.projects, from)
+	delete(f.mainBranches, from)
+	w.WriteHeader(http.StatusNoContent)
+}
+
 func (f *fakeProjectInstance) serveBranches(w http.ResponseWriter, r *http.Request) {
 	if f.failBranches {
 		w.WriteHeader(http.StatusForbidden)
@@ -148,6 +178,10 @@ func (f *fakeProjectInstance) serveBranches(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	name, found := f.mainBranches[r.URL.Query().Get("project")]
+	if f.hiddenBranchReads > 0 {
+		f.hiddenBranchReads--
+		found = false
+	}
 	if !found {
 		w.WriteHeader(http.StatusNotFound)
 		return
@@ -333,9 +367,14 @@ func TestProjectResourceCreateWarnsWhenTheMainBranchReadFails(t *testing.T) {
 
 func projectState(t *testing.T, s schema.Schema, mainBranch string) tfsdk.State {
 	t.Helper()
+	return projectStateWithKey(t, s, "my-project", mainBranch)
+}
+
+func projectStateWithKey(t *testing.T, s schema.Schema, key, mainBranch string) tfsdk.State {
+	t.Helper()
 
 	attributes := map[string]string{
-		"id": "my-project", "key": "my-project", "name": "My Project", "organization": "my-org",
+		"id": key, "key": key, "name": "My Project", "organization": "my-org",
 	}
 	if mainBranch != "" {
 		attributes["main_branch"] = mainBranch
@@ -483,7 +522,7 @@ func TestProjectResourceReadRetainsStateWhenTheMainBranchReadFails(t *testing.T)
 
 	resp := &resource.ReadResponse{State: state}
 	r.Read(context.Background(), resource.ReadRequest{State: state}, resp)
-	providertest.AssertDiagnosticsContain(t, resp.Diagnostics, "Cannot read the main branch of the project my-project")
+	providertest.AssertDiagnosticsContain(t, resp.Diagnostics, "cannot read the main branch")
 	if !resp.State.Raw.Equal(state.Raw) {
 		t.Error("a failed read changed the prior state")
 	}
@@ -614,4 +653,199 @@ func truncate(value string) string {
 		return value
 	}
 	return value[:20] + "..."
+}
+
+func TestProjectResourceUpdateChangesTheKeyInPlace(t *testing.T) {
+	t.Parallel()
+	for name, tc := range map[string]struct {
+		mainBranch        string
+		hiddenReads       int
+		hiddenBranchReads int
+		wantCalls         []string
+	}{
+		"branch list shows the key late": {mainBranch: "master", hiddenBranchReads: 1, wantCalls: []string{"/api/projects/update_key",
+			"/organizations/organizations", "/projects/projects", "/api/project_branches/list",
+			"/organizations/organizations", "/projects/projects", "/api/project_branches/list"}},
+		"key only": {mainBranch: "master", wantCalls: []string{"/api/projects/update_key", "/organizations/organizations", "/projects/projects",
+			"/api/project_branches/list"}},
+		"key and main branch": {mainBranch: "main", wantCalls: []string{"/api/projects/update_key", "/organizations/organizations", "/projects/projects",
+			"/api/project_branches/list", "/api/project_branches/rename"}},
+		"list shows the key late": {mainBranch: "master", hiddenReads: 2, wantCalls: []string{"/api/projects/update_key",
+			"/organizations/organizations", "/projects/projects", "/organizations/organizations", "/projects/projects",
+			"/organizations/organizations", "/projects/projects", "/api/project_branches/list"}},
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			instance := newFakeProjectInstance()
+			instance.addProject("my-project", "My Project")
+			instance.hiddenReads, instance.hiddenBranchReads = tc.hiddenReads, tc.hiddenBranchReads
+			r := &projectResource{client: instance.start(t), keyWaits: []time.Duration{time.Millisecond, time.Millisecond, time.Millisecond}}
+			s := projectResourceSchema(t)
+
+			resp := &resource.UpdateResponse{State: projectState(t, s, "master")}
+			r.Update(t.Context(), resource.UpdateRequest{
+				Plan:  tfsdk.Plan{Schema: s, Raw: projectStateWithKey(t, s, "new-key", tc.mainBranch).Raw},
+				State: projectState(t, s, "master"),
+			}, resp)
+			if resp.Diagnostics.HasError() {
+				t.Fatal(resp.Diagnostics)
+			}
+			state := providertest.ReadModel[projectResourceModel](t, resp.State)
+			if state.Key.ValueString() != "new-key" || state.ID.ValueString() != "new-key" || state.MainBranch.ValueString() != tc.mainBranch {
+				t.Errorf("state = %v", state)
+			}
+			if _, found := instance.projects["new-key"]; !found || instance.mainBranches["new-key"] != tc.mainBranch {
+				t.Errorf("projects = %v, main branches = %v", instance.projects, instance.mainBranches)
+			}
+			if !slices.Equal(instance.calls, tc.wantCalls) {
+				t.Errorf("calls = %v, want %v: the project must not be replaced", instance.calls, tc.wantCalls)
+			}
+		})
+	}
+}
+
+// A refused key keeps the old key in the state.
+func TestProjectResourceUpdateReportsARefusedKey(t *testing.T) {
+	t.Parallel()
+	instance := newFakeProjectInstance()
+	instance.addProject("my-project", "My Project")
+	instance.addProject("taken-key", "Other")
+	r := &projectResource{client: instance.start(t)}
+	s := projectResourceSchema(t)
+
+	prior := projectState(t, s, "master")
+	resp := &resource.UpdateResponse{State: prior}
+	r.Update(t.Context(), resource.UpdateRequest{Plan: tfsdk.Plan{Schema: s, Raw: projectStateWithKey(t, s, "taken-key", "master").Raw}, State: prior}, resp)
+	providertest.AssertDiagnosticsContain(t, resp.Diagnostics, "already exists")
+	if got := providertest.ReadModel[projectResourceModel](t, resp.State).Key.ValueString(); got != "my-project" {
+		t.Errorf("key in state = %q, want my-project", got)
+	}
+}
+
+// planAttribute runs the plan modifiers of one attribute of the project
+// schema, from a project in the state with the prior values.
+func planAttribute(t *testing.T, attribute string, planned types.String) *planmodifier.StringResponse {
+	t.Helper()
+	s := projectResourceSchema(t)
+	prior := map[string]string{"id": "my-project", "key": "my-project", "name": "My project", "organization": "my-org", "main_branch": "main"}
+	state := tfsdk.State{Schema: s, Raw: providertest.SchemaValue(t, s, prior)}
+	stateValue := types.StringValue(prior[attribute])
+	req := planmodifier.StringRequest{
+		Path: path.Root(attribute), State: state, Plan: tfsdk.Plan{Schema: s, Raw: state.Raw},
+		StateValue: stateValue, PlanValue: planned, ConfigValue: planned,
+	}
+	resp := &planmodifier.StringResponse{PlanValue: planned}
+	for _, modifier := range s.Attributes[attribute].(schema.StringAttribute).PlanModifiers {
+		modifier.PlanModifyString(t.Context(), req, resp)
+	}
+	return resp
+}
+
+// SonarQube Cloud cannot rename or move a project, and a replacement deletes
+// its history, so the plan refuses a new name or organization.
+func TestProjectResourceRefusesANewNameOrOrganization(t *testing.T) {
+	t.Parallel()
+	for attribute, want := range map[string]string{"name": "Cannot rename the project", "organization": "Cannot move the project"} {
+		resp := planAttribute(t, attribute, types.StringValue("other"))
+		providertest.AssertDiagnosticsContain(t, resp.Diagnostics, want)
+		providertest.AssertDiagnosticsContain(t, resp.Diagnostics, "terraform destroy -target")
+		if resp.RequiresReplace {
+			t.Errorf("a new %s replaces the project", attribute)
+		}
+	}
+	providertest.AssertDiagnosticsContain(t, planAttribute(t, "organization", types.StringValue("other")).Diagnostics, "Change the key")
+}
+
+// A value that was unknown in the plan and differs at apply is refused too,
+// because Update cannot rename or move a project.
+func TestProjectResourceUpdateRefusesAMove(t *testing.T) {
+	t.Parallel()
+	instance := newFakeProjectInstance()
+	instance.addProject("my-project", "My Project")
+	r := &projectResource{client: instance.start(t)}
+	s := projectResourceSchema(t)
+
+	prior := projectState(t, s, "master")
+	moved := providertest.SchemaValue(t, s, map[string]string{"id": "my-project", "key": "my-project", "name": "My Project", "organization": "other-org", "main_branch": "master"})
+	resp := &resource.UpdateResponse{State: prior}
+	r.Update(t.Context(), resource.UpdateRequest{Plan: tfsdk.Plan{Schema: s, Raw: moved}, State: prior}, resp)
+	providertest.AssertDiagnosticsContain(t, resp.Diagnostics, "Cannot rename or move the project")
+	if len(instance.calls) != 0 {
+		t.Errorf("calls = %v, want none", instance.calls)
+	}
+}
+
+// A new key, a new main branch, the same name, an unknown name or
+// organization, a create and a destroy replace nothing and refuse nothing.
+func TestProjectResourcePlansOtherChangesInPlace(t *testing.T) {
+	t.Parallel()
+	for name, tc := range map[string]struct {
+		attribute string
+		planned   types.String
+	}{
+		"new key":              {attribute: "key", planned: types.StringValue("other")},
+		"new main branch":      {attribute: "main_branch", planned: types.StringValue("trunk")},
+		"same name":            {attribute: "name", planned: types.StringValue("My project")},
+		"unknown name":         {attribute: "name", planned: types.StringUnknown()},
+		"unknown organization": {attribute: "organization", planned: types.StringUnknown()},
+	} {
+		if resp := planAttribute(t, tc.attribute, tc.planned); resp.RequiresReplace || len(resp.Diagnostics) != 0 {
+			t.Errorf("%s: RequiresReplace = %v, diagnostics = %v", name, resp.RequiresReplace, resp.Diagnostics)
+		}
+	}
+	s := projectResourceSchema(t)
+	value := providertest.SchemaValue(t, s, map[string]string{"key": "my-project", "name": "My project", "organization": "my-org"})
+	null := tftypes.NewValue(s.Type().TerraformType(t.Context()), nil)
+	for name, raws := range map[string][2]tftypes.Value{"create": {null, value}, "destroy": {value, null}} {
+		for _, attribute := range []string{"name", "organization"} {
+			req := planmodifier.StringRequest{
+				Path: path.Root(attribute), State: tfsdk.State{Schema: s, Raw: raws[0]}, Plan: tfsdk.Plan{Schema: s, Raw: raws[1]},
+				StateValue: types.StringValue("Old"), PlanValue: types.StringValue("New"),
+			}
+			resp := &planmodifier.StringResponse{}
+			for _, modifier := range s.Attributes[attribute].(schema.StringAttribute).PlanModifiers {
+				modifier.PlanModifyString(t.Context(), req, resp)
+			}
+			if resp.RequiresReplace || len(resp.Diagnostics) != 0 {
+				t.Errorf("%s %s: RequiresReplace = %v, diagnostics = %v", name, attribute, resp.RequiresReplace, resp.Diagnostics)
+			}
+		}
+	}
+}
+
+// The id follows the planned key, so that a new key also plans a new id.
+func TestProjectResourcePlansTheIDFromTheKey(t *testing.T) {
+	t.Parallel()
+	s := projectResourceSchema(t)
+	plan := tfsdk.Plan{Schema: s, Raw: providertest.SchemaValue(t, s, map[string]string{"id": "my-project", "key": "new-key", "name": "My project", "organization": "my-org"})}
+	resp := &planmodifier.StringResponse{PlanValue: types.StringValue("my-project")}
+	for _, modifier := range s.Attributes["id"].(schema.StringAttribute).PlanModifiers {
+		modifier.PlanModifyString(t.Context(), planmodifier.StringRequest{Path: path.Root("id"), Plan: plan, PlanValue: types.StringUnknown()}, resp)
+	}
+	if resp.PlanValue.ValueString() != "new-key" {
+		t.Errorf("planned id = %v, want new-key", resp.PlanValue)
+	}
+}
+
+// When the project list does not show the new key in time, the key change
+// stays in the state, with a warning.
+func TestProjectResourceUpdateWarnsWhenTheNewKeyStaysHidden(t *testing.T) {
+	t.Parallel()
+	instance := newFakeProjectInstance()
+	instance.addProject("my-project", "My Project")
+	instance.hiddenReads = 10
+	r := &projectResource{client: instance.start(t), keyWaits: []time.Duration{time.Millisecond}}
+	s := projectResourceSchema(t)
+
+	resp := &resource.UpdateResponse{State: projectState(t, s, "master")}
+	r.Update(t.Context(), resource.UpdateRequest{
+		Plan:  tfsdk.Plan{Schema: s, Raw: projectStateWithKey(t, s, "new-key", "master").Raw},
+		State: projectState(t, s, "master"),
+	}, resp)
+	if resp.Diagnostics.HasError() || resp.Diagnostics.WarningsCount() != 1 {
+		t.Fatalf("diagnostics = %v, want one warning", resp.Diagnostics)
+	}
+	if got := providertest.ReadModel[projectResourceModel](t, resp.State).Key.ValueString(); got != "new-key" {
+		t.Errorf("key in state = %q, want new-key", got)
+	}
 }

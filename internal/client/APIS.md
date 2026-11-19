@@ -140,6 +140,7 @@ permissions `admin`, `scan` and `provisioning`:
 | `GetProject` | `GET {api_url}/projects/projects?keys=&organizationIds=` | Web API v2 | [Public](https://api-docs.sonarsource.com/sonarqube-cloud/default/public-projectsexternal-0-0-1#/Projects/getProjects) | Public projects only |
 | `FindProjectsByKey`, `FindProjectsByID` | `GET {api_url}/projects/projects?keys=&organizationIds=&pageIndex=&pageSize=`, or with `ids=` | Web API v2 | [Public](https://api-docs.sonarsource.com/sonarqube-cloud/default/public-projectsexternal-0-0-1#/Projects/getProjects) | Public projects only |
 | `CreateProject` | `POST {url}/api/projects/create` | Web API v1 | [Public](https://sonarcloud.io/web_api/api/projects/create) | Yes |
+| `UpdateProjectKey` | `POST {url}/api/projects/update_key` | Web API v1 | [Public](https://sonarcloud.io/web_api/api/projects/update_key) | No (404) |
 | `DeleteProject` | `POST {url}/api/projects/delete` | Web API v1 | [Public](https://sonarcloud.io/web_api/api/projects/delete) | No (401) |
 | `GetMainBranch` | `GET {url}/api/project_branches/list?project=` | Web API v1 | [Public](https://sonarcloud.io/web_api/api/project_branches/list) | Not checked |
 | `RenameMainBranch` | `POST {url}/api/project_branches/rename` | Web API v1 | [Public](https://sonarcloud.io/web_api/api/project_branches/rename) | Not checked |

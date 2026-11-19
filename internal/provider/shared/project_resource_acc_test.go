@@ -21,6 +21,7 @@ func TestAccProjectResource(t *testing.T) {
 	acctest.SkipWithSOT(t, acctest.SOTPrivateProjects)
 	key := fmt.Sprintf("%s%d", acctest.KeyPrefix, rand.Uint32())
 	newKey := key + "-new"
+	var projectID string
 	organization := os.Getenv(acctest.EnvTestOrganization)
 	// An empty mainBranch leaves main_branch out of the configuration.
 	configWithBranch := func(key, name, mainBranch string) string {
@@ -82,19 +83,36 @@ resource "sonarqube_project" "test" {
 				),
 			},
 			{
-				// SonarQube Cloud cannot rename a project, so a new name
-				// replaces it.
-				Config:           config(key, "Second name"),
-				ConfigPlanChecks: acctest.PlanAction(projectAddress, plancheck.ResourceActionReplace),
-				Check:            testAccCheckProjectName(t, organization, key, "Second name"),
+				// SonarQube Cloud cannot rename a project, and a replacement
+				// deletes its history, so the plan refuses a new name.
+				Config:      config(key, "Second name"),
+				ExpectError: regexp.MustCompile(`Cannot rename the project`),
 			},
 			{
-				// A new key replaces the project.
-				Config:           config(newKey, "Second name"),
-				ConfigPlanChecks: acctest.PlanAction(projectAddress, plancheck.ResourceActionReplace),
+				// SonarQube Cloud cannot move a project, so the plan refuses a
+				// new organization. The refusal comes before any API call.
+				Config: fmt.Sprintf(`resource "sonarqube_project" "test" {
+  organization = %q
+  key          = %q
+  name         = "First name"
+}
+`, acctest.MissingKey, key),
+				ExpectError: regexp.MustCompile(`Cannot move the project`),
+			},
+			{
+				// A new key changes the key in place, and the project stays.
+				PreConfig:        func() { projectID = readProjectID(t, organization, key) },
+				Config:           config(newKey, "First name"),
+				ConfigPlanChecks: acctest.PlanAction(projectAddress, plancheck.ResourceActionUpdate),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr(projectAddress, "id", newKey),
-					testAccCheckProjectName(t, organization, newKey, "Second name"),
+					testAccCheckProjectName(t, organization, newKey, "First name"),
+					func(*terraform.State) error {
+						if got := readProjectID(t, organization, newKey); got != projectID {
+							return fmt.Errorf("the project with the new key has the id %q, want %q", got, projectID)
+						}
+						return nil
+					},
 					acctest.CheckProjectDeleted(t, organization, key),
 				),
 			},
@@ -106,8 +124,8 @@ resource "sonarqube_project" "test" {
 			},
 			acctest.ImportError(projectAddress, newKey, regexp.MustCompile(`Cannot import the project`)),
 			acctest.ImportError(projectAddress, organization+"/"+acctest.MissingKey, acctest.MissingImport),
-			acctest.DeletedOutside(t, projectAddress, config(newKey, "Second name"),
-				testAccCheckProjectName(t, organization, newKey, "Second name"),
+			acctest.DeletedOutside(t, projectAddress, config(newKey, "First name"),
+				testAccCheckProjectName(t, organization, newKey, "First name"),
 				func() error { return acctest.Client().DeleteProject(t.Context(), newKey) },
 				func() (*client.Project, error) { return acctest.Client().GetProject(t.Context(), organization, newKey) }),
 		},
@@ -161,4 +179,15 @@ func testAccCheckProjectName(t *testing.T, organization, key, want string) resou
 		}
 		return nil
 	}
+}
+
+// readProjectID returns the identifier of the project on the server, which a
+// change of the key keeps and a replacement does not.
+func readProjectID(t *testing.T, organization, key string) string {
+	t.Helper()
+	project, err := acctest.Client().GetProject(t.Context(), organization, key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return project.LegacyID
 }
