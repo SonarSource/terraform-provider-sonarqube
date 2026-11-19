@@ -27,6 +27,8 @@ SonarQube Cloud does not protect the last project administrator. An apply can re
 
 ## Delays
 
+When a refresh finds no permissions for a group, it reads the list again for about seven seconds, because the list can lag after a group change. A removal outside Terraform thus shows some seconds later than other changes.
+
 For some seconds after a group is created, renamed, or deleted, SonarQube Cloud can refuse permission changes for a group with that name. Create and update then try each call again for about ten seconds. Thus a group name that does not exist, for example after a typing error or a deletion outside Terraform, shows its error about ten seconds later.
 
 ## Example Usage

@@ -54,8 +54,9 @@ type permissionsResource[M any, P permissionsModelPointer[M]] struct {
 	// checkApply, when set, can refuse the permissions that create or update
 	// would add, before any change is sent.
 	checkApply func(ctx context.Context, c *client.Client, scope client.PermissionScope, adds []string) diag.Diagnostics
-	// readRetries are the waits before Delete reads again, after a remove
-	// that failed, to find a group or a project that is being deleted.
+	// readRetries are the waits before Read reads again when it finds no
+	// permissions for a group, and before Delete reads again after a remove that failed,
+	// to find a group or a project that is being deleted.
 	readRetries []time.Duration
 	// groupWaits are the waits before create and update try a call for a
 	// group again, while the group is not ready after a recent change.
@@ -148,7 +149,17 @@ func (r *permissionsResource[M, P]) Read(ctx context.Context, req resource.ReadR
 		return
 	}
 	model := P(&state)
-	current, err := r.client.GetPermissions(ctx, model.scope(), model.principal())
+	// After a change of the group, the list can show no permissions for some
+	// seconds, so read again before the resource is taken for removed.
+	waits := r.readRetries
+	if !model.principal().Group {
+		waits = nil
+	}
+	current, err := eventual.ReadAgain(ctx, waits,
+		func() ([]string, error) { return r.client.GetPermissions(ctx, model.scope(), model.principal()) },
+		func(current []string, err error) bool {
+			return len(current) > 0 || (err != nil && !errors.Is(err, client.ErrNotFound))
+		})
 	var missing *client.ScopeNotFoundError
 	switch {
 	case errors.As(err, &missing):
