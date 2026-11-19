@@ -1,15 +1,14 @@
 name: Acceptance tests
 
-# This repository is public. A run from a pull_request trigger would give the
-# staging credentials to code that nobody examined, so this workflow has no
-# pull_request trigger, and never uses pull_request_target. The tests run
-# after a merge to master, each night, or by hand. They do not stop a merge,
-# because the repository has no merge queue. Add a merge_group trigger when it
-# has one.
+# GitHub gives a pull request from a fork no OIDC token, so the Vault step
+# fails there. The `if` of the test jobs skips these runs. Do not use
+# pull_request_target. Add a merge_group trigger when the repository has a
+# merge queue.
 on:
   push:
     branches:
       - master
+  pull_request:
   workflow_dispatch:
   # The nightly run finds changes of staging and of the APIs between two
   # merges. GitHub disables the schedule after 60 days without activity in the
@@ -32,6 +31,9 @@ jobs:
   acceptance-tests:
     runs-on: sonar-s
     name: Acceptance tests
+    if: >-
+      github.event_name != 'pull_request' ||
+      github.event.pull_request.head.repo.full_name == github.repository
     timeout-minutes: 45
     permissions:
       id-token: write
@@ -101,7 +103,9 @@ jobs:
     runs-on: warp-custom-ubuntu-24-04
     name: Acceptance tests of GitLab Self-Managed
     needs: acceptance-tests
-    if: ${{ !cancelled() }}
+    if: >-
+      !cancelled() && (github.event_name != 'pull_request' ||
+      github.event.pull_request.head.repo.full_name == github.repository)
     # The first start of GitLab takes some minutes.
     timeout-minutes: 45
     permissions:
