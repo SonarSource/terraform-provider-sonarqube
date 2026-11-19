@@ -15,8 +15,6 @@ concurrency:
 
 jobs:
   build:
-    # For guidance on runner selection, visit:
-    # https://xtranet-sonarsource.atlassian.net/wiki/spaces/Platform/pages/3694231566/GitHub+Actions+Runner+-+GitHub
     runs-on: sonar-xs
     name: Build
     permissions:
