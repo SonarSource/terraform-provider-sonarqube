@@ -1,5 +1,16 @@
 # Contributing
 
+> **We do not accept external pull requests on this project.** When all
+> changes come from the team, we can track, plan, prioritize and test each
+> change correctly. To report a bug or to ask for a feature,
+> [open a GitHub issue](https://github.com/SonarSource/terraform-provider-sonarqube/issues/new)
+> or write a post on the
+> [SonarSource Community forum](https://community.sonarsource.com/).
+>
+> The source code is public. You can fork it, read it and do tests with it.
+> The rest of this guide tells how to build, test and document the provider
+> from the source code.
+
 ## Requirements
 
 * Go, at the version that `go.mod` gives.

@@ -28,6 +28,10 @@ This API is experimental. It can change in any release before version 1.0.0.
 
 ## Contributing
 
+We do not accept external pull requests. To report a bug or to ask for a
+feature, open a GitHub issue or write a post on the
+[SonarSource Community forum](https://community.sonarsource.com/).
+
 See [CONTRIBUTING.md](CONTRIBUTING.md) to build the provider, use a local
 build, run the tests and generate the documentation.
 
