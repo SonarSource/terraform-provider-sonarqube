@@ -1,6 +1,6 @@
 ---
 page_title: "sonarqube_cloud_project_quality_gate Resource - SonarQube"
-subcategory: "SonarQube Cloud"
+subcategory: "Quality gates"
 description: |-
   Assigns a quality gate to a SonarQube Cloud project. The next analysis of the project uses this gate.
 ---
@@ -42,3 +42,23 @@ resource "sonarqube_cloud_project_quality_gate" "example" {
 
 - `association_id` (String) Identifier of the assignment of the gate to the project.
 - `id` (String) Organization key and project key, separated by a slash.
+
+## Import
+
+Import is supported using the following syntax:
+
+In Terraform v1.5.0 and later, the [`import` block](https://developer.hashicorp.com/terraform/language/import) can be used with the `id` attribute, for example:
+
+```terraform
+import {
+  to = sonarqube_cloud_project_quality_gate.example
+  id = "my-organization/my-project"
+}
+```
+
+The [`terraform import` command](https://developer.hashicorp.com/terraform/cli/commands/import) can be used, for example:
+
+```shell
+# The ID is <organization>/<project_key>.
+terraform import sonarqube_cloud_project_quality_gate.example my-organization/my-project
+```

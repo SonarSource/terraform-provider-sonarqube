@@ -1,6 +1,6 @@
 ---
 page_title: "sonarqube_cloud_organization_quality_gate_settings Resource - SonarQube"
-subcategory: "SonarQube Cloud"
+subcategory: "Quality gates"
 description: |-
   Manages whether a SonarQube Cloud organization ignores coverage and duplication conditions on changes with fewer than 20 new lines. A project administrator can turn this setting off for a project when the organization setting is on.
 ---
@@ -33,3 +33,23 @@ resource "sonarqube_cloud_organization_quality_gate_settings" "example" {
 ### Read-Only
 
 - `id` (String) Key of the organization.
+
+## Import
+
+Import is supported using the following syntax:
+
+In Terraform v1.5.0 and later, the [`import` block](https://developer.hashicorp.com/terraform/language/import) can be used with the `id` attribute, for example:
+
+```terraform
+import {
+  to = sonarqube_cloud_organization_quality_gate_settings.example
+  id = "my-org"
+}
+```
+
+The [`terraform import` command](https://developer.hashicorp.com/terraform/cli/commands/import) can be used, for example:
+
+```shell
+# The ID is the key of the organization.
+terraform import sonarqube_cloud_organization_quality_gate_settings.example my-org
+```

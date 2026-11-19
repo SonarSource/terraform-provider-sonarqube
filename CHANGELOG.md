@@ -32,6 +32,9 @@ ENHANCEMENTS:
   projects then.
 * `sonarqube_cloud_organization`: the docs tell what a new key does to the resources that refer to it, and how to
   keep them.
+* Docs: each resource and data source has an example, and each resource has an `import` block example. The
+  provider page tells which token permissions each resource needs, and links to the SonarQube Cloud documentation.
+  The Registry shows the pages in groups.
 
 BUG FIXES:
 

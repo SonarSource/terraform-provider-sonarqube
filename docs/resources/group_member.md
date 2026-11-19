@@ -1,6 +1,6 @@
 ---
 page_title: "sonarqube_group_member Resource - SonarQube"
-subcategory: ""
+subcategory: "Groups"
 description: |-
   This resource adds one user to one group. Destroy removes the user from the group. It does not change the other members of the group. A change to any attribute replaces the membership.
 ---
@@ -60,6 +60,15 @@ resource "sonarqube_group_member" "alice" {
 ## Import
 
 Import is supported using the following syntax:
+
+In Terraform v1.5.0 and later, the [`import` block](https://developer.hashicorp.com/terraform/language/import) can be used with the `id` attribute, for example:
+
+```terraform
+import {
+  to = sonarqube_group_member.alice
+  id = "my-organization/Developers/alice@github"
+}
+```
 
 The [`terraform import` command](https://developer.hashicorp.com/terraform/cli/commands/import) can be used, for example:
 

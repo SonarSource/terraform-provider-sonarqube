@@ -1,6 +1,6 @@
 ---
 page_title: "sonarqube_cloud_enterprise Data Source - SonarQube"
-subcategory: "SonarQube Cloud"
+subcategory: "Enterprise, organization and projects"
 description: |-
   Reads one SonarQube Cloud enterprise by its key. The provider must use a user token. Scoped organization tokens are not supported.
 ---

@@ -1,14 +1,50 @@
 {{/*
   Copy of the default template of tfplugindocs v0.25.0. Compare it with the
   new default when you upgrade tfplugindocs. Changes from the default:
-  - subcategory: the name of each SonarQube Cloud resource and data source
-    starts with sonarqube_cloud_. The second part of the name is thus
-    "cloud" for these and only these. The shared ones have no subcategory.
+  - subcategory: the Registry group of each resource and data source. Add
+    each new name to a group. TestDocsPages fails for a page with
+    no group.
   - description: only the first paragraph of the schema description.
 */ -}}
 ---
 page_title: "{{.Name}} {{.Type}} - {{.RenderedProviderName}}"
-subcategory: "{{ if eq (index (split .Name "_") 1) "cloud" }}SonarQube Cloud{{ end }}"
+subcategory: "
+{{- if eq .Name "sonarqube_cloud_enterprise"
+    "sonarqube_cloud_enterprise_organization"
+    "sonarqube_cloud_organization"
+    "sonarqube_project"
+    -}}
+  Enterprise, organization and projects
+{{- else if eq .Name "sonarqube_group"
+    "sonarqube_group_member"
+    -}}
+  Groups
+{{- else if eq .Name "sonarqube_cloud_organization_permissions"
+    "sonarqube_cloud_project_permissions"
+    "sonarqube_cloud_scoped_organization_token"
+    -}}
+  Permissions
+{{- else if eq .Name "sonarqube_cloud_quality_gate"
+    "sonarqube_cloud_organization_default_quality_gate"
+    "sonarqube_cloud_organization_quality_gate_settings"
+    "sonarqube_cloud_project_quality_gate"
+    -}}
+  Quality gates
+{{- else if eq .Name "sonarqube_quality_profile"
+    "sonarqube_quality_profile_rule"
+    "sonarqube_quality_profile_editor"
+    "sonarqube_project_quality_profile"
+    "sonarqube_cloud_organization_default_quality_profile"
+    -}}
+  Quality profiles
+{{- else if eq .Name "sonarqube_cloud_organization_binding"
+    "sonarqube_cloud_organization_gitlab_self_managed_binding"
+    "sonarqube_cloud_project_binding"
+    "sonarqube_cloud_dop_applications"
+    -}}
+  DevOps platform bindings
+{{- end -}}
+"
 description: |-
 {{ index (split .Description "\n\n") 0 | plainmarkdown | trimspace | prefixlines "  " }}
 ---

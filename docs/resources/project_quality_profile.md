@@ -1,6 +1,6 @@
 ---
 page_title: "sonarqube_project_quality_profile Resource - SonarQube"
-subcategory: ""
+subcategory: "Quality profiles"
 description: |-
   This resource sets the quality profile that a project uses for the language of the profile. A project uses the default profile of the organization for each language that has no such assignment. Use one resource for each language of the project. Do not use two resources for the same project and language: each apply then changes the assignment of the other.
 ---
@@ -58,6 +58,15 @@ resource "sonarqube_project_quality_profile" "backend" {
 ## Import
 
 Import is supported using the following syntax:
+
+In Terraform v1.5.0 and later, the [`import` block](https://developer.hashicorp.com/terraform/language/import) can be used with the `id` attribute, for example:
+
+```terraform
+import {
+  to = sonarqube_project_quality_profile.backend
+  id = "my-organization/my-project/java"
+}
+```
 
 The [`terraform import` command](https://developer.hashicorp.com/terraform/cli/commands/import) can be used, for example:
 

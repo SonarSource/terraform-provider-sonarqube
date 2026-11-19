@@ -1,6 +1,6 @@
 ---
 page_title: "sonarqube_quality_profile Data Source - SonarQube"
-subcategory: ""
+subcategory: "Quality profiles"
 description: |-
   Reads a quality profile of one language by its exact name, also a built-in profile such as Sonar way core. Use its key as the parent_key of a sonarqube_quality_profile. The alpha supports SonarQube Cloud only.
 ---

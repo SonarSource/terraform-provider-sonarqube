@@ -1,6 +1,6 @@
 ---
 page_title: "sonarqube_cloud_project_binding Resource - SonarQube"
-subcategory: "SonarQube Cloud"
+subcategory: "DevOps platform bindings"
 description: |-
   Binds a SonarQube Cloud project to a repository on the DevOps platform that its organization is bound to: GitHub or GitLab Self-Managed. On GitHub, the GitHub application installation of the organization must be able to see the repository. On GitLab, the token of the organization binding must be able to read it.
 ---
@@ -73,3 +73,23 @@ A rename or a move of the repository on the DevOps platform does not change the 
 
 - `id` (String) Identifier of the binding.
 - `repository_id` (String) Identifier that the DevOps platform gives the repository.
+
+## Import
+
+Import is supported using the following syntax:
+
+In Terraform v1.5.0 and later, the [`import` block](https://developer.hashicorp.com/terraform/language/import) can be used with the `id` attribute, for example:
+
+```terraform
+import {
+  to = sonarqube_cloud_project_binding.example
+  id = "my-organization/my-organization_my-repo"
+}
+```
+
+The [`terraform import` command](https://developer.hashicorp.com/terraform/cli/commands/import) can be used, for example:
+
+```shell
+# The ID is <organization>/<project_key>.
+terraform import sonarqube_cloud_project_binding.example my-organization/my-organization_my-repo
+```

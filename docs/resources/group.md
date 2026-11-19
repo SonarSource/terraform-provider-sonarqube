@@ -1,6 +1,6 @@
 ---
 page_title: "sonarqube_group Resource - SonarQube"
-subcategory: ""
+subcategory: "Groups"
 description: |-
   Manages a SonarQube Cloud group. A change to name renames the group in place. A change to organization replaces it.
 ---
@@ -44,3 +44,24 @@ resource "sonarqube_group" "example" {
 ### Read-Only
 
 - `id` (String) Opaque group identifier.
+
+## Import
+
+Import is supported using the following syntax:
+
+In Terraform v1.5.0 and later, the [`import` block](https://developer.hashicorp.com/terraform/language/import) can be used with the `id` attribute, for example:
+
+```terraform
+import {
+  to = sonarqube_group.example
+  id = "my-organization/Developers"
+}
+```
+
+The [`terraform import` command](https://developer.hashicorp.com/terraform/cli/commands/import) can be used, for example:
+
+```shell
+# The ID is <organization>/<name>. The Members and Owners groups cannot be
+# imported. Read them with the sonarqube_group data source.
+terraform import sonarqube_group.example my-organization/Developers
+```

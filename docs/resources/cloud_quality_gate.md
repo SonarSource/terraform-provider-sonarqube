@@ -1,6 +1,6 @@
 ---
 page_title: "sonarqube_cloud_quality_gate Resource - SonarQube"
-subcategory: "SonarQube Cloud"
+subcategory: "Quality gates"
 description: |-
   Manages a SonarQube Cloud quality gate and all its conditions. The built-in Sonar way gate cannot be managed.
 ---
@@ -60,3 +60,23 @@ Required:
 - `metric` (String) Metric key, such as new_coverage.
 - `operator` (String) Comparison operator: LT (less than) or GT (greater than). The metric sets which of the two is valid.
 - `threshold` (String) Threshold value accepted by SonarQube Cloud.
+
+## Import
+
+Import is supported using the following syntax:
+
+In Terraform v1.5.0 and later, the [`import` block](https://developer.hashicorp.com/terraform/language/import) can be used with the `id` attribute, for example:
+
+```terraform
+import {
+  to = sonarqube_cloud_quality_gate.example
+  id = "my-organization/My quality gate"
+}
+```
+
+The [`terraform import` command](https://developer.hashicorp.com/terraform/cli/commands/import) can be used, for example:
+
+```shell
+# The ID is <organization>/<name>. The name can contain "/".
+terraform import sonarqube_cloud_quality_gate.example "my-organization/My quality gate"
+```

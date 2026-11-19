@@ -1,6 +1,6 @@
 ---
 page_title: "sonarqube_cloud_organization_default_quality_gate Resource - SonarQube"
-subcategory: "SonarQube Cloud"
+subcategory: "Quality gates"
 description: |-
   Sets the default quality gate of a SonarQube Cloud organization. Each project that has no quality gate of its own uses the default.
 ---
@@ -37,3 +37,23 @@ resource "sonarqube_cloud_organization_default_quality_gate" "example" {
 ### Read-Only
 
 - `id` (String) Key of the organization.
+
+## Import
+
+Import is supported using the following syntax:
+
+In Terraform v1.5.0 and later, the [`import` block](https://developer.hashicorp.com/terraform/language/import) can be used with the `id` attribute, for example:
+
+```terraform
+import {
+  to = sonarqube_cloud_organization_default_quality_gate.example
+  id = "my-organization"
+}
+```
+
+The [`terraform import` command](https://developer.hashicorp.com/terraform/cli/commands/import) can be used, for example:
+
+```shell
+# The ID is the key of the organization.
+terraform import sonarqube_cloud_organization_default_quality_gate.example my-organization
+```
