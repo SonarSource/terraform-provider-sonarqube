@@ -1,6 +1,6 @@
 ---
 page_title: "sonarqube_cloud_project_binding Data Source - SonarQube"
-subcategory: "SonarQube Cloud"
+subcategory: "DevOps platform bindings"
 description: |-
   Reads the repository binding of a SonarQube Cloud project.
 ---

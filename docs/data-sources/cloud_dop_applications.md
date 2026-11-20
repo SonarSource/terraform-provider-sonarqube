@@ -1,6 +1,6 @@
 ---
 page_title: "sonarqube_cloud_dop_applications Data Source - SonarQube"
-subcategory: "SonarQube Cloud"
+subcategory: "DevOps platform bindings"
 description: |-
   Lists the applications that this SonarQube Cloud instance owns on the DevOps platforms.
 ---

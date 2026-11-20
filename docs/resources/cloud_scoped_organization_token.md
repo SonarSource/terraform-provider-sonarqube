@@ -1,6 +1,6 @@
 ---
 page_title: "sonarqube_cloud_scoped_organization_token Resource - SonarQube"
-subcategory: "SonarQube Cloud"
+subcategory: "Permissions"
 description: |-
   This resource creates a scoped organization token on SonarQube Cloud. The
   organization must have a plan that supports these tokens. The provider must
@@ -135,6 +135,15 @@ resource "sonarqube_cloud_scoped_organization_token" "backend" {
 ## Import
 
 Import is supported using the following syntax:
+
+In Terraform v1.5.0 and later, the [`import` block](https://developer.hashicorp.com/terraform/language/import) can be used with the `id` attribute, for example:
+
+```terraform
+import {
+  to = sonarqube_cloud_scoped_organization_token.analysis
+  id = "my-org/00000000-0000-4000-8000-000000000002"
+}
+```
 
 The [`terraform import` command](https://developer.hashicorp.com/terraform/cli/commands/import) can be used, for example:
 

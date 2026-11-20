@@ -6,8 +6,11 @@ description: |-
 
 # SonarQube Provider
 
-The SonarQube provider manages the resources of SonarQube Cloud. The alpha
-release supports SonarQube Cloud only.
+[Managing SonarQube Cloud with Terraform](https://docs.sonarsource.com/sonarqube-cloud/administering-sonarcloud/managing-with-terraform)
+in the SonarQube Cloud documentation tells what the provider can manage, the
+plan requirements and the known limitations. It also has an example.
+
+This release supports SonarQube Cloud only.
 
 ## Requirements
 
@@ -19,8 +22,53 @@ expires each year.
 
 {{tffile "examples/provider/provider.tf"}}
 
-An alpha version is a pre-release. Terraform selects it only when the
-constraint gives the exact version.
+## Select the Instance
+
+* `url` is the address of the SonarQube Cloud web application. The default is
+  `https://sonarcloud.io` (the EU region). For the US region, set
+  `https://sonarqube.us`.
+* `api_url` is the address of Web API v2. The provider gets it from `url`, for
+  example `https://api.sonarcloud.io` from `https://sonarcloud.io`. Set it only
+  when your instance does not use this pattern.
+* `product` is the SonarQube product. Only `cloud` (the default) is supported.
+
+## Authenticate
+
+Use a user token. To make one, open **My Account** > **Security** in SonarQube
+Cloud. The provider has the permissions of the user of the token. Use a user
+that is dedicated to Terraform, so that the configuration does not depend on
+the account of one person.
+
+Set the token in one of these places:
+
+* the `token` argument, from a sensitive variable
+* the `SONARQUBE_TOKEN` environment variable
+
+The environment variables `SONARQUBE_URL` and `SONARQUBE_API_URL` set `url` and
+`api_url`. A value in the configuration has priority over the environment
+variable.
+
+When the provider starts, it checks the token one time. A wrong, expired or
+revoked token stops the plan with the error "Invalid token".
+
+### Permissions of the Token
+
+| To manage | The user needs |
+| --- | --- |
+| An organization | To create it: no permission, unless its enterprise limits who can create organizations. To change or delete it: **Administer Organization** (`admin`). |
+| An enterprise | To create it: **Administer Organization** (`admin`) on its first organization. To delete it: enterprise administrator. |
+| An organization in an enterprise | Enterprise administrator, and **Administer Organization** (`admin`) on the organization |
+| Projects | **Create Projects** (`provisioning`) to create. **Administer** on the project to change or delete. |
+| Groups, members and organization permissions | **Administer Organization** (`admin`) |
+| Project permissions and project bindings | **Administer Organization** (`admin`), or **Administer** on the project |
+| Organization bindings to a DevOps platform | **Administer Organization** (`admin`) |
+| Quality gates and the default quality gate | **Administer Quality Gates** (`gateadmin`) |
+| `sonarqube_cloud_organization_quality_gate_settings` | **Administer Organization** (`admin`) |
+| Quality profiles, their rules and the default profiles | **Administer Quality Profiles** (`profileadmin`). To change a profile, the right to edit it is also enough. |
+| Scoped organization tokens | **Administer Organization** (`admin`) |
+
+The pages of the resources tell about other conditions, such as the plan of
+the organization.
 
 ## Authenticate with a Scoped Organization Token
 
@@ -65,7 +113,8 @@ so run them with `-refresh=false`.
 ## Import an Existing Setup
 
 `terraform plan -generate-config-out=<file>` writes the configuration of the
-resources in `import` blocks. This configuration has hard-coded names and keys,
+resources in `import` blocks. The "Import" section of each resource page gives
+the format of the ID. This configuration has hard-coded names and keys,
 so Terraform does not know the dependencies between the resources. Replace the
 hard-coded values with references to the other resources, for example
 `group_name = sonarqube_group.developers.name` instead of

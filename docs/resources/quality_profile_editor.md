@@ -1,6 +1,6 @@
 ---
 page_title: "sonarqube_quality_profile_editor Resource - SonarQube"
-subcategory: ""
+subcategory: "Quality profiles"
 description: |-
   This resource lets one group or one user edit one custom quality profile. The editor can then change the rules, the projects, the name and the parent of the profile, and let other groups and users edit it too. The editor does not need the Administer Quality Profiles permission. Destroy takes the right from the editor. A change to any attribute replaces the resource.
 ---
@@ -67,6 +67,15 @@ resource "sonarqube_quality_profile_editor" "lead" {
 ## Import
 
 Import is supported using the following syntax:
+
+In Terraform v1.5.0 and later, the [`import` block](https://developer.hashicorp.com/terraform/language/import) can be used with the `id` attribute, for example:
+
+```terraform
+import {
+  to = sonarqube_quality_profile_editor.backend_team
+  id = "my-organization/my-profile-key/group/backend-team"
+}
+```
 
 The [`terraform import` command](https://developer.hashicorp.com/terraform/cli/commands/import) can be used, for example:
 

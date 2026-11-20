@@ -1,6 +1,6 @@
 ---
 page_title: "sonarqube_cloud_organization_permissions Resource - SonarQube"
-subcategory: "SonarQube Cloud"
+subcategory: "Permissions"
 description: |-
   This resource manages the complete set of organization permissions for one group or user. Create removes existing grants that are not in permissions. Destroy removes the selected principal's organization grants. It does not change other principals.
 ---
@@ -51,6 +51,15 @@ resource "sonarqube_cloud_organization_permissions" "developers" {
 ## Import
 
 Import is supported using the following syntax:
+
+In Terraform v1.5.0 and later, the [`import` block](https://developer.hashicorp.com/terraform/language/import) can be used with the `id` attribute, for example:
+
+```terraform
+import {
+  to = sonarqube_cloud_organization_permissions.developers
+  id = "my-org/group/Developers"
+}
+```
 
 The [`terraform import` command](https://developer.hashicorp.com/terraform/cli/commands/import) can be used, for example:
 

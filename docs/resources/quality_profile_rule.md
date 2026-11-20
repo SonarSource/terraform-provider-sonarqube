@@ -1,6 +1,6 @@
 ---
 page_title: "sonarqube_quality_profile_rule Resource - SonarQube"
-subcategory: ""
+subcategory: "Quality profiles"
 description: |-
   This resource activates a rule in a custom quality profile, and sets the severity of its impacts and the values of its parameters. It can also change a rule that the profile gets from its parent profile.
 ---
@@ -107,6 +107,15 @@ resource "sonarqube_quality_profile_rule" "hardcoded_ip" {
 ## Import
 
 Import is supported using the following syntax:
+
+In Terraform v1.5.0 and later, the [`import` block](https://developer.hashicorp.com/terraform/language/import) can be used with the `id` attribute, for example:
+
+```terraform
+import {
+  to = sonarqube_quality_profile_rule.too_many_parameters
+  id = "my-profile-key/java:S107"
+}
+```
 
 The [`terraform import` command](https://developer.hashicorp.com/terraform/cli/commands/import) can be used, for example:
 

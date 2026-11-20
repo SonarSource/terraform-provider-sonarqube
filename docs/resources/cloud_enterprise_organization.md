@@ -1,6 +1,6 @@
 ---
 page_title: "sonarqube_cloud_enterprise_organization Resource - SonarQube"
-subcategory: "SonarQube Cloud"
+subcategory: "Enterprise, organization and projects"
 description: |-
   This resource attaches an organization to a SonarQube Cloud enterprise. The
   provider must use a user token. Scoped organization tokens are not supported.
@@ -71,6 +71,15 @@ resource "sonarqube_cloud_enterprise_organization" "second" {
 ## Import
 
 Import is supported using the following syntax:
+
+In Terraform v1.5.0 and later, the [`import` block](https://developer.hashicorp.com/terraform/language/import) can be used with the `id` attribute, for example:
+
+```terraform
+import {
+  to = sonarqube_cloud_enterprise_organization.second
+  id = "my-enterprise/my-second-organization"
+}
+```
 
 The [`terraform import` command](https://developer.hashicorp.com/terraform/cli/commands/import) can be used, for example:
 

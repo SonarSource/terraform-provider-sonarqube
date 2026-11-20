@@ -1,6 +1,6 @@
 ---
 page_title: "sonarqube_cloud_organization_gitlab_self_managed_binding Resource - SonarQube"
-subcategory: "SonarQube Cloud"
+subcategory: "DevOps platform bindings"
 description: |-
   Binds a SonarQube Cloud organization to a top-level group on a GitLab Self-Managed instance. It also stores the GitLab configuration of the organization, which holds the addresses of the instance.
 ---
@@ -82,6 +82,15 @@ The API never returns the token, so the provider cannot see a change made outsid
 ## Import
 
 Import is supported using the following syntax:
+
+In Terraform v1.5.0 and later, the [`import` block](https://developer.hashicorp.com/terraform/language/import) can be used with the `id` attribute, for example:
+
+```terraform
+import {
+  to = sonarqube_cloud_organization_gitlab_self_managed_binding.example
+  id = "my-organization"
+}
+```
 
 The [`terraform import` command](https://developer.hashicorp.com/terraform/cli/commands/import) can be used, for example:
 

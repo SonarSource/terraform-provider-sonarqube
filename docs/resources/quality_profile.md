@@ -1,6 +1,6 @@
 ---
 page_title: "sonarqube_quality_profile Resource - SonarQube"
-subcategory: ""
+subcategory: "Quality profiles"
 description: |-
   This resource manages a custom quality profile of one language. A profile can extend one parent profile, for example a built-in profile such as Sonar way core. Then it gets the rules of the parent. A change to name or parent_key changes the profile in place. A change to organization or language replaces it.
 ---
@@ -82,6 +82,15 @@ resource "sonarqube_quality_profile" "backend_payments" {
 ## Import
 
 Import is supported using the following syntax:
+
+In Terraform v1.5.0 and later, the [`import` block](https://developer.hashicorp.com/terraform/language/import) can be used with the `id` attribute, for example:
+
+```terraform
+import {
+  to = sonarqube_quality_profile.backend
+  id = "my-organization/java/Backend"
+}
+```
 
 The [`terraform import` command](https://developer.hashicorp.com/terraform/cli/commands/import) can be used, for example:
 

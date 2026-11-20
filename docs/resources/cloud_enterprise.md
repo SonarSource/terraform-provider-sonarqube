@@ -1,6 +1,6 @@
 ---
 page_title: "sonarqube_cloud_enterprise Resource - SonarQube"
-subcategory: "SonarQube Cloud"
+subcategory: "Enterprise, organization and projects"
 description: |-
   This resource creates a SonarQube Cloud enterprise with a license and its
   first organization. The provider must use a user token. Scoped organization
@@ -79,6 +79,15 @@ resource "sonarqube_cloud_enterprise" "main" {
 ## Import
 
 Import is supported using the following syntax:
+
+In Terraform v1.5.0 and later, the [`import` block](https://developer.hashicorp.com/terraform/language/import) can be used with the `id` attribute, for example:
+
+```terraform
+import {
+  to = sonarqube_cloud_enterprise.main
+  id = "my-enterprise"
+}
+```
 
 The [`terraform import` command](https://developer.hashicorp.com/terraform/cli/commands/import) can be used, for example:
 

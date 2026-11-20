@@ -1,6 +1,6 @@
 ---
 page_title: "sonarqube_cloud_organization_binding Resource - SonarQube"
-subcategory: "SonarQube Cloud"
+subcategory: "DevOps platform bindings"
 description: |-
   Binds a SonarQube Cloud organization to an organization on a DevOps platform. Only github.com is supported.
 ---
@@ -74,3 +74,24 @@ The installation must belong to the GitHub application of this SonarQube Cloud i
 - `id` (String) Identifier of the binding.
 - `organization_id` (String) Internal identifier of the bound organization.
 - `organization_uuid_v4` (String) Identifier of the bound organization in the form of a UUID.
+
+## Import
+
+Import is supported using the following syntax:
+
+In Terraform v1.5.0 and later, the [`import` block](https://developer.hashicorp.com/terraform/language/import) can be used with the `id` attribute, for example:
+
+```terraform
+import {
+  to = sonarqube_cloud_organization_binding.example
+  id = "my-organization"
+}
+```
+
+The [`terraform import` command](https://developer.hashicorp.com/terraform/cli/commands/import) can be used, for example:
+
+```shell
+# The ID is the key of the organization. Only a binding to github.com can be
+# imported.
+terraform import sonarqube_cloud_organization_binding.example my-organization
+```

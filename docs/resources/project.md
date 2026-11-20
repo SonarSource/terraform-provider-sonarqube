@@ -1,6 +1,6 @@
 ---
 page_title: "sonarqube_project Resource - SonarQube"
-subcategory: ""
+subcategory: "Enterprise, organization and projects"
 description: |-
   Manages a SonarQube Cloud project without a repository binding.
 ---
@@ -46,6 +46,15 @@ When you do not set it, SonarQube Cloud chooses the main branch of a new project
 ## Import
 
 Import is supported using the following syntax:
+
+In Terraform v1.5.0 and later, the [`import` block](https://developer.hashicorp.com/terraform/language/import) can be used with the `id` attribute, for example:
+
+```terraform
+import {
+  to = sonarqube_project.example
+  id = "my-organization/my-project"
+}
+```
 
 The [`terraform import` command](https://developer.hashicorp.com/terraform/cli/commands/import) can be used, for example:
 

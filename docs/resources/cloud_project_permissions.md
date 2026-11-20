@@ -1,6 +1,6 @@
 ---
 page_title: "sonarqube_cloud_project_permissions Resource - SonarQube"
-subcategory: "SonarQube Cloud"
+subcategory: "Permissions"
 description: |-
   This resource manages the complete set of permissions for one group or user on one project. Destroy removes the selected principal's grants on the project. It does not change other principals.
 ---
@@ -63,6 +63,15 @@ resource "sonarqube_cloud_project_permissions" "developers" {
 ## Import
 
 Import is supported using the following syntax:
+
+In Terraform v1.5.0 and later, the [`import` block](https://developer.hashicorp.com/terraform/language/import) can be used with the `id` attribute, for example:
+
+```terraform
+import {
+  to = sonarqube_cloud_project_permissions.developers
+  id = "my-org/my-project/group/Developers"
+}
+```
 
 The [`terraform import` command](https://developer.hashicorp.com/terraform/cli/commands/import) can be used, for example:
 

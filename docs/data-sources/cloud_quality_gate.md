@@ -1,6 +1,6 @@
 ---
 page_title: "sonarqube_cloud_quality_gate Data Source - SonarQube"
-subcategory: "SonarQube Cloud"
+subcategory: "Quality gates"
 description: |-
   Reads one SonarQube Cloud quality gate by name in an organization.
 ---

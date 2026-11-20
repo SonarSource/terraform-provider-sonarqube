@@ -1,6 +1,6 @@
 ---
 page_title: "sonarqube_cloud_organization_default_quality_profile Resource - SonarQube"
-subcategory: "SonarQube Cloud"
+subcategory: "Quality profiles"
 description: |-
   Sets the default quality profile of a language in a SonarQube Cloud organization. Each project that has no quality profile of its own for the language uses the default.
 ---
@@ -43,6 +43,15 @@ resource "sonarqube_cloud_organization_default_quality_profile" "java" {
 ## Import
 
 Import is supported using the following syntax:
+
+In Terraform v1.5.0 and later, the [`import` block](https://developer.hashicorp.com/terraform/language/import) can be used with the `id` attribute, for example:
+
+```terraform
+import {
+  to = sonarqube_cloud_organization_default_quality_profile.java
+  id = "my-organization/java"
+}
+```
 
 The [`terraform import` command](https://developer.hashicorp.com/terraform/cli/commands/import) can be used, for example:
 

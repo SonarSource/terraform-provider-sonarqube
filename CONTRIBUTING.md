@@ -224,10 +224,15 @@ on a Warp runner, after the other tests. It needs the repository variable
   next to the Go file, which `//go:embed` loads;
 * `examples/resources/<name>/resource.tf` or
   `examples/data-sources/<name>/data-source.tf`: the example;
-* `examples/resources/<name>/import.sh`: the import section.
+* `examples/resources/<name>/import-by-string-id.tf` (an `import` block) and
+  `examples/resources/<name>/import.sh` (`terraform import`): the import
+  section.
 
 `templates/resources.md.tmpl` and `templates/data-sources.md.tmpl` give the
-layout of these pages. The provider page, `docs/index.md`, comes from
+layout of these pages and the Registry group (`subcategory`) of each resource
+and data source. Add a new resource or data source to a group there.
+`TestDocsPages` fails when a page has no group, no example, or no import
+example. The provider page, `docs/index.md`, comes from
 `templates/index.md.tmpl`, the example `examples/provider/provider.tf`, and
 the descriptions of the provider schema. After a change to one of these
 sources, run:
