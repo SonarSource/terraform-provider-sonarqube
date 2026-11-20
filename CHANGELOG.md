@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.1.0-alpha.5 (Unreleased)
+## 0.1.0-alpha.5 (November 20, 2026)
 
 BREAKING CHANGES:
 
