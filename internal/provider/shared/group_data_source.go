@@ -37,7 +37,7 @@ func (d *groupDataSource) Metadata(_ context.Context, req datasource.MetadataReq
 
 func (d *groupDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, resp *datasource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		Description: "Reads a group by its exact name, including a built-in group. The alpha supports SonarQube Cloud only.",
+		Description: "Reads a group by its exact name, including a built-in group. The provider supports SonarQube Cloud only.",
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{Computed: true, Description: "Opaque group identifier."},
 			"organization": schema.StringAttribute{Required: true, Description: "Key of the organization that owns the group.",

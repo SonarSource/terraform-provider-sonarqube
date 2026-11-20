@@ -5,7 +5,7 @@ are in the "SonarQube Cloud and SonarQube Server" section of `AGENTS.md`.
 Add a row before you add a resource or data source, and update a row when a
 decision changes.
 
-The alpha supports SonarQube Cloud only. "Shared" means that the resource
+The provider supports SonarQube Cloud only. "Shared" means that the resource
 will also work on SonarQube Server when the provider supports it.
 
 ## Resources

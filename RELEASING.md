@@ -9,15 +9,12 @@ pushed.
 
 The versions are semantic versions, and the tags have a `v` prefix.
 
-* Alpha: `v0.1.0-alpha.1`, `v0.1.0-alpha.2`, and so on. Make an alpha
-  release only when a user needs one, not for each change.
-* After the first registry release, `v0.1.0`: increase the minor version for
-  new features or breaking changes, and the patch version for fixes.
+Increase the minor version for new features or breaking changes, and the
+patch version for fixes.
 
-Terraform selects a pre-release version, such as `0.1.0-alpha.1`, only when
-the version constraint gives that exact version. A constraint such as `>=` or
-`~>` does not select it. The workflow marks a version with a `-` suffix as a
-GitHub pre-release.
+The workflow marks a version with a `-` suffix, for example `1.0.0-rc.1`, as a
+GitHub pre-release. Terraform selects a pre-release version only when the
+version constraint gives that exact version.
 
 The registry keeps each version that it publishes. Nobody can remove a
 version from the registry, also when the GitHub release is deleted.
@@ -26,7 +23,7 @@ version from the registry, also when the GitHub release is deleted.
 
 1. In a pull request, change the header of the version in `CHANGELOG.md`
    from `(Unreleased)` to the release date, for example
-   `## 0.1.0-alpha.1 (October 20, 2026)`. Change the version in
+   `## 0.2.0 (January 15, 2027)`. Change the version in
    `examples/provider/provider.tf` to the new version, and run `make docs`
    to update `docs/index.md`. Merge the pull request.
 2. Find the commit to release: a commit of `master` that has this change, and
@@ -38,14 +35,13 @@ version from the registry, also when the GitHub release is deleted.
 
    ```bash
    git fetch origin
-   git tag v0.1.0-alpha.1 <commit>
-   git push origin v0.1.0-alpha.1
+   git tag v0.2.0 <commit>
+   git push origin v0.2.0
    ```
 
 4. Approve the `release` environment in the run of the `Release` workflow.
-5. After the repository is connected to the registry: run Resync on the
-   provider in HCP Terraform. The registry does not get a new version
-   automatically.
+5. Run Resync on the provider in HCP Terraform. The registry does not get a
+   new version automatically.
 
 ## When a release fails
 
@@ -56,7 +52,7 @@ that stops before the last step publishes nothing. But the tag stays.
 * If the cause is outside the repository, for example Vault, the registry or
   the runner, run the failed job again.
 * If the cause is in the repository, fix it on `master`, and release the
-  next version, for example `v0.1.0-alpha.2`.
+  next version, for example `v0.2.1`.
 * `gh release create` makes a draft, uploads the files, and then publishes
   the draft. If the last step stops, a draft can stay. Delete the draft
   before you run the job again.

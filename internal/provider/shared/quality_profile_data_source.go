@@ -42,7 +42,7 @@ func (d *qualityProfileDataSource) Metadata(_ context.Context, req datasource.Me
 func (d *qualityProfileDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, resp *datasource.SchemaResponse) {
 	resp.Schema = schema.Schema{
 		MarkdownDescription: "Reads a quality profile of one language by its exact name, also a built-in profile such as " +
-			"`Sonar way core`. Use its `key` as the `parent_key` of a `sonarqube_quality_profile`. The alpha " +
+			"`Sonar way core`. Use its `key` as the `parent_key` of a `sonarqube_quality_profile`. The provider " +
 			"supports SonarQube Cloud only.",
 		Attributes: map[string]schema.Attribute{
 			"id":  schema.StringAttribute{Computed: true, Description: "Key of the profile."},
