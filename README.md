@@ -26,6 +26,15 @@ This API is experimental. It can change in any release before version 1.0.0.
 * The provider makes its own User-Agent header. Do not replace it. To add text
   at the end, set the `TF_APPEND_USER_AGENT` environment variable.
 
+## Telemetry
+
+The provider sends the Terraform version and the provider version in the
+User-Agent header of each request. It sends no separate telemetry requests. To
+turn off the optional telemetry, set `disable_telemetry = true` in the provider
+configuration, or set `SONARQUBE_DISABLE_TELEMETRY=true` or `DO_NOT_TRACK=1`.
+The [provider documentation](docs/index.md#telemetry) lists the data that the
+provider sends.
+
 ## Contributing
 
 We do not accept external pull requests. To report a bug or to ask for a
