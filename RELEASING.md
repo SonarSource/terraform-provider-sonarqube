@@ -68,3 +68,7 @@ GitHub releases are immutable. A published release cannot change.
 The workflow reads the signing key from Vault. The path is
 `SIGNING_KEY_VAULT_PATH` in `.github/workflows/release.yml`. The registry
 must have the public key of each key that signs a release.
+
+When the key changes, update `SIGNING_KEY_VAULT_PATH` and `SIGNING_KEY_ID`
+together. The registry must have the public key of the new key before a
+release can pass the "Verify the release files" step.
