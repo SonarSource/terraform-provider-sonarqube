@@ -12,7 +12,7 @@ defaults:
     shell: bash
 
 env:
-  SIGNING_KEY_VAULT_PATH: development/kv/data/sign
+  SIGNING_KEY_VAULT_PATH: development/kv/data/sign/terraform
 
 jobs:
   release:
