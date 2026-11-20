@@ -162,7 +162,7 @@ func configureWithTokenCheck(t *testing.T, env map[string]string, attributes map
 	checkToken func(context.Context, *client.Client) error) *provider.ConfigureResponse {
 	t.Helper()
 
-	for _, name := range []string{EnvURL, EnvAPIURL, EnvToken, envAppendUserAgent} {
+	for _, name := range []string{EnvURL, EnvAPIURL, EnvToken, envAppendUserAgent, EnvDisableTelemetry, envDoNotTrack} {
 		t.Setenv(name, env[name])
 	}
 
