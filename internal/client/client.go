@@ -61,6 +61,11 @@ type Config struct {
 	// UserAgent is the User-Agent header of each request. An empty value
 	// sends "sonarqube-terraform".
 	UserAgent string
+	// Telemetry turns on the optional telemetry.
+	Telemetry bool
+	// TelemetryTypes are the resource and data source type names that the
+	// optional telemetry can name.
+	TelemetryTypes []string
 	// HTTPClient replaces the default client. Tests set it; leave it nil
 	// elsewhere.
 	HTTPClient *http.Client
@@ -78,6 +83,9 @@ type Client struct {
 	userAgent string
 	http      *http.Client
 	readWaits []time.Duration
+
+	telemetry      bool
+	telemetryTypes map[string]bool
 }
 
 // New builds a Client from cfg.
@@ -106,6 +114,9 @@ func New(cfg Config) *Client {
 		userAgent: cmp.Or(cfg.UserAgent, defaultUserAgent),
 		http:      httpClient,
 		readWaits: cfg.ReadWaits,
+
+		telemetry:      cfg.Telemetry,
+		telemetryTypes: telemetryTypeSet(cfg.TelemetryTypes),
 	}
 }
 
