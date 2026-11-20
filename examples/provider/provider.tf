@@ -4,7 +4,7 @@ terraform {
   required_providers {
     sonarqube = {
       source  = "sonarsource/sonarqube"
-      version = "0.1.0-alpha.4"
+      version = "0.1.0-alpha.5"
     }
   }
 }
