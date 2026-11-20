@@ -5,7 +5,7 @@ Shared instructions for all coding agents working in this repository.
 ## Purpose and scope
 
 One official Terraform provider for SonarQube Cloud and SonarQube Server.
-The alpha supports Cloud only and targets organizations bound to GitHub.
+The provider supports Cloud only and targets organizations bound to GitHub.
 
 ## Data sensitivity
 
@@ -122,7 +122,7 @@ checks that could not run.
 
 ## SonarQube Cloud and SonarQube Server
 
-The provider will support SonarQube Cloud and SonarQube Server. The alpha
+The provider will support SonarQube Cloud and SonarQube Server. Now it
 supports SonarQube Cloud only. Do not add SonarQube Server code now, but do
 not make a choice that prevents it later.
 

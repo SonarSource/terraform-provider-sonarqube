@@ -2,12 +2,12 @@
 page_title: "sonarqube_group Data Source - SonarQube"
 subcategory: "Groups"
 description: |-
-  Reads a group by its exact name, including a built-in group. The alpha supports SonarQube Cloud only.
+  Reads a group by its exact name, including a built-in group. The provider supports SonarQube Cloud only.
 ---
 
 # sonarqube_group (Data Source)
 
-Reads a group by its exact name, including a built-in group. The alpha supports SonarQube Cloud only.
+Reads a group by its exact name, including a built-in group. The provider supports SonarQube Cloud only.
 
 ## Example Usage
 
