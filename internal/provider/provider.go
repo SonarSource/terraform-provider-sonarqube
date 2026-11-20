@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
+	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/provider"
@@ -36,6 +37,9 @@ const (
 	// the User-Agent header.
 	envAppendUserAgent = "TF_APPEND_USER_AGENT"
 )
+
+// providerTypeName prefixes every resource and data source type name.
+const providerTypeName = "sonarqube"
 
 var _ provider.Provider = &sonarqubeProvider{}
 
@@ -74,12 +78,14 @@ type providerModel struct {
 	APIURL  types.String `tfsdk:"api_url"`
 	Token   types.String `tfsdk:"token"`
 	Product types.String `tfsdk:"product"`
+
+	DisableTelemetry types.Bool `tfsdk:"disable_telemetry"`
 }
 
 // Metadata sets the type name, which prefixes every resource and data source,
 // for example "sonarqube_cloud_organization".
 func (p *sonarqubeProvider) Metadata(_ context.Context, _ provider.MetadataRequest, resp *provider.MetadataResponse) {
-	resp.TypeName = "sonarqube"
+	resp.TypeName = providerTypeName
 	resp.Version = p.version
 }
 
@@ -114,6 +120,12 @@ func (p *sonarqubeProvider) Schema(_ context.Context, _ provider.SchemaRequest, 
 				Description: "SonarQube product to manage: `cloud` or `server`. Defaults to " +
 					"`cloud`. Only `cloud` works in this release.",
 			},
+			"disable_telemetry": schema.BoolAttribute{
+				Optional: true,
+				Description: "Set to `true` to turn off the optional telemetry. The `" +
+					EnvDisableTelemetry + "` environment variable and `" + envDoNotTrack +
+					"=1` also turn it off. Defaults to `false`.",
+			},
 		},
 	}
 }
@@ -131,6 +143,7 @@ func (p *sonarqubeProvider) Configure(ctx context.Context, req provider.Configur
 	addUnknownError(resp, config.APIURL, "api_url", EnvAPIURL)
 	addUnknownError(resp, config.Token, "token", EnvToken)
 	addUnknownError(resp, config.Product, "product", "")
+	addUnknownError(resp, config.DisableTelemetry, "disable_telemetry", EnvDisableTelemetry)
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -163,6 +176,11 @@ func (p *sonarqubeProvider) Configure(ctx context.Context, req provider.Configur
 	if resp.Diagnostics.HasError() {
 		return
 	}
+	telemetry, diags := telemetryEnabled(config.DisableTelemetry, os.Getenv)
+	resp.Diagnostics.Append(diags...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
 	if token == "" {
 		resp.Diagnostics.AddAttributeError(
 			path.Root("token"),
@@ -178,6 +196,9 @@ func (p *sonarqubeProvider) Configure(ctx context.Context, req provider.Configur
 		Token:     token,
 		Product:   product,
 		UserAgent: userAgent(req.TerraformVersion, p.version, os.Getenv(envAppendUserAgent)),
+
+		Telemetry:      telemetry,
+		TelemetryTypes: p.telemetryTypes(ctx),
 	})
 
 	// Each API answers a wrong token in a different way, so one check here
@@ -241,7 +262,7 @@ func (p *sonarqubeProvider) DataSources(_ context.Context) []func() datasource.D
 
 // addUnknownError takes an empty envVar for an attribute that no environment
 // variable can supply.
-func addUnknownError(resp *provider.ConfigureResponse, value types.String, attribute, envVar string) {
+func addUnknownError(resp *provider.ConfigureResponse, value attr.Value, attribute, envVar string) {
 	if !value.IsUnknown() {
 		return
 	}

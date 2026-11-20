@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.0-alpha.7 (Unreleased)
+
+ENHANCEMENTS:
+
+* The new provider attribute `disable_telemetry`, the `SONARQUBE_DISABLE_TELEMETRY` environment variable and
+  `DO_NOT_TRACK=1` turn off the optional telemetry. This release sends no optional telemetry yet. The User-Agent
+  header does not change. The provider docs list the data that the provider sends.
+
 ## 0.1.0-alpha.6 (November 25, 2026)
 
 The tag `v0.1.0-alpha.5` exists, but `0.1.0-alpha.5` was not released. This release contains its changes.
