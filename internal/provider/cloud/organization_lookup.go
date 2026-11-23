@@ -60,8 +60,7 @@ func lookupOrganization(
 func refreshOrganization(
 	ctx context.Context,
 	c *client.Client,
-	organizationKey string,
-	subject string,
+	organizationKey, subject string,
 	resp *resource.ReadResponse,
 ) (*client.Organization, bool) {
 	org, err := c.GetOrganization(ctx, organizationKey)
