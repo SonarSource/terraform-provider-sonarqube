@@ -47,6 +47,15 @@ jobs:
       - name: Vet
         run: go vet ./...
 
+      - name: Set up the lint tools
+        uses: ./.github/actions/setup-lint-tools
+
+      - name: Lint
+        run: make lint
+
+      - name: Check for known vulnerabilities
+        run: make vulncheck
+
       - name: Build
         run: go build ./...
 

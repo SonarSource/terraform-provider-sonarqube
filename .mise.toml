@@ -3,3 +3,6 @@ go = "1.27.4"
 # .github/actions/setup-release-tools reads this version.
 goreleaser = "2.18.2"
 pre-commit = "4.7.0"
+# .github/actions/setup-lint-tools reads these versions.
+golangci-lint = "2.15.0"
+"go:golang.org/x/vuln/cmd/govulncheck" = "1.9.0"
