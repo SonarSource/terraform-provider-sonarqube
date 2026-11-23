@@ -250,14 +250,27 @@ The `Build` and `pre-commit` workflows run these checks on each pull request.
 To run them locally:
 
 ```bash
-gofmt -l .
-go mod tidy
-go vet ./...
-go build ./...
-env -u TF_ACC go test -race ./...
-make docs
-pre-commit run --all-files
+make check
 ```
 
-After `go mod tidy` and `make docs`, `git status` must show no unexpected
-changes.
+`make check` runs the format check, `go mod tidy`, `go vet`, the build, the
+unit tests, `golangci-lint`, `govulncheck`, `make docs`, `terraform fmt` on
+`examples/` and `pre-commit`. It runs each check also after a failure, and
+lists the failed checks at the end. To run one check, give its target, for
+example `make lint`. The `CHECKS` variable of the `Makefile` lists them.
+
+`go mod tidy` and `make docs` can change files. The check then fails: review
+the changes and keep them.
+
+`.mise.toml` gives the versions of `golangci-lint`, `govulncheck` and
+`pre-commit`. The checks also need Terraform. To run `make check` before each
+push, install the hooks:
+
+```bash
+pre-commit install
+```
+
+The pull request checks workflow also checks the title of the pull request,
+and that a change of `internal/client` changes `internal/client/APIS.md` and a
+change that users see changes `CHANGELOG.md`. The labels `no-api-change` and
+`no-changelog` skip these two checks.

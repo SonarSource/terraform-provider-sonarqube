@@ -78,18 +78,25 @@ acceptance tests need. Use the Go version declared in `go.mod`, and run
 commands from the repository root.
 
 - During development, run only the affected package or test.
-- After Go changes, format the changed Go files with `gofmt -w`, and run the
-  checks in [CONTRIBUTING.md](CONTRIBUTING.md#checks-before-a-pull-request).
-  Run the unit tests with `env -u TF_ACC`, so that they do not start the
-  acceptance tests when the calling shell sets `TF_ACC`.
+- Before you hand off a change, run `make check`. It runs all checks of CI
+  except the acceptance tests, also after a failure, and lists the failed
+  checks at the end. Fix each failure: the message tells what to change. Do
+  not hand off a change while a check fails. When a check cannot run, for
+  example because a tool of `.mise.toml` is not installed, say so.
+- Run the unit tests with `env -u TF_ACC`, so that they do not start the
+  acceptance tests when the calling shell sets `TF_ACC`. `make test` does
+  this.
+- Some rules of this file are unit tests or lint rules. Do not change a
+  test, `.golangci.yml` or an exclusion to make a check pass. Ask the user
+  first.
 - When imports or dependencies change, run `go mod tidy` and review both
   `go.mod` and `go.sum`.
 - `docs/` is generated. Do not edit it. After a change to a schema
   description, an example or a template, run `make docs` and commit the
   changes in `docs/`. [CONTRIBUTING.md](CONTRIBUTING.md#documentation) tells
   where the text of each page comes from.
-- For documentation or workflow changes, run the applicable checks from
-  `.pre-commit-config.yaml`:
+- For documentation or workflow changes, `make check` runs the checks of
+  `.pre-commit-config.yaml`. To run them on some files only:
 
   ```bash
   pre-commit run --files <changed-files>
@@ -217,6 +224,9 @@ calls, grouped by domain, with each endpoint marked either public (with a
 link to its docs page) or internal. Whenever a change to `internal/client`
 adds, removes, or changes an endpoint — including adding a new domain for a
 new resource or data source — update `APIS.md` in the same change.
+`TestAPIInventory` fails when `APIS.md` does not list an exported `Client`
+method that sends a request, or lists a function that does not exist. It
+does not check the endpoint column.
 
 Keep the notes below a table to a few short bullets that tell why the
 provider calls the API this way: which identifier it takes, why an internal

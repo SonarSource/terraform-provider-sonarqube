@@ -1,7 +1,20 @@
 # See https://pre-commit.com for more information
 # See https://pre-commit.com/hooks.html for more hooks
 ---
+# pre-commit install installs the hook of each stage. The pre-push hook runs
+# make check, so that a push gets the result of CI before CI runs. The CI
+# workflow runs only the pre-commit stage.
+default_install_hook_types: [pre-commit, pre-push]
 repos:
+  - repo: local
+    hooks:
+      - id: make-check
+        name: make check
+        entry: make check
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-push]
   - repo: meta
     hooks:
       - id: check-hooks-apply
