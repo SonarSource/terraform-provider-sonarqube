@@ -37,22 +37,16 @@ jobs:
       - name: Set up Go
         uses: ./.github/actions/setup-go
 
+      # Each step runs a check of make check. CONTRIBUTING.md tells how to run
+      # them all locally.
       - name: Check the format
-        run: |
-          unformatted=$(gofmt -l .)
-          if [[ -n "${unformatted}" ]]; then
-            echo "These files are not gofmt-formatted:"
-            echo "${unformatted}"
-            exit 1
-          fi
+        run: make fmt-check
 
       - name: Check that go.mod and go.sum are tidy
-        run: |
-          go mod tidy
-          git diff --exit-code go.mod go.sum
+        run: make tidy-check
 
       - name: Vet
-        run: go vet ./...
+        run: make vet
 
       - name: Set up the lint tools
         uses: ./.github/actions/setup-lint-tools
@@ -64,10 +58,10 @@ jobs:
         run: make vulncheck
 
       - name: Build
-        run: go build ./...
+        run: make build
 
       - name: Test
-        run: go test -race -covermode=atomic -coverprofile=coverage.out ./...
+        run: make test TEST_FLAGS="-race -covermode=atomic -coverprofile=coverage.out"
 
       - name: Fetch the Vault secrets
         if: env.SONAR_ANALYSIS_ENABLED == 'true'
@@ -123,19 +117,15 @@ jobs:
       - name: Set up Terraform
         uses: ./.github/actions/setup-terraform
 
-      - name: Generate the documentation
-        run: make docs
-
       - name: Check that docs/ agrees with the generated documentation
-        run: |
-          changes=$(git status --porcelain docs/)
-          if [[ -n "${changes}" ]]; then
-            echo "docs/ is different from the output of make docs:"
-            echo "${changes}"
-            git diff docs/
-            echo "Run make docs and commit the result."
-            exit 1
-          fi
+        run: make docs-check
+
+      - name: Show the changes of docs/
+        if: failure()
+        run: git diff docs/
+
+      - name: Check the format of the examples
+        run: make examples-fmt-check
 
   notify_failure:
     name: Notify Failure
