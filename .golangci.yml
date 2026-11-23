@@ -1,0 +1,114 @@
+version: "2"
+
+# Each linter here checks a rule of AGENTS.md or finds a real defect. Do not
+# enable a linter only for its style opinions: an agent then gets noise
+# instead of feedback.
+linters:
+  # The standard set: errcheck, govet, ineffassign, staticcheck and unused.
+  default: standard
+  enable:
+    - bodyclose
+    - contextcheck
+    - depguard
+    - forbidigo
+    - gosec
+    - noctx
+    - unparam
+  settings:
+    gosec:
+      excludes:
+        # G101 flags each name that contains "token", such as EnvToken. G104
+        # repeats errcheck.
+        - G101
+        - G104
+    staticcheck:
+      checks:
+        - all
+        # The defaults of golangci-lint.
+        - -ST1000
+        - -ST1003
+        - -ST1016
+        - -ST1020
+        - -ST1021
+        - -ST1022
+        # The provider gives errors as sentences, because Terraform shows
+        # them to the user.
+        - -ST1005
+        # The quick fixes are style suggestions.
+        - -QF*
+    depguard:
+      rules:
+        # A product package must not import another product package. See
+        # "Names" in AGENTS.md.
+        cloud:
+          files:
+            - "**/internal/provider/cloud/**"
+          deny:
+            - pkg: github.com/SonarSource/terraform-provider-sonarqube/internal/provider/shared
+              desc: A product package must not import another product package. Move the helper to a package with the name of its task.
+            - pkg: github.com/SonarSource/terraform-provider-sonarqube/internal/provider/server
+              desc: A product package must not import another product package. Move the helper to a package with the name of its task.
+        shared:
+          files:
+            - "**/internal/provider/shared/**"
+          deny:
+            - pkg: github.com/SonarSource/terraform-provider-sonarqube/internal/provider/cloud
+              desc: A product package must not import another product package. Move the helper to a package with the name of its task.
+            - pkg: github.com/SonarSource/terraform-provider-sonarqube/internal/provider/server
+              desc: A product package must not import another product package. Move the helper to a package with the name of its task.
+        server:
+          files:
+            - "**/internal/provider/server/**"
+          deny:
+            - pkg: github.com/SonarSource/terraform-provider-sonarqube/internal/provider/cloud
+              desc: A product package must not import another product package. Move the helper to a package with the name of its task.
+            - pkg: github.com/SonarSource/terraform-provider-sonarqube/internal/provider/shared
+              desc: A product package must not import another product package. Move the helper to a package with the name of its task.
+    forbidigo:
+      analyze-types: true
+      forbid:
+        # Output on stdout or through the log package can show a token, and
+        # Terraform does not show it to the user anyway.
+        - pattern: ^(fmt\.Print(|f|ln)|print|println)$
+          msg: Use tflog, or return a diagnostic.
+        - pattern: ^log\.(Print|Fatal|Panic)(|f|ln)$
+          msg: Use tflog, or return a diagnostic.
+        # All SonarQube HTTP requests go through internal/client. See
+        # "Implementation rules" in AGENTS.md.
+        - pattern: ^http\.(Client|Transport|DefaultClient|DefaultTransport|Get|Head|Post|PostForm|NewRequest|NewRequestWithContext)$
+          pkg: ^net/http$
+          msg: Send SonarQube requests through internal/client.
+  exclusions:
+    presets:
+      - std-error-handling
+    rules:
+      - path: ^internal/client/
+        linters:
+          - forbidigo
+        text: internal/client
+      # The tests and the test helpers start fake servers and call them. A
+      # fake server that cannot write its answer makes the test fail anyway.
+      # The sweepers of internal/acctest log through the log package, as
+      # terraform-plugin-testing expects.
+      - path: (_test\.go|^internal/provider/providertest/|^internal/acctest/)
+        linters:
+          - bodyclose
+          - errcheck
+          - forbidigo
+          - gosec
+          - noctx
+          - unparam
+      # In tests, only the staticcheck checks that find bugs (SA).
+      - path: _test\.go
+        linters:
+          - staticcheck
+        text: ^(S|ST)\d
+      # The retry delays need no secure random numbers.
+      - path: ^internal/client/client\.go$
+        linters:
+          - gosec
+        text: G404
+      # The main function can print the error that stops the provider.
+      - path: ^main\.go$
+        linters:
+          - forbidigo
