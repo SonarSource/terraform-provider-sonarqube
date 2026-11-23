@@ -1,0 +1,31 @@
+name: Set up the lint tools
+description: >-
+  Install the golangci-lint and govulncheck versions that .mise.toml gives.
+  Set up Go first.
+runs:
+  using: composite
+  steps:
+    - name: Read the versions
+      id: versions
+      shell: bash
+      run: |
+        golangci_lint="$(sed -n 's/^golangci-lint = "\(.*\)"$/\1/p' .mise.toml)"
+        govulncheck="$(sed -n 's/^"go:golang.org\/x\/vuln\/cmd\/govulncheck" = "\(.*\)"$/\1/p' .mise.toml)"
+        if [[ -z "${golangci_lint}" || -z "${govulncheck}" ]]; then
+          echo ".mise.toml must have the lines golangci-lint = \"<version>\" and \"go:golang.org/x/vuln/cmd/govulncheck\" = \"<version>\"."
+          exit 1
+        fi
+        echo "golangci-lint=v${golangci_lint}" >> "${GITHUB_OUTPUT}"
+        echo "govulncheck=v${govulncheck}" >> "${GITHUB_OUTPUT}"
+
+    - name: Install golangci-lint
+      uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
+      with:
+        version: ${{ steps.versions.outputs.golangci-lint }}
+        install-only: true
+
+    - name: Install govulncheck
+      shell: bash
+      env:
+        VERSION: ${{ steps.versions.outputs.govulncheck }}
+      run: go install "golang.org/x/vuln/cmd/govulncheck@${VERSION}"

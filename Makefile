@@ -17,7 +17,7 @@ ALLOWED_SKIP := TestAccOrganizationPermissionsUserResource TestAccEnterpriseReso
 GITLAB_TESTS := ^TestAccGitLabSelfManaged
 GITLAB_ENV_FILE ?= .gitlab-self-managed.env
 
-.PHONY: testacc testacc-gitlab gitlab-start gitlab-stop sweep release-check docs
+.PHONY: testacc testacc-gitlab gitlab-start gitlab-stop sweep release-check docs lint vulncheck
 
 # Run the acceptance tests. The environment variables that CONTRIBUTING.md
 # lists must be set. The timeout applies to each package, not to the whole run.
@@ -71,3 +71,11 @@ release-check:
 docs:
 	go tool tfplugindocs generate --provider-name sonarqube --rendered-provider-name SonarQube
 	go tool tfplugindocs validate --provider-name sonarqube
+
+# Run the linters of .golangci.yml. .mise.toml gives the version.
+lint:
+	golangci-lint run ./...
+
+# Report the known vulnerabilities that the code can reach.
+vulncheck:
+	govulncheck ./...

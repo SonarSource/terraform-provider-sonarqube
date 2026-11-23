@@ -259,6 +259,8 @@ To run them locally:
 gofmt -l .
 go mod tidy
 go vet ./...
+make lint
+make vulncheck
 go build ./...
 env -u TF_ACC go test -race ./...
 make docs
@@ -266,4 +268,5 @@ pre-commit run --all-files
 ```
 
 After `go mod tidy` and `make docs`, `git status` must show no unexpected
-changes.
+changes. `make lint` and `make vulncheck` need the golangci-lint and
+govulncheck versions of `.mise.toml`. `mise install` installs them.
