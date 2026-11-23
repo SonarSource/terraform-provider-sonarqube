@@ -17,7 +17,7 @@ ALLOWED_SKIP := TestAccOrganizationPermissionsUserResource TestAccEnterpriseReso
 GITLAB_TESTS := ^TestAccGitLabSelfManaged
 GITLAB_ENV_FILE ?= .gitlab-self-managed.env
 
-.PHONY: testacc testacc-gitlab gitlab-start gitlab-stop sweep release-check docs
+.PHONY: testacc testacc-gitlab gitlab-start gitlab-stop sweep release-check docs schema-check
 
 # Run the acceptance tests. The environment variables that CONTRIBUTING.md
 # lists must be set. The timeout applies to each package, not to the whole run.
@@ -60,6 +60,12 @@ gitlab-stop:
 # because the sweepers are the same in each package that imports acctest.
 sweep:
 	TF_ACC=1 go test ./internal/provider/cloud -count=1 -v -sweep=all -sweep-allow-failures
+
+# List the schema changes since the merge base with SCHEMA_BASE that can break
+# the configuration or the state of a user.
+SCHEMA_BASE ?= origin/master
+schema-check:
+	scripts/schema-check.sh '$(SCHEMA_BASE)'
 
 # Build a snapshot release, sign it with a temporary key, and install it from a
 # local mirror. It needs goreleaser, gpg, jq, shasum and terraform.

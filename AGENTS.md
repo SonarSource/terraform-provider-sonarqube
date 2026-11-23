@@ -84,6 +84,9 @@ commands from the repository root.
   acceptance tests when the calling shell sets `TF_ACC`.
 - When imports or dependencies change, run `go mod tidy` and review both
   `go.mod` and `go.sum`.
+- After a schema change, run `make schema-check`. Do not approve the
+  `breaking-change` environment yourself: ask the user. See
+  [CONTRIBUTING.md](CONTRIBUTING.md#schema-compatibility).
 - `docs/` is generated. Do not edit it. After a change to a schema
   description, an example or a template, run `make docs` and commit the
   changes in `docs/`. [CONTRIBUTING.md](CONTRIBUTING.md#documentation) tells

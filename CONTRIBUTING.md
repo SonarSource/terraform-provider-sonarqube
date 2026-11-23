@@ -261,3 +261,30 @@ pre-commit run --all-files
 
 After `go mod tidy` and `make docs`, `git status` must show no unexpected
 changes.
+
+### Schema compatibility
+
+The `Schema compatibility` workflow compares the schemas of the provider,
+the resources and the data sources with the base branch. It fails when a
+change can break the configuration or the state of a user: a removed
+resource, data source or attribute, a type change, a new required attribute,
+an attribute that becomes required, computed only, sensitive or write-only,
+an attribute that is no longer computed, a changed default, or a new plan
+modifier, such as `RequiresReplace`. To run it locally:
+
+```bash
+git fetch origin master
+make schema-check
+```
+
+Keep the schema compatible when you can. For example, deprecate an attribute
+before you remove it. When a breaking change is necessary, add a
+`CHANGELOG.md` entry that tells users what to change. The check then waits
+for the `breaking-change` environment: a member of the code owner team other
+than the author approves the deployment in the workflow run (**Review
+deployments**). Each new commit starts a new run, which needs a new
+approval.
+
+The check cannot find a stricter validator, a replacement that `ModifyPlan`
+requests, or a stricter condition of an existing `RequiresReplace`. Look for
+these in review.
