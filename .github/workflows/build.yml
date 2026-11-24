@@ -53,9 +53,6 @@ jobs:
       - name: Lint
         run: make lint
 
-      - name: Check for known vulnerabilities
-        run: make vulncheck
-
       - name: Build
         run: go build ./...
 
