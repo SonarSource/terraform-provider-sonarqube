@@ -58,6 +58,9 @@ jobs:
       # steps still run. The condition reads only the github context: the
       # test step runs the pull request code, and that code can change env
       # values through GITHUB_ENV.
+      # This does not protect the token from same-repo branches. Their code
+      # can still change GITHUB_ENV and GITHUB_PATH for the next steps, but
+      # only users with write access can push such a branch.
       - name: Fetch the Vault secrets
         if: github.event_name != 'pull_request' ||
           github.event.pull_request.head.repo.full_name == github.repository
