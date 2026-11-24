@@ -1,0 +1,12 @@
+self-hosted-runner:
+  # The runners of the SonarSource organization.
+  labels:
+    - sonar-xs
+    - sonar-s
+    - warp-custom-ubuntu-24-04
+paths:
+  .github/workflows/acceptance-tests.yml:
+    ignore:
+      # GitHub accepts concurrency.queue, but actionlint does not know it yet:
+      # https://github.com/rhysd/actionlint/issues/654
+      - 'unexpected key "queue" for "concurrency" section'

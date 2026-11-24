@@ -1,0 +1,60 @@
+name: Pull request checks
+
+# These checks make the checklist of the pull request template a check. A
+# label skips a check when the change does not need the file: no-api-change
+# for APIS.md, no-changelog for CHANGELOG.md.
+on:
+  pull_request:
+    types: [opened, edited, reopened, synchronize, labeled, unlabeled]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  pr-checks:
+    runs-on: sonar-xs
+    name: Pull request checks
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # The check compares the head with the merge base.
+          fetch-depth: 0
+
+      # The values come from the environment, not from an expression in the
+      # script, because the author of the pull request writes the title.
+      - name: Check the title and the changed files
+        env:
+          TITLE: ${{ github.event.pull_request.title }}
+          AUTHOR_TYPE: ${{ github.event.pull_request.user.type }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          LABELS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
+        run: |
+          failed=0
+
+          # The bots, such as Renovate, write their own titles.
+          if [[ "${AUTHOR_TYPE}" != "Bot" && ! "${TITLE}" =~ ^([A-Z][A-Z0-9]+-[0-9]+|NOJIRA)\  ]]; then
+            echo "Start the title with the Jira key and a space, for example \"TFP-123 Add ...\", or with NOJIRA."
+            failed=1
+          fi
+
+          changed="$(git diff --name-only "${BASE_SHA}...HEAD")"
+          has_label() { [[ ",${LABELS}," == *",$1,"* ]]; }
+          # The tests and their helpers change neither the API calls nor what
+          # users see.
+          changes() { grep -E "$1" <<<"${changed}" | grep -vE '(_test\.go$|^internal/provider/providertest/)' | grep -q .; }
+
+          if changes '^internal/client/.*\.go$' && ! changes '^internal/client/APIS\.md$' && ! has_label no-api-change; then
+            echo "internal/client changed, but internal/client/APIS.md did not. Update APIS.md, or add the label no-api-change when no endpoint changed. See \"Keep the API inventory current\" in AGENTS.md."
+            failed=1
+          fi
+
+          if changes '^(main\.go|sonarqube/|internal/(client|provider)/.*\.go|internal/provider/.*_resource\.md|examples/|templates/)' && ! changes '^CHANGELOG\.md$' && ! has_label no-changelog; then
+            echo "The provider changed, but CHANGELOG.md did not. Add an entry under the next version, or add the label no-changelog when users do not see the change."
+            failed=1
+          fi
+
+          exit "${failed}"

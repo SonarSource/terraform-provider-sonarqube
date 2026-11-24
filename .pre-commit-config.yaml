@@ -1,7 +1,20 @@
 # See https://pre-commit.com for more information
 # See https://pre-commit.com/hooks.html for more hooks
 ---
+# pre-commit install installs the hook of each stage. The pre-push hook runs
+# make check, so that a push gets the result of CI before CI runs. The CI
+# workflow runs only the pre-commit stage.
+default_install_hook_types: [pre-commit, pre-push]
 repos:
+  - repo: local
+    hooks:
+      - id: make-check
+        name: make check
+        entry: make check
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-push]
   - repo: meta
     hooks:
       - id: check-hooks-apply
@@ -20,3 +33,13 @@ repos:
         # the docs job of the build workflow checks it. A *_resource.md file is
         # the start of a page in docs/, so it has no heading on its first line.
         exclude: ^docs/|_resource\.md$
+  - repo: https://github.com/rhysd/actionlint
+    rev: 914e7df21a07ef503a81201c76d2b11c789d3fca  # frozen: v1.7.12
+    hooks:
+      - id: actionlint
+  - repo: https://github.com/shellcheck-py/shellcheck-py
+    rev: 745eface02aef23e168a8afb6b5737818efbea95  # frozen: v0.11.0.1
+    hooks:
+      - id: shellcheck
+        # The import.sh files of examples/ go into docs/ without a shebang.
+        args: [--shell=bash]
