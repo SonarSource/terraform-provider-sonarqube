@@ -89,7 +89,7 @@ const invalidTokenMessage = "explicit deny in an identity-based policy"
 
 // InvalidTokenHint replaces the gateway message, which looks like a missing
 // permission.
-const InvalidTokenHint = "SonarQube Cloud does not accept the token. The token is wrong, expired or revoked."
+const InvalidTokenHint = "SonarQube Cloud does not accept the token. The token is wrong, expired or revoked." //nolint:gosec // G101: an error text, not a credential
 
 // IsStatus reports an API error with the HTTP status code.
 func IsStatus(err error, code int) bool {
