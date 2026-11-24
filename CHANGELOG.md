@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+FEATURES:
+
+* **New Resource:** `sonarqube_cloud_project_automatic_analysis`
+
 ## 0.1.0-alpha.5 (November 20, 2026)
 
 BREAKING CHANGES:

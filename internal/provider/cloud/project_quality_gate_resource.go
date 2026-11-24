@@ -4,22 +4,18 @@ import (
 	"context"
 	"errors"
 	"net/http"
-	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
-	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
-	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 
 	"github.com/SonarSource/terraform-provider-sonarqube/internal/client"
 	"github.com/SonarSource/terraform-provider-sonarqube/internal/provider/configure"
-	"github.com/SonarSource/terraform-provider-sonarqube/internal/provider/validate"
 )
 
 var (
@@ -51,7 +47,6 @@ func (r *projectQualityGateResource) Metadata(_ context.Context, req resource.Me
 }
 
 func (r *projectQualityGateResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
-	replace := []planmodifier.String{stringplanmodifier.RequiresReplace()}
 	resp.Schema = schema.Schema{
 		Description: "Assigns a quality gate to a SonarQube Cloud project. The next analysis of the " +
 			"project uses this gate.\n\n" +
@@ -63,24 +58,7 @@ func (r *projectQualityGateResource) Schema(_ context.Context, _ resource.Schema
 			"SonarQube Cloud refuses to change the gate of a project.\n\n" +
 			"If a project uses the default gate of the organization, this resource does not exist " +
 			"for that project. A change of the gate in the UI shows in the next plan.",
-		Attributes: map[string]schema.Attribute{
-			"id": schema.StringAttribute{
-				Computed:      true,
-				Description:   "Organization key and project key, separated by a slash.",
-				PlanModifiers: []planmodifier.String{stringplanmodifier.UseStateForUnknown()},
-			},
-			"organization": schema.StringAttribute{
-				Required:      true,
-				Description:   "Key of the organization that owns the project. A change replaces this resource.",
-				Validators:    validate.OrganizationKey(),
-				PlanModifiers: replace,
-			},
-			"project_key": schema.StringAttribute{
-				Required:      true,
-				Description:   "Key of the project. A change replaces this resource.",
-				Validators:    validate.ProjectKey(),
-				PlanModifiers: replace,
-			},
+		Attributes: projectScopedAttributes(map[string]schema.Attribute{
 			"quality_gate_id": schema.StringAttribute{
 				Required:    true,
 				Description: "UUID of the quality gate for the project. The gate must belong to the organization.",
@@ -92,7 +70,7 @@ func (r *projectQualityGateResource) Schema(_ context.Context, _ resource.Schema
 				// kept from the state.
 				Description: "Identifier of the assignment of the gate to the project.",
 			},
-		},
+		}),
 	}
 }
 
@@ -123,17 +101,8 @@ func (r *projectQualityGateResource) apply(ctx context.Context, planned tfsdk.Pl
 	key := plan.ProjectKey.ValueString()
 	gateID := plan.QualityGateID.ValueString()
 
-	org, ok := lookupOrganization(ctx, r.client, organization, path.Root("organization"), diagnostics)
+	org, project, ok := lookupProject(ctx, r.client, organization, key, diagnostics)
 	if !ok {
-		return
-	}
-	project, err := r.client.GetProject(ctx, organization, key)
-	if errors.Is(err, client.ErrNotFound) {
-		addProjectNotFound(diagnostics, organization, key)
-		return
-	}
-	if err != nil {
-		diagnostics.AddError("Cannot read the project "+key, err.Error())
 		return
 	}
 
@@ -181,25 +150,9 @@ func (r *projectQualityGateResource) Read(ctx context.Context, req resource.Read
 	organization := state.Organization.ValueString()
 	key := state.ProjectKey.ValueString()
 
-	org, err := r.client.GetOrganization(ctx, organization)
-	if errors.Is(err, client.ErrNotFound) {
-		addAssignmentGone(&resp.Diagnostics, "organization", organization)
-		resp.State.RemoveResource(ctx)
-		return
-	}
-	if err != nil {
-		resp.Diagnostics.AddError("Cannot read the organization "+organization, err.Error())
-		return
-	}
-
-	project, err := r.client.GetProject(ctx, organization, key)
-	if errors.Is(err, client.ErrNotFound) {
-		addAssignmentGone(&resp.Diagnostics, "project", key)
-		resp.State.RemoveResource(ctx)
-		return
-	}
-	if err != nil {
-		resp.Diagnostics.AddError("Cannot read the project "+key, err.Error())
+	org, project, ok := refreshProject(ctx, r.client, organization, key,
+		"the quality gate assignment of this project", resp)
+	if !ok {
 		return
 	}
 
@@ -219,17 +172,6 @@ func (r *projectQualityGateResource) Read(ctx context.Context, req resource.Read
 	state.QualityGateID = types.StringValue(association.QualityGateID)
 	state.AssociationID = types.StringValue(association.ID)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
-}
-
-// addAssignmentGone warns that the state loses the assignment of a gate,
-// because its organization or its project cannot be read.
-func addAssignmentGone(diagnostics *diag.Diagnostics, kind, name string) {
-	diagnostics.AddWarning(
-		"The "+kind+" "+name+" was not found",
-		"Terraform removes the quality gate assignment of this project from the state. The "+kind+
-			" was deleted, or the token cannot read it any more. In the second case, the next "+
-			"apply fails, because the "+kind+" cannot be found.",
-	)
 }
 
 // Delete removes the assignment. The project then uses the default quality gate
@@ -255,15 +197,5 @@ func (r *projectQualityGateResource) Delete(ctx context.Context, req resource.De
 
 // ImportState takes "organization/project_key". Read fills in the rest.
 func (r *projectQualityGateResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
-	organization, key, separated := strings.Cut(req.ID, "/")
-	if !separated || organization == "" || key == "" {
-		resp.Diagnostics.AddError(
-			"Cannot import the project quality gate",
-			"The identifier must hold the organization and the project key, separated "+
-				"by a slash, as in \"my-organization/my-project\". It holds "+req.ID+".")
-		return
-	}
-
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("organization"), organization)...)
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("project_key"), key)...)
+	importProjectScoped(ctx, "project quality gate", req, resp)
 }

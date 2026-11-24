@@ -113,3 +113,18 @@ func TestInvalidToken(t *testing.T) {
 		}
 	}
 }
+
+func TestIsStatus(t *testing.T) {
+	t.Parallel()
+
+	forbidden := fmt.Errorf("wrapped: %w", &APIError{StatusCode: http.StatusForbidden})
+	if !IsStatus(forbidden, http.StatusForbidden) {
+		t.Error("a wrapped 403 is not reported")
+	}
+	if IsStatus(forbidden, http.StatusNotFound) {
+		t.Error("a 403 is reported as a 404")
+	}
+	if IsStatus(errors.New("network"), http.StatusForbidden) || IsStatus(nil, http.StatusForbidden) {
+		t.Error("an error without a status is reported")
+	}
+}

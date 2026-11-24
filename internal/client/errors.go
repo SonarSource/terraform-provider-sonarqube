@@ -91,6 +91,12 @@ const invalidTokenMessage = "explicit deny in an identity-based policy"
 // permission.
 const InvalidTokenHint = "SonarQube Cloud does not accept the token. The token is wrong, expired or revoked."
 
+// IsStatus reports an API error with the HTTP status code.
+func IsStatus(err error, code int) bool {
+	var apiErr *APIError
+	return errors.As(err, &apiErr) && apiErr.StatusCode == code
+}
+
 // IsInvalidToken reports a refusal of the token itself.
 func IsInvalidToken(err error) bool {
 	var apiErr *APIError
