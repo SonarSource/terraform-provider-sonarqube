@@ -77,7 +77,7 @@ Cloud instance. Do not run them against production.
 
 Run the acceptance tests with `make testacc`. It sets `TF_ACC=1`, runs the
 tests, and fails when a test skips, except the ones that `ALLOWED_SKIP` in the
-`Makefile` names. It needs `SONARQUBE_URL` and `SONARQUBE_TOKEN`, and five more variables:
+`Makefile` names. It needs `SONARQUBE_URL` and `SONARQUBE_TOKEN`, and six more variables:
 
 * `SONARQUBE_TEST_ALLOWED_HOSTS`: the hosts where a test may make and delete
   an organization, separated by commas. An entry allows its sub-domains as
@@ -121,6 +121,12 @@ tests, and fails when a test skips, except the ones that `ALLOWED_SKIP` in the
   SONARQUBE_TEST_ENTERPRISE_LICENSE=<license> TF_ACC=1 \
     go test ./internal/provider/cloud -run '^TestAccEnterpriseResource$' -count=1 -v
   ```
+* `SONARQUBE_TEST_ENTERPRISE_KEY`: the key of an enterprise that the token
+  user administers, for the test of
+  `sonarqube_cloud_organization_automatic_analysis`. Only an organization on
+  the Enterprise plan accepts the setting, so the test attaches its
+  organization to this enterprise. The tests of GitLab Self-Managed use it
+  too (see below).
 
 Set `SONARQUBE_TEST_SOT_TOKEN` to run the acceptance tests with a scoped
 organization token. Make the token for `SONARQUBE_TEST_ORGANIZATION`, with

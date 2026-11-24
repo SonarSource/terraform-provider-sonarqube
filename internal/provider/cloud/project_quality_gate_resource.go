@@ -113,8 +113,7 @@ func (r *projectQualityGateResource) apply(ctx context.Context, planned tfsdk.Pl
 			"No quality gate has this UUID. Check the UUID, and check that the token can read the gate.")
 		return
 	}
-	var apiErr *client.APIError
-	if errors.As(err, &apiErr) && apiErr.StatusCode == http.StatusForbidden {
+	if client.IsStatus(err, http.StatusForbidden) {
 		diagnostics.AddError("Cannot assign the quality gate to the project "+key,
 			"SonarQube Cloud refused the change: "+err.Error()+"\n\n"+
 				"The organization must be on the Team or the Enterprise plan to assign a quality "+

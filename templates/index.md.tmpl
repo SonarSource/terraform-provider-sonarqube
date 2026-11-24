@@ -64,6 +64,7 @@ revoked token stops the plan with the error "Invalid token".
 | Organization bindings to a DevOps platform | **Administer Organization** (`admin`) |
 | Quality gates and the default quality gate | **Administer Quality Gates** (`gateadmin`) |
 | `sonarqube_cloud_organization_quality_gate_settings` | **Administer Organization** (`admin`) |
+| Automatic Analysis | For a project: **Administer** on the project. For new projects of an organization: **Administer Organization** (`admin`). |
 | Quality profiles, their rules and the default profiles | **Administer Quality Profiles** (`profileadmin`). To change a profile, the right to edit it is also enough. |
 | Scoped organization tokens | **Administer Organization** (`admin`) |
 
@@ -84,6 +85,7 @@ supports only a small set of resources and data sources with them.
 | `sonarqube_quality_profile` data source | Supported |
 | `sonarqube_cloud_scoped_organization_token` | Supported. The token must have the `admin` organization permission. `project_keys` works only with public projects. |
 | `sonarqube_cloud_organization_quality_gate_settings` | Supported. The token must have the `admin` organization permission. |
+| `sonarqube_cloud_organization_automatic_analysis` | Supported. The token must have the `admin` organization permission. |
 | All other resources and data sources | Not supported |
 
 Give the token the organization permissions `admin`, `scan` and

@@ -162,11 +162,18 @@ permissions `admin`, `scan` and `provisioning`:
 | --- | --- | --- | --- | --- |
 | `GetProjectAutomaticAnalysis` | `GET {url}/api/settings/values?component=&keys=sonar.autoscan.enabled` | Web API v1 | [Public](https://sonarcloud.io/web_api/api/settings/values) | Yes |
 | `SetProjectAutomaticAnalysis` | `POST {url}/api/autoscan/activation` | Web API v1 | Internal | No (404) |
+| `GetOrganizationAutomaticAnalysis` | `GET {url}/api/settings/values?organization=&keys=sonar.autoscan.enabled` | Web API v1 | [Public](https://sonarcloud.io/web_api/api/settings/values) | Yes |
+| `SetOrganizationAutomaticAnalysis` | `POST {url}/api/settings/set` | Web API v1 | [Public](https://sonarcloud.io/web_api/api/settings/set) | Yes |
+| `ResetOrganizationAutomaticAnalysis` | `POST {url}/api/settings/reset` | Web API v1 | [Public](https://sonarcloud.io/web_api/api/settings/reset) | Yes |
 
-* There is no Web API v2 and no public endpoint that changes the setting, and
-  `api/settings/set` cannot change it.
-* To turn it on, the project must be the only project bound to its repository.
-* There is no reset. A destroy removes the setting from the state only.
+* No Web API v2 endpoint manages the setting.
+* Project: no public endpoint changes the setting, and `api/settings/set`
+  cannot change it. To turn it on, the project must be the only project bound
+  to its repository. There is no reset, so a destroy removes the setting from
+  the state only.
+* Organization: `api/settings/set` works on the Enterprise plan only, and a
+  destroy resets the value. `api/settings/values` gives the default for an
+  unknown organization, so the provider reads the organization first.
 
 ## Project bindings (`project_bindings.go`)
 

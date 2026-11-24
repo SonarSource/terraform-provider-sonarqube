@@ -44,6 +44,9 @@ jobs:
     env:
       SONARQUBE_URL: https://${{ vars.SONARQUBE_STAGING_HOST }}
       SONARQUBE_TEST_ALLOWED_HOSTS: ${{ vars.SONARQUBE_STAGING_HOST }}
+      # The test of the Automatic Analysis default of an organization attaches
+      # its organization to this enterprise.
+      SONARQUBE_TEST_ENTERPRISE_KEY: ${{ vars.SONARQUBE_TEST_ENTERPRISE_KEY }}
     steps:
       - name: Check the repository variable
         env:
@@ -51,6 +54,10 @@ jobs:
         run: |
           if [[ -z "${STAGING_HOST}" ]]; then
             echo "The repository variable SONARQUBE_STAGING_HOST is not set. Set it to the host of the staging instance."
+            exit 1
+          fi
+          if [[ -z "${SONARQUBE_TEST_ENTERPRISE_KEY}" ]]; then
+            echo "The repository variable SONARQUBE_TEST_ENTERPRISE_KEY is not set. Set it to the key of the staging enterprise."
             exit 1
           fi
 
