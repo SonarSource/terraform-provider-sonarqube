@@ -20,13 +20,6 @@ jobs:
     permissions:
       id-token: write
       contents: read
-    env:
-      # GitHub gives no OIDC token to a pull request from a fork, so the Vault
-      # authentication, and therefore the analysis, cannot work there. The Go
-      # steps still run. A step-level `if` can read the env context, a
-      # job-level `if` cannot, so the condition lives here.
-      SONAR_ANALYSIS_ENABLED: ${{ github.event_name != 'pull_request' ||
-        github.event.pull_request.head.repo.full_name == github.repository }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -60,8 +53,14 @@ jobs:
       - name: Test
         run: go test -race -covermode=atomic -coverprofile=coverage.out ./...
 
+      # GitHub gives no OIDC token to a pull request from a fork, so the Vault
+      # authentication, and therefore the analysis, cannot work there. The Go
+      # steps still run. The condition reads only the github context: the
+      # test step runs the pull request code, and that code can change env
+      # values through GITHUB_ENV.
       - name: Fetch the Vault secrets
-        if: env.SONAR_ANALYSIS_ENABLED == 'true'
+        if: github.event_name != 'pull_request' ||
+          github.event.pull_request.head.repo.full_name == github.repository
         id: secrets
         uses: SonarSource/vault-action-wrapper@v3
         with:
@@ -69,7 +68,8 @@ jobs:
             development/kv/data/sonarcloud token | SONAR_TOKEN;
 
       - name: SonarQube Cloud analysis
-        if: env.SONAR_ANALYSIS_ENABLED == 'true'
+        if: github.event_name != 'pull_request' ||
+          github.event.pull_request.head.repo.full_name == github.repository
         uses: SonarSource/sonarqube-scan-action@v8
         env:
           # The `|| '{}'` is necessary. GitHub evaluates the env block of a
