@@ -33,7 +33,12 @@ func (c *Client) GetProject(ctx context.Context, organization, key string) (*Pro
 	if err != nil {
 		return nil, err
 	}
+	return c.GetProjectInOrganization(ctx, org, key)
+}
 
+// GetProjectInOrganization is GetProject for a caller that has read the
+// organization already. A missing project is ErrNotFound.
+func (c *Client) GetProjectInOrganization(ctx context.Context, org *Organization, key string) (*Project, error) {
 	params := url.Values{}
 	params.Set("keys", key)
 	params.Set("organizationIds", org.UUIDV4)

@@ -137,7 +137,7 @@ permissions `admin`, `scan` and `provisioning`:
 
 | Function | Endpoint | Surface | Public or internal | SOT |
 | --- | --- | --- | --- | --- |
-| `GetProject` | `GET {api_url}/projects/projects?keys=&organizationIds=` | Web API v2 | [Public](https://api-docs.sonarsource.com/sonarqube-cloud/default/public-projectsexternal-0-0-1#/Projects/getProjects) | Public projects only |
+| `GetProject`, `GetProjectInOrganization` | `GET {api_url}/projects/projects?keys=&organizationIds=` | Web API v2 | [Public](https://api-docs.sonarsource.com/sonarqube-cloud/default/public-projectsexternal-0-0-1#/Projects/getProjects) | Public projects only |
 | `FindProjectsByKey`, `FindProjectsByID` | `GET {api_url}/projects/projects?keys=&organizationIds=&pageIndex=&pageSize=`, or with `ids=` | Web API v2 | [Public](https://api-docs.sonarsource.com/sonarqube-cloud/default/public-projectsexternal-0-0-1#/Projects/getProjects) | Public projects only |
 | `CreateProject` | `POST {url}/api/projects/create` | Web API v1 | [Public](https://sonarcloud.io/web_api/api/projects/create) | Yes |
 | `UpdateProjectKey` | `POST {url}/api/projects/update_key` | Web API v1 | [Public](https://sonarcloud.io/web_api/api/projects/update_key) | No (404) |
@@ -155,6 +155,18 @@ permissions `admin`, `scan` and `provisioning`:
 * `rename` renames the main branch in place, and the project keeps its history.
   `api/projects/create` has a `branch` parameter, but it changes the project
   key, so the provider does not use it.
+
+## Automatic Analysis (`automatic_analysis.go`)
+
+| Function | Endpoint | Surface | Public or internal | SOT |
+| --- | --- | --- | --- | --- |
+| `GetProjectAutomaticAnalysis` | `GET {url}/api/settings/values?component=&keys=sonar.autoscan.enabled` | Web API v1 | [Public](https://sonarcloud.io/web_api/api/settings/values) | Yes |
+| `SetProjectAutomaticAnalysis` | `POST {url}/api/autoscan/activation` | Web API v1 | Internal | No (404) |
+
+* There is no Web API v2 and no public endpoint that changes the setting, and
+  `api/settings/set` cannot change it.
+* To turn it on, the project must be the only project bound to its repository.
+* There is no reset. A destroy removes the setting from the state only.
 
 ## Project bindings (`project_bindings.go`)
 
