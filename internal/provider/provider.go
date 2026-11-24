@@ -210,6 +210,7 @@ func (p *sonarqubeProvider) Resources(_ context.Context) []func() resource.Resou
 		cloud.NewOrganizationPermissionsResource,
 		cloud.NewProjectPermissionsResource,
 		cloud.NewOrganizationQualityGateSettingsResource,
+		cloud.NewOrganizationAutomaticAnalysisResource,
 		cloud.NewOrganizationBindingResource,
 		cloud.NewOrganizationGitLabSelfManagedBindingResource,
 		shared.NewProjectResource,

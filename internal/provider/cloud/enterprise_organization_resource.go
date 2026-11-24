@@ -339,8 +339,7 @@ func addEnterpriseReadError(diagnostics *diag.Diagnostics, enterpriseID string, 
 
 // isAccessDenied reports a 401 or a 403 answer.
 func isAccessDenied(err error) bool {
-	var apiErr *client.APIError
-	return errors.As(err, &apiErr) && (apiErr.StatusCode == http.StatusUnauthorized || apiErr.StatusCode == http.StatusForbidden)
+	return client.IsStatus(err, http.StatusUnauthorized) || client.IsStatus(err, http.StatusForbidden)
 }
 
 func addRelationReadError(diagnostics *diag.Diagnostics, organizationKey string, err error) {

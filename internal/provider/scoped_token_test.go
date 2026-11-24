@@ -28,6 +28,7 @@ var supportScopedToken = map[typeKey]bool{
 	{"sonarqube_quality_profile", true}:                           true,
 	{"sonarqube_cloud_scoped_organization_token", false}:          true,
 	{"sonarqube_cloud_organization_quality_gate_settings", false}: true,
+	{"sonarqube_cloud_organization_automatic_analysis", false}:    true,
 }
 
 // configureEach configures each resource and data source of the provider with

@@ -112,3 +112,51 @@ func TestSetProjectAutomaticAnalysisRefused(t *testing.T) {
 		t.Errorf("error = %v", err)
 	}
 }
+
+func TestOrganizationAutomaticAnalysis(t *testing.T) {
+	t.Parallel()
+
+	var calls []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = r.ParseForm()
+		calls = append(calls, r.Method+" "+r.URL.Path+" "+r.Form.Encode())
+		if r.Method == http.MethodGet {
+			w.Write([]byte(`{"settings":[{"key":"sonar.autoscan.enabled","value":"false","parentValue":"true"}]}`))
+		}
+	}))
+	defer srv.Close()
+	c := newTestClient(srv)
+
+	value, err := c.GetOrganizationAutomaticAnalysis(t.Context(), "my-org")
+	if err != nil || value != (AutomaticAnalysisValue{Enabled: false, Own: true}) {
+		t.Errorf("value = %+v, %v", value, err)
+	}
+	if err := c.SetOrganizationAutomaticAnalysis(t.Context(), "my-org", true); err != nil {
+		t.Error(err)
+	}
+	if err := c.ResetOrganizationAutomaticAnalysis(t.Context(), "my-org"); err != nil {
+		t.Error(err)
+	}
+	want := []string{
+		"GET /api/settings/values keys=sonar.autoscan.enabled&organization=my-org",
+		"POST /api/settings/set key=sonar.autoscan.enabled&organization=my-org&value=true",
+		"POST /api/settings/reset keys=sonar.autoscan.enabled&organization=my-org",
+	}
+	if strings.Join(calls, "\n") != strings.Join(want, "\n") {
+		t.Errorf("calls =\n%s\nwant\n%s", strings.Join(calls, "\n"), strings.Join(want, "\n"))
+	}
+}
+
+func TestOrganizationAutomaticAnalysisInherited(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Write([]byte(`{"settings":[{"key":"sonar.autoscan.enabled","value":"true","inherited":true,"parentOrigin":"INSTANCE"}]}`))
+	}))
+	defer srv.Close()
+
+	value, err := newTestClient(srv).GetOrganizationAutomaticAnalysis(t.Context(), "my-org")
+	if err != nil || value != (AutomaticAnalysisValue{Enabled: true, Own: false}) {
+		t.Errorf("value = %+v, %v", value, err)
+	}
+}

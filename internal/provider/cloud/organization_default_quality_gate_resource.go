@@ -56,13 +56,12 @@ func setDefaultQualityGate(ctx context.Context, c *client.Client, organization, 
 	}
 
 	err := c.SetDefaultQualityGate(ctx, org.UUIDV4, gateID)
-	var apiErr *client.APIError
 	switch {
 	case errors.Is(err, client.ErrNotFound):
 		diagnostics.AddAttributeError(path.Root("quality_gate_id"),
 			"Quality gate "+gateID+" not found",
 			"No quality gate has this UUID. Check the UUID, and check that the token can read the gate.")
-	case errors.As(err, &apiErr) && apiErr.StatusCode == http.StatusForbidden:
+	case client.IsStatus(err, http.StatusForbidden):
 		diagnostics.AddError("Cannot set the default quality gate of the organization "+organization,
 			"SonarQube Cloud refused the change: "+err.Error()+"\n\n"+
 				"The organization must be on the Team or the Enterprise plan to change its default "+
