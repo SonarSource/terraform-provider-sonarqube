@@ -34,7 +34,7 @@ const EnvTestOrganization = "SONARQUBE_TEST_ORGANIZATION"
 // EnvTestSOTToken names an optional scoped organization token of the shared
 // organization. When it is set, the provider under test authenticates with
 // it, and Client keeps the user token of SONARQUBE_TOKEN for the checks.
-const EnvTestSOTToken = "SONARQUBE_TEST_SOT_TOKEN"
+const EnvTestSOTToken = "SONARQUBE_TEST_SOT_TOKEN" //nolint:gosec // G101: the name of an environment variable, not a credential
 
 // sotToken is the value of EnvTestSOTToken, and userToken is the user token
 // of SONARQUBE_TOKEN when the run starts.
@@ -375,8 +375,8 @@ const (
 	// EnvTestGitLabToken and EnvTestGitLabSecondToken are two personal access
 	// tokens with the api scope. The test changes the binding from the first
 	// to the second.
-	EnvTestGitLabToken       = "SONARQUBE_TEST_GITLAB_TOKEN"
-	EnvTestGitLabSecondToken = "SONARQUBE_TEST_GITLAB_SECOND_TOKEN"
+	EnvTestGitLabToken       = "SONARQUBE_TEST_GITLAB_TOKEN"        //nolint:gosec // G101: the name of an environment variable, not a credential
+	EnvTestGitLabSecondToken = "SONARQUBE_TEST_GITLAB_SECOND_TOKEN" //nolint:gosec // G101: the name of an environment variable, not a credential
 	// EnvTestGitLabRepository and EnvTestGitLabSubgroupRepository are the
 	// full paths of two private repositories with a default branch: one in
 	// the group, and one in a subgroup of the group.

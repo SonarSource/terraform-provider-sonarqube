@@ -17,9 +17,7 @@ linters:
   settings:
     gosec:
       excludes:
-        # G101 flags each name that contains "token", such as EnvToken. G104
-        # repeats errcheck.
-        - G101
+        # G104 repeats errcheck.
         - G104
     staticcheck:
       checks:

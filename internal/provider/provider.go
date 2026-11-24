@@ -30,7 +30,7 @@ import (
 const (
 	EnvURL    = "SONARQUBE_URL"
 	EnvAPIURL = "SONARQUBE_API_URL"
-	EnvToken  = "SONARQUBE_TOKEN"
+	EnvToken  = "SONARQUBE_TOKEN" //nolint:gosec // G101: the name of an environment variable, not a credential
 
 	// envAppendUserAgent is the Terraform convention for text at the end of
 	// the User-Agent header.
