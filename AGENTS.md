@@ -81,7 +81,8 @@ commands from the repository root.
 - After Go changes, format the changed Go files with `gofmt -w`, and run the
   checks in [CONTRIBUTING.md](CONTRIBUTING.md#checks-before-a-pull-request).
   Run the unit tests with `env -u TF_ACC`, so that they do not start the
-  acceptance tests when the calling shell sets `TF_ACC`.
+  acceptance tests when the calling shell sets `TF_ACC`. Run `make lint` and
+  `make vulncheck`: CI runs both.
 - When imports or dependencies change, run `go mod tidy` and review both
   `go.mod` and `go.sum`.
 - `docs/` is generated. Do not edit it. After a change to a schema
