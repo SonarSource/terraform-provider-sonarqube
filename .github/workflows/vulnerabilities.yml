@@ -1,0 +1,57 @@
+name: Vulnerabilities
+on:
+  push:
+    branches:
+      - master
+      - branch-*
+      - dogfood-*
+  pull_request:
+  merge_group:
+  # A new advisory can affect code that did not change.
+  schedule:
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.ref_name != github.event.repository.default_branch }}
+
+jobs:
+  vulncheck:
+    runs-on: sonar-xs
+    # A separate check, so that a new advisory does not hide a failure of
+    # Build.
+    name: Vulnerabilities
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Go
+        uses: ./.github/actions/setup-go
+
+      - name: Set up the lint tools
+        uses: ./.github/actions/setup-lint-tools
+
+      - name: Check for known vulnerabilities
+        run: make vulncheck
+
+  notify_failure:
+    name: Notify Failure
+    needs: [vulncheck]
+    if: >-
+      !cancelled() && failure() &&
+      (github.ref_name == github.event.repository.default_branch ||
+      startsWith(github.ref_name, 'branch-') ||
+      startsWith(github.ref_name, 'dogfood-'))
+    permissions:
+      id-token: write
+      actions: read
+    runs-on: sonar-xs
+    steps:
+      - uses: SonarSource/release-github-actions/notify-failure@v1
+        with:
+          project-name: terraform-provider-sonarqube
+          slack-channel: squad-dopex-on-call
+          needs: ${{ toJSON(needs) }}

@@ -252,7 +252,9 @@ workflow fails when `docs/` is different from the output of `make docs`.
 
 ## Checks before a pull request
 
-The `Build` and `pre-commit` workflows run these checks on each pull request.
+The `Build`, `Vulnerabilities` and `pre-commit` workflows run these checks on
+each pull request. `Vulnerabilities` also runs each week on `master`, because
+a new advisory can affect code that did not change.
 To run them locally:
 
 ```bash
