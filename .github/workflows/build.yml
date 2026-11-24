@@ -47,8 +47,10 @@ jobs:
       - name: Vet
         run: go vet ./...
 
-      - name: Set up the lint tools
+      - name: Set up golangci-lint
         uses: ./.github/actions/setup-lint-tools
+        with:
+          govulncheck: false
 
       - name: Lint
         run: make lint
