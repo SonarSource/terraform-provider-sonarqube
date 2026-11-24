@@ -1,0 +1,101 @@
+name: Schema compatibility
+on:
+  pull_request:
+  # The pull request passed the check before it entered the merge queue.
+  merge_group:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  compare:
+    if: github.event_name == 'pull_request'
+    runs-on: sonar-xs
+    name: Compare the schemas
+    permissions:
+      contents: read
+    outputs:
+      breaking: ${{ steps.compare.outputs.breaking }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # The check needs the merge base with the base branch.
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: ./.github/actions/setup-go
+
+      - name: Compare the schemas with the base branch
+        id: compare
+        shell: bash
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          set +e
+          scripts/schema-check.sh "origin/${BASE_REF}" | tee "${RUNNER_TEMP}/schema-check.txt"
+          status="${PIPESTATUS[0]}"
+          set -e
+          if [[ "${status}" == 0 ]]; then
+            echo "breaking=false" >>"${GITHUB_OUTPUT}"
+            exit 0
+          fi
+          if [[ "${status}" != 1 ]]; then
+            exit "${status}"
+          fi
+
+          echo "breaking=true" >>"${GITHUB_OUTPUT}"
+          {
+            echo '## Breaking schema changes'
+            echo
+            echo 'A member of the code owner team must approve the `breaking-change` deployment of this run.'
+            echo
+            echo '```text'
+            cat "${RUNNER_TEMP}/schema-check.txt"
+            echo '```'
+          } >>"${GITHUB_STEP_SUMMARY}"
+          echo "::warning::Keep the schema compatible, or get the approval of a code owner and add a CHANGELOG.md entry that tells users what to change."
+
+  schema-compatibility:
+    needs: compare
+    if: ${{ !cancelled() }}
+    runs-on: sonar-xs
+    name: Schema compatibility
+    # On a breaking change, the job waits until a required reviewer of the
+    # environment approves it. GitHub checks who may approve.
+    environment: ${{ needs.compare.outputs.breaking == 'true' && 'breaking-change' || '' }}
+    permissions:
+      contents: read
+    steps:
+      - name: Give the result
+        shell: bash
+        env:
+          EVENT: ${{ github.event_name }}
+          COMPARE: ${{ needs.compare.result }}
+          BREAKING: ${{ needs.compare.outputs.breaking }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [[ "${EVENT}" == merge_group ]]; then
+            echo "The pull request passed this check before the merge queue."
+            exit 0
+          fi
+          if [[ "${COMPARE}" != success ]]; then
+            echo "::error::The comparison of the schemas did not succeed."
+            exit 1
+          fi
+          if [[ "${BREAKING}" != true ]]; then
+            echo "No breaking schema change."
+            exit 0
+          fi
+
+          # GitHub makes a missing environment without protection, and then
+          # nobody approves. Accept only an environment that needs a reviewer
+          # other than the author of the run.
+          protected="$(gh api "repos/${GITHUB_REPOSITORY}/environments/breaking-change" \
+            --jq 'any(.protection_rules[]?; .type == "required_reviewers" and .prevent_self_review == true and (.reviewers | length) > 0)')"
+          if [[ "${protected}" != true ]]; then
+            echo "::error::The breaking-change environment must have required reviewers and prevent self-review."
+            exit 1
+          fi
+          echo "::notice::A required reviewer of the breaking-change environment accepted the breaking schema changes."
