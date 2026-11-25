@@ -18,6 +18,8 @@ passphrase="release-check"
 gpg --batch --quiet --pinentry-mode loopback --passphrase "${passphrase}" \
   --quick-generate-key "Release check <release-check@example.invalid>" rsa3072 cert 1d
 primary="$(gpg --batch --with-colons --list-keys | awk -F: '$1 == "fpr" { print $10; exit }')"
+# Until TFP-93, the registry key does not contain the signing subkey.
+gpg --batch --armor --export "${primary}" >"${tmp}/registry-without-subkey.asc"
 gpg --batch --quiet --pinentry-mode loopback --passphrase "${passphrase}" \
   --quick-add-key "${primary}" rsa3072 sign 1d
 subkey="$(gpg --batch --with-colons --list-keys |
@@ -29,10 +31,30 @@ fi
 
 key="$(gpg --batch --pinentry-mode loopback --passphrase "${passphrase}" \
   --armor --export-secret-subkeys "${subkey}!")"
-GPG_KEY="${key}" GPG_PASSPHRASE="${passphrase}" GPG_KEY_ID="${subkey}" \
-  scripts/release/sign.sh dist "${version}"
+absent_fingerprint="0000000000000000000000000000000000000000"
 
-gpg --batch --armor --export "${primary}" >"${tmp}/public.asc"
-scripts/release/verify.sh dist "${version}" "${tmp}/public.asc"
+# The release workflow pins the fingerprint of the signing subkey. When the
+# key from Vault does not have that fingerprint, the signature must stop.
+if GPG_KEY="${key}" GPG_PASSPHRASE="${passphrase}" GPG_KEY_ID="${absent_fingerprint}" \
+  scripts/release/sign.sh dist "${version}" 2>/dev/null; then
+  echo "sign.sh signed with a fingerprint that is not the signing subkey." >&2
+  exit 1
+fi
+
+GPG_KEY="${key}" GPG_PASSPHRASE="${passphrase}" GPG_KEY_ID="${subkey}" \
+  scripts/release/sign.sh dist "${version}" "${tmp}/signing-key.asc"
+
+# As in the release workflow until TFP-93: the registry key alone cannot
+# verify the signature, and the key that sign.sh writes makes it pass.
+if scripts/release/verify.sh dist "${version}" "${tmp}/registry-without-subkey.asc" >/dev/null 2>&1; then
+  echo "The registry key without the signing subkey verified the signature." >&2
+  exit 1
+fi
+cat "${tmp}/registry-without-subkey.asc" "${tmp}/signing-key.asc" >"${tmp}/keys.asc"
+scripts/release/verify.sh dist "${version}" "${tmp}/keys.asc"
+
+# After TFP-93, the registry key contains the signing subkey.
+gpg --batch --armor --export "${primary}" >"${tmp}/registry.asc"
+scripts/release/verify.sh dist "${version}" "${tmp}/registry.asc"
 
 scripts/release/check-mirror.sh dist "${version}"

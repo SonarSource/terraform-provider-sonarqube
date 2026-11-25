@@ -14,6 +14,10 @@ defaults:
 env:
   SIGNING_KEY_VAULT_PATH: development/kv/data/sign/terraform
   SIGNING_KEY_ID: 9582347C
+  # The full fingerprint of the signing subkey. The release signs only with
+  # this exact key, because until TFP-93 the Verify step also trusts the key
+  # from Vault.
+  SIGNING_KEY_FPR: 4D2E30BAA0D0987C7602EB1F2BF0BAFD9582347C
 
 jobs:
   release:
@@ -90,8 +94,11 @@ jobs:
             echo "Vault has key ${GPG_KEY_ID}, expected ${SIGNING_KEY_ID}" >&2
             exit 1
           fi
-          scripts/release/sign.sh dist "${VERSION}"
+          GPG_KEY_ID="${SIGNING_KEY_FPR}" \
+            scripts/release/sign.sh dist "${VERSION}" "${RUNNER_TEMP}/signing-key.asc"
 
+      # Temporary: the registry key does not contain the signing subkey yet, so
+      # the signing key is also accepted. TFP-93 removes it.
       - name: Verify the release files
         env:
           VERSION: ${{ steps.tag.outputs.version }}
@@ -100,7 +107,11 @@ jobs:
             >"${RUNNER_TEMP}/registry-keys.json"
           jq -er '.data[].attributes["ascii-armor"]' "${RUNNER_TEMP}/registry-keys.json" \
             >"${RUNNER_TEMP}/registry-keys.asc"
-          scripts/release/verify.sh dist "${VERSION}" "${RUNNER_TEMP}/registry-keys.asc"
+          if ! scripts/release/verify.sh dist "${VERSION}" "${RUNNER_TEMP}/registry-keys.asc"; then
+            echo "::warning::The registry keys cannot verify this release. A Resync in HCP Terraform fails until the registry has the signing subkey."
+          fi
+          cat "${RUNNER_TEMP}/registry-keys.asc" "${RUNNER_TEMP}/signing-key.asc" >"${RUNNER_TEMP}/keys.asc"
+          scripts/release/verify.sh dist "${VERSION}" "${RUNNER_TEMP}/keys.asc"
           scripts/release/check-mirror.sh dist "${VERSION}"
 
       - name: Publish the GitHub release
