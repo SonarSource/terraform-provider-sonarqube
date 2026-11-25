@@ -41,7 +41,8 @@ version from the registry, also when the GitHub release is deleted.
 
 4. Approve the `release` environment in the run of the `Release` workflow.
 5. Run Resync on the provider in HCP Terraform. The registry does not get a
-   new version automatically.
+   new version automatically. Until TFP-93, do not do this step (see
+   "Signing key").
 
 ## When a release fails
 
@@ -67,4 +68,17 @@ must have the public key of each key that signs a release.
 
 When the key changes, update `SIGNING_KEY_VAULT_PATH` and `SIGNING_KEY_ID`
 together. The registry must have the public key of the new key before a
-release can pass the "Verify the release files" step.
+release can pass the "Verify the release files" step. Until TFP-93, this is
+not true: see the next paragraph.
+
+Until the registry has the subkey `9582347C`, the "Verify the release files"
+step also accepts the public key of the signing key. The release signs only
+with the key that has the fingerprint `SIGNING_KEY_FPR`, so a different key
+in Vault stops the release before it publishes. TFP-93 removes this
+exception and `SIGNING_KEY_FPR`.
+
+Thus a green run does not show that the registry accepts the release. The
+step shows a warning when the registry keys cannot verify the signature.
+Until the registry has the subkey, do not run Resync in HCP Terraform: it
+fails for these releases. Installs from the GitHub release files do not
+check the signature, so they work.
