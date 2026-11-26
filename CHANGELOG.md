@@ -5,8 +5,11 @@
 ENHANCEMENTS:
 
 * The new provider attribute `disable_telemetry`, the `SONARQUBE_DISABLE_TELEMETRY` environment variable and
-  `DO_NOT_TRACK=1` turn off the optional telemetry. This release sends no optional telemetry yet. The User-Agent
-  header does not change. The provider docs list the data that the provider sends.
+  `DO_NOT_TRACK=1` turn off the optional telemetry. The provider docs list the data that the provider sends.
+* The User-Agent header names the resource or data source type and the operation (`create`, `read`, `update`,
+  `delete` or `import`) of each request, for example `sonarqube-terraform/1.0.0 (sonarqube_project; create)`. The
+  opt-out above turns it off. During `terraform plan`, only the refresh and the data source reads (`read`) and
+  `import` blocks name an operation.
 
 ## 0.1.0-alpha.6 (November 25, 2026)
 

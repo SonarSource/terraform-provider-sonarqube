@@ -14,7 +14,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/hashicorp/terraform-plugin-framework/providerserver"
 	"github.com/hashicorp/terraform-plugin-go/tfprotov6"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 
@@ -84,7 +83,7 @@ const providerVersion = "acceptance-test"
 
 // The provider runs inside the test process.
 var ProtoV6ProviderFactories = map[string]func() (tfprotov6.ProviderServer, error){
-	"sonarqube": providerserver.NewProtocol6WithError(provider.New(providerVersion)()),
+	"sonarqube": func() (tfprotov6.ProviderServer, error) { return provider.NewProtocol6(providerVersion)(), nil },
 }
 
 // resource.Test already skips every test when TF_ACC is unset. This adds the

@@ -10,7 +10,8 @@ import (
 )
 
 // New returns the factory of the provider. The version goes in the
-// User-Agent header of each request.
+// User-Agent header of each request. The requests of this provider send no
+// optional telemetry.
 func New(version string) func() provider.Provider {
 	return internalprovider.New(version)
 }

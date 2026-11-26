@@ -82,7 +82,7 @@ func TestConfigureSetsTheTelemetry(t *testing.T) {
 	}
 }
 
-// The optional telemetry never changes the base User-Agent.
+// An opt-out keeps the User-Agent and turns off the optional telemetry.
 func TestConfigureKeepsTheUserAgentWithoutTelemetry(t *testing.T) {
 	resp := configure(t, map[string]string{EnvToken: "a-token", envDoNotTrack: "1", envAppendUserAgent: "my-ci/2.0"}, nil)
 	if resp.Diagnostics.HasError() {
@@ -90,8 +90,12 @@ func TestConfigureKeepsTheUserAgentWithoutTelemetry(t *testing.T) {
 	}
 
 	want := "Terraform/" + testTerraformVersion + " (+https://www.terraform.io) sonarqube-terraform/test my-ci/2.0"
-	if got := configuredClient(t, resp).UserAgent(); got != want {
+	c := configuredClient(t, resp)
+	if got := c.UserAgent(); got != want {
 		t.Errorf("UserAgent() = %q, want %q", got, want)
+	}
+	if c.Telemetry() {
+		t.Error("Telemetry() = true with DO_NOT_TRACK=1, want false")
 	}
 }
 

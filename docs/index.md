@@ -174,7 +174,17 @@ The optional telemetry can contain only these values:
 * the name of an operation: `create`, `read`, `update`, `delete` or `import`
 
 It never contains attribute values, IDs, keys or other values from your
-configuration. This release sends no optional telemetry yet.
+configuration.
+
+The provider puts the optional telemetry in a comment after its product token
+in the User-Agent header, for example
+`sonarqube-terraform/1.0.0 (sonarqube_project; create)`. The text of
+`TF_APPEND_USER_AGENT` comes after this comment. During `terraform plan`,
+the refresh and the data source reads send the `read` operation, and an
+`import` block sends the `import` operation. Other requests during
+`terraform plan` send no operation.
+A Go program that uses the
+`sonarqube` package sends no optional telemetry either.
 
 To turn off the optional telemetry, do one of these steps:
 

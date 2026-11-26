@@ -61,6 +61,9 @@ type Config struct {
 	// UserAgent is the User-Agent header of each request. An empty value
 	// sends "sonarqube-terraform".
 	UserAgent string
+	// AppendedUserAgent is the text at the end of the User-Agent header,
+	// after the optional telemetry.
+	AppendedUserAgent string
 	// Telemetry turns on the optional telemetry.
 	Telemetry bool
 	// TelemetryTypes are the resource and data source type names that the
@@ -76,13 +79,14 @@ type Config struct {
 
 // Client talks to one SonarQube instance.
 type Client struct {
-	url       string
-	apiURL    string
-	token     string
-	product   Product
-	userAgent string
-	http      *http.Client
-	readWaits []time.Duration
+	url               string
+	apiURL            string
+	token             string
+	product           Product
+	userAgent         string
+	appendedUserAgent string
+	http              *http.Client
+	readWaits         []time.Duration
 
 	telemetry      bool
 	telemetryTypes map[string]bool
@@ -107,13 +111,14 @@ func New(cfg Config) *Client {
 	}
 
 	return &Client{
-		url:       url,
-		apiURL:    apiURL,
-		token:     cfg.Token,
-		product:   cfg.Product,
-		userAgent: cmp.Or(cfg.UserAgent, defaultUserAgent),
-		http:      httpClient,
-		readWaits: cfg.ReadWaits,
+		url:               url,
+		apiURL:            apiURL,
+		token:             cfg.Token,
+		product:           cfg.Product,
+		userAgent:         cmp.Or(cfg.UserAgent, defaultUserAgent),
+		appendedUserAgent: cfg.AppendedUserAgent,
+		http:              httpClient,
+		readWaits:         cfg.ReadWaits,
 
 		telemetry:      cfg.Telemetry,
 		telemetryTypes: telemetryTypeSet(cfg.TelemetryTypes),
@@ -203,9 +208,10 @@ func (c *Client) APIURL() string {
 	return c.apiURL
 }
 
-// UserAgent returns the User-Agent header of each request.
+// UserAgent returns the User-Agent header of a request with no optional
+// telemetry.
 func (c *Client) UserAgent() string {
-	return c.userAgent
+	return c.userAgentFor(context.Background())
 }
 
 // Product returns the product the instance runs.
@@ -369,7 +375,7 @@ func (c *Client) apiMergePatch(ctx context.Context, path string, body, out any) 
 // try is the number of the try, for the debug log.
 func (c *Client) do(req *http.Request, try int, out any) error {
 	req.Header.Set("Accept", "application/json")
-	req.Header.Set("User-Agent", c.userAgent)
+	req.Header.Set("User-Agent", c.userAgentFor(req.Context()))
 
 	resp, err := c.http.Do(req)
 	logFields := map[string]any{"method": req.Method, "host": req.URL.Host, "path": req.URL.Path, "try": try}
