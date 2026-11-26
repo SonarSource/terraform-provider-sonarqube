@@ -191,11 +191,12 @@ func (p *sonarqubeProvider) Configure(ctx context.Context, req provider.Configur
 	}
 
 	c := client.New(client.Config{
-		URL:       instanceURL,
-		APIURL:    apiURL,
-		Token:     token,
-		Product:   product,
-		UserAgent: userAgent(req.TerraformVersion, p.version, os.Getenv(envAppendUserAgent)),
+		URL:               instanceURL,
+		APIURL:            apiURL,
+		Token:             token,
+		Product:           product,
+		UserAgent:         userAgent(req.TerraformVersion, p.version),
+		AppendedUserAgent: sanitizeUserAgent(os.Getenv(envAppendUserAgent)),
 
 		Telemetry:      telemetry,
 		TelemetryTypes: p.telemetryTypes(ctx),

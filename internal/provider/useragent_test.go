@@ -19,37 +19,50 @@ func printableASCII(value string) bool {
 func TestUserAgent(t *testing.T) {
 	t.Parallel()
 
-	const base = "Terraform/1.9.8 (+https://www.terraform.io) sonarqube-terraform/1.2.3"
+	cases := []struct {
+		terraformVersion, providerVersion, want string
+	}{
+		{"1.9.8", "1.2.3", "Terraform/1.9.8 (+https://www.terraform.io) sonarqube-terraform/1.2.3"},
+		{"", "1.2.3", "Terraform/unknown (+https://www.terraform.io) sonarqube-terraform/1.2.3"},
+		{"1.9.8", "", "Terraform/1.9.8 (+https://www.terraform.io) sonarqube-terraform/unknown"},
+	}
+	for _, tc := range cases {
+		if got := userAgent(tc.terraformVersion, tc.providerVersion); got != tc.want {
+			t.Errorf("userAgent(%q, %q) = %q, want %q", tc.terraformVersion, tc.providerVersion, got, tc.want)
+		}
+	}
+}
+
+func TestSanitizeUserAgent(t *testing.T) {
+	t.Parallel()
 
 	cases := []struct {
-		name             string
-		terraformVersion string
-		appended         string
-		want             string
+		name     string
+		appended string
+		want     string
 	}{
-		{"no appended value", "1.9.8", "", base},
-		{"appended product", "1.9.8", "my-ci/2.0", base + " my-ci/2.0"},
-		{"appended product and comment", "1.9.8", "my-ci/2.0 (team-a)", base + " my-ci/2.0 (team-a)"},
-		{"trims and collapses whitespace", "1.9.8", "  my-ci/2.0 \t\t (team-a)  ", base + " my-ci/2.0 (team-a)"},
-		{"spaces only", "1.9.8", "   \t ", base},
-		{"line breaks", "1.9.8", "my-ci/2.0\r\nX-Injected: yes", base + " my-ci/2.0 X-Injected: yes"},
-		{"control characters", "1.9.8", "my\x00-ci\x7f/2.0", base + " my-ci/2.0"},
-		{"non-ASCII", "1.9.8", "mój-ci/2.0 ✓", base + " mj-ci/2.0"},
-		{"non-ASCII only", "1.9.8", "✓✓", base},
-		{"Unicode whitespace", "1.9.8", "my-ci/2.0\u00a0(team-a)\u2028x", base + " my-ci/2.0 (team-a) x"},
-		{"unknown Terraform version", "", "", "Terraform/unknown (+https://www.terraform.io) sonarqube-terraform/1.2.3"},
+		{"empty", "", ""},
+		{"product", "my-ci/2.0", "my-ci/2.0"},
+		{"product and comment", "my-ci/2.0 (team-a)", "my-ci/2.0 (team-a)"},
+		{"trims and collapses whitespace", "  my-ci/2.0 \t\t (team-a)  ", "my-ci/2.0 (team-a)"},
+		{"spaces only", "   \t ", ""},
+		{"line breaks", "my-ci/2.0\r\nX-Injected: yes", "my-ci/2.0 X-Injected: yes"},
+		{"control characters", "my\x00-ci\x7f/2.0", "my-ci/2.0"},
+		{"non-ASCII", "mój-ci/2.0 ✓", "mj-ci/2.0"},
+		{"non-ASCII only", "✓✓", ""},
+		{"Unicode whitespace", "my-ci/2.0\u00a0(team-a)\u2028x", "my-ci/2.0 (team-a) x"},
 	}
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			got := userAgent(tc.terraformVersion, "1.2.3", tc.appended)
+			got := sanitizeUserAgent(tc.appended)
 			if got != tc.want {
-				t.Errorf("userAgent() = %q, want %q", got, tc.want)
+				t.Errorf("sanitizeUserAgent() = %q, want %q", got, tc.want)
 			}
 			if !printableASCII(got) {
-				t.Errorf("userAgent() = %q is not a valid header field value", got)
+				t.Errorf("sanitizeUserAgent() = %q is not a valid header field value", got)
 			}
 		})
 	}
@@ -57,30 +70,19 @@ func TestUserAgent(t *testing.T) {
 
 // A long value is cut, so that the header does not exceed the limits of a
 // proxy and make each request fail.
-func TestUserAgentCutsALongValue(t *testing.T) {
+func TestSanitizeUserAgentCutsALongValue(t *testing.T) {
 	t.Parallel()
 
-	base := userAgent("1.9.8", "1.2.3", "")
-	got := userAgent("1.9.8", "1.2.3", strings.Repeat("product/1.0 ", 500))
+	got := sanitizeUserAgent(strings.Repeat("product/1.0 ", 500))
 
-	appended := strings.TrimPrefix(got, base+" ")
-	if len(appended) == 0 || len(appended) > maxAppendedUserAgent {
-		t.Errorf("appended text has %d characters, want 1 to %d", len(appended), maxAppendedUserAgent)
+	if len(got) == 0 || len(got) > maxAppendedUserAgent {
+		t.Errorf("appended text has %d characters, want 1 to %d", len(got), maxAppendedUserAgent)
 	}
-	if !strings.HasPrefix(appended, "product/1.0 product/1.0") {
-		t.Errorf("appended text = %q, want the start of the value", appended)
+	if !strings.HasPrefix(got, "product/1.0 product/1.0") {
+		t.Errorf("appended text = %q, want the start of the value", got)
 	}
-	if strings.HasSuffix(appended, " ") {
-		t.Errorf("appended text = %q ends with a space", appended)
-	}
-}
-
-func TestUserAgentOfAnUnknownProviderVersion(t *testing.T) {
-	t.Parallel()
-
-	want := "Terraform/1.9.8 (+https://www.terraform.io) sonarqube-terraform/unknown"
-	if got := userAgent("1.9.8", "", ""); got != want {
-		t.Errorf("userAgent() = %q, want %q", got, want)
+	if strings.HasSuffix(got, " ") {
+		t.Errorf("appended text = %q ends with a space", got)
 	}
 }
 
